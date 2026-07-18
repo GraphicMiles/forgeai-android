@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Toddler secrets & local build artifacts
+.env
+.env.local
+temporary/
+*.keystore
+android/keystore/
+android/app/debug.keystore
+backend/.venv/
+backend/__pycache__/
