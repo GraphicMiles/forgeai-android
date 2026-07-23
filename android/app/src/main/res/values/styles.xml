@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#131418</item>
+        <item name="colorPrimaryDark">#131418</item>
+        <item name="colorAccent">#c8f24d</item>
+        <item name="android:windowBackground">#131418</item>
+        <item name="android:statusBarColor">#131418</item>
+        <item name="android:navigationBarColor">#131418</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
