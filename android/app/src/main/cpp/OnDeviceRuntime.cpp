@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <algorithm>
 #include "llama.h"
 
 namespace { std::mutex mutex; llama_model * model = nullptr; }
@@ -48,7 +49,8 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeGenerate(JNIEnv *env, jclass, jstring 
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     std::string output;
     if (llama_decode(ctx, batch) != 0) { llama_sampler_free(sampler); llama_free(ctx); return nullptr; }
-    for (int i = 0; i < maxTokens; ++i) {
+    const int safeMaxTokens = std::min(std::max(maxTokens, 1), 2048 - nPrompt - 1);
+    for (int i = 0; i < safeMaxTokens; ++i) {
         llama_token token = llama_sampler_sample(sampler, ctx, -1);
         if (llama_vocab_is_eog(vocab, token)) break;
         char piece[256]; int n = llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, true); if (n > 0) output.append(piece, n);
