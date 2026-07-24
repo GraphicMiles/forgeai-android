@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   push:
     branches:
       - main
@@ -32,6 +32,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK, NDK, and CMake
+        shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
 
@@ -43,6 +44,7 @@ jobs:
             "ndk;25.2.9519653"
 
       - name: Verify toolchain
+        shell: bash
         run: |
           java -version
           adb version
@@ -51,15 +53,38 @@ jobs:
           test -f android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install JavaScript dependencies
+        shell: bash
         run: npm ci
 
       - name: Run unit tests
+        shell: bash
         run: npm test
 
       - name: Build web application
+        shell: bash
         run: npm run build
 
       - name: Sync Capacitor Android project
+        shell: bash
         run: npx cap sync android
 
-      - name: Ensure Gradle wrapper is executable
+      - name: Build debug APK
+        shell: bash
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK output
+        shell: bash
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgeai-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
