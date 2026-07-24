@@ -4,11 +4,11 @@ plugins {
 
 android {
     namespace 'ai.forgeai.app'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "ai.forgeai.app"
-        minSdk 24
+        minSdk 23
         targetSdk 34
         versionCode 1
         versionName "1.0"
