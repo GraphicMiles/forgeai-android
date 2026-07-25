@@ -106,4 +106,10 @@ jobs:
           set -e
 
           test -f android/app/capacitor.build.gradle
-          grep 
+          grep -q "capacitor" android/app/capacitor.build.gradle
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          cd android
+          ./gradlew assembleDebug
