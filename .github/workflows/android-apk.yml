@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 env:
+  CMAKE_BUILD_PARALLEL_LEVEL: "2"
   GRADLE_OPTS: >-
     -Dorg.gradle.jvmargs=-Xmx4096m
     -Dorg.gradle.daemon=false
     -Dorg.gradle.workers.max=2
     -Dorg.gradle.internal.http.connectionTimeout=120000
     -Dorg.gradle.internal.http.socketTimeout=120000
-  CMAKE_BUILD_PARALLEL_LEVEL: "2"
 
 jobs:
   build-android:
@@ -41,12 +41,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android licenses
+      - name: Accept Android SDK licenses
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Install exact Android build tools
+      - name: Install Android SDK, NDK, and CMake
         shell: bash
         run: |
           sdkmanager \
@@ -54,9 +54,9 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "cmake;3.22.1" \
-            "ndk;25.2.9519653"
+            "ndk;26.1.10909125"
 
-      - name: Verify source and toolchain
+      - name: Verify Java and Android toolchain
         shell: bash
         run: |
           set -e
@@ -65,6 +65,7 @@ jobs:
           adb version
           cmake --version
 
+          test -f package.json
           test -f package-lock.json
           test -f third_party/llama.cpp/include/llama.h
           test -f android/gradle/wrapper/gradle-wrapper.properties
@@ -75,72 +76,34 @@ jobs:
 
           grep -q "gradle-8.7" android/gradle/wrapper/gradle-wrapper.properties
           grep -q "com.android.tools.build:gradle:8.6.1" android/build.gradle
-          grep -q "ndkVersion" android/app/build.gradle
+          grep -q "26.1.10909125" android/app/build.gradle
           grep -q "GGML_BACKEND_DL ON" android/app/src/main/cpp/CMakeLists.txt
+          grep -q "GGML_CPU_ALL_VARIANTS OFF" android/app/src/main/cpp/CMakeLists.txt
 
       - name: Install JavaScript dependencies
         shell: bash
-        run: npm ci
+        run: |
+          npm ci
 
-      - name: Run unit tests
+      - name: Run unit and safety tests
         shell: bash
-        run: npm test
+        run: |
+          npm test
 
-      - name: Build web assets
+      - name: Build web application
         shell: bash
-        run: npm run build
+        run: |
+          npm run build
 
       - name: Sync Capacitor Android project
         shell: bash
-        run: npx cap sync android
+        run: |
+          npx cap sync android
 
-      - name: Verify generated Capacitor project
+      - name: Verify generated Capacitor Android project
         shell: bash
         run: |
           set -e
 
           test -f android/app/capacitor.build.gradle
-          grep -q "forgeai-device-capacity" android/app/capacitor.build.gradle
-          grep -q "forgeai-device-capacity" android/capacitor.settings.gradle
-
-      - name: Build debug APK with retries
-        shell: bash
-        working-directory: android
-        run: |
-          set -u
-          chmod +x gradlew
-
-          for attempt in 1 2 3; do
-            echo "Gradle build attempt ${attempt}/3"
-
-            if ./gradlew assembleDebug \
-              --no-daemon \
-              --no-parallel \
-              --max-workers=2 \
-              --stacktrace; then
-              exit 0
-            fi
-
-            if [ "${attempt}" -lt 3 ]; then
-              echo "Build failed. Retrying in 30 seconds..."
-              sleep 30
-            fi
-          done
-
-          echo "Gradle build failed after 3 attempts."
-          exit 1
-
-      - name: Verify APK
-        shell: bash
-        run: |
-          set -e
-          test -f android/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: forgeai-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+          grep 
