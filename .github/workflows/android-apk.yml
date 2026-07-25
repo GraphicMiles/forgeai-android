@@ -9,6 +9,15 @@ on:
 permissions:
   contents: read
 
+env:
+  GRADLE_OPTS: >-
+    -Dorg.gradle.jvmargs=-Xmx4096m
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.workers.max=2
+    -Dorg.gradle.internal.http.connectionTimeout=120000
+    -Dorg.gradle.internal.http.socketTimeout=120000
+  CMAKE_BUILD_PARALLEL_LEVEL: "2"
+
 jobs:
   build-android:
     name: Build ForgeAI Debug APK
@@ -20,6 +29,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          clean: true
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -31,7 +41,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK, NDK, and CMake
+      - name: Accept Android licenses
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Install exact Android build tools
         shell: bash
         run: |
           sdkmanager \
@@ -41,14 +56,27 @@ jobs:
             "cmake;3.22.1" \
             "ndk;25.2.9519653"
 
-      - name: Verify toolchain
+      - name: Verify source and toolchain
         shell: bash
         run: |
+          set -e
+
           java -version
           adb version
           cmake --version
+
+          test -f package-lock.json
           test -f third_party/llama.cpp/include/llama.h
           test -f android/gradle/wrapper/gradle-wrapper.properties
+          test -f android/app/src/main/cpp/CMakeLists.txt
+          test -f android/app/src/main/cpp/OnDeviceRuntime.cpp
+          test -f android/app/src/main/java/ai/forgeai/app/OnDeviceRuntime.java
+          test -f android/app/src/main/java/ai/forgeai/app/MainActivity.java
+
+          grep -q "gradle-8.7" android/gradle/wrapper/gradle-wrapper.properties
+          grep -q "com.android.tools.build:gradle:8.6.1" android/build.gradle
+          grep -q "ndkVersion" android/app/build.gradle
+          grep -q "GGML_BACKEND_DL ON" android/app/src/main/cpp/CMakeLists.txt
 
       - name: Install JavaScript dependencies
         shell: bash
@@ -58,7 +86,7 @@ jobs:
         shell: bash
         run: npm test
 
-      - name: Build web application
+      - name: Build web assets
         shell: bash
         run: npm run build
 
@@ -66,20 +94,50 @@ jobs:
         shell: bash
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Verify generated Capacitor project
+        shell: bash
+        run: |
+          set -e
+
+          test -f android/app/capacitor.build.gradle
+          grep -q "forgeai-device-capacity" android/app/capacitor.build.gradle
+          grep -q "forgeai-device-capacity" android/capacitor.settings.gradle
+
+      - name: Build debug APK with retries
         shell: bash
         working-directory: android
         run: |
+          set -u
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Verify APK output
+          for attempt in 1 2 3; do
+            echo "Gradle build attempt ${attempt}/3"
+
+            if ./gradlew assembleDebug \
+              --no-daemon \
+              --no-parallel \
+              --max-workers=2 \
+              --stacktrace; then
+              exit 0
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "Build failed. Retrying in 30 seconds..."
+              sleep 30
+            fi
+          done
+
+          echo "Gradle build failed after 3 attempts."
+          exit 1
+
+      - name: Verify APK
         shell: bash
         run: |
+          set -e
           test -f android/app/build/outputs/apk/debug/app-debug.apk
           ls -lh android/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Upload debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: forgeai-debug-apk
