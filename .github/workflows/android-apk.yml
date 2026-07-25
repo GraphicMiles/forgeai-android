@@ -100,16 +100,59 @@ jobs:
         run: |
           npx cap sync android
 
-      - name: Verify generated Capacitor Android project
+      - name: Verify generated Capacitor project
         shell: bash
         run: |
           set -e
 
           test -f android/app/capacitor.build.gradle
-          grep -q "capacitor" android/app/capacitor.build.gradle
+          grep -q "forgeai-device-capacity" android/app/capacitor.build.gradle
+          grep -q "forgeai-device-capacity" android/capacitor.settings.gradle
 
       - name: Build Android APK
         shell: bash
+        working-directory: android
         run: |
-          cd android
-          ./gradlew assembleDebug
+          set -e
+          chmod +x gradlew
+
+          for attempt in 1 2 3; do
+            echo "Android build attempt ${attempt}/3"
+
+            if ./gradlew assembleDebug \
+              --no-daemon \
+              --no-parallel \
+              --max-workers=2 \
+              --stacktrace; then
+              break
+            fi
+
+            if [ "${attempt}" -eq 3 ]; then
+              echo "Android build failed after 3 attempts."
+              exit 1
+            fi
+
+            echo "Build failed. Retrying in 30 seconds..."
+            sleep 30
+          done
+
+      - name: Verify APK exists
+        shell: bash
+        run: |
+          set -e
+
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          test -f "$APK_PATH"
+          test -s "$APK_PATH"
+
+          echo "APK successfully created:"
+          ls -lh "$APK_PATH"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgeai-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
