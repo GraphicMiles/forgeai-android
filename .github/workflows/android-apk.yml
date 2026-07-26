@@ -31,6 +31,19 @@ jobs:
           fetch-depth: 1
           clean: true
 
+      - name: Ensure llama.cpp is present
+        shell: bash
+        run: |
+          # The .gitmodules file references third_party/llama.cpp but the
+          # submodule pointer was never committed to the tree, so actions/checkout
+          # with submodules:recursive leaves the directory empty.  Clone it directly.
+          if [ ! -f "third_party/llama.cpp/include/llama.h" ]; then
+            echo "llama.cpp submodule missing — cloning directly..."
+            mkdir -p third_party
+            git clone --depth 1 https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
+          fi
+          test -f third_party/llama.cpp/include/llama.h && echo "llama.h confirmed."
+
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
@@ -57,7 +70,7 @@ jobs:
             "ndk;26.1.10909125"
 
           # Prepend the Android SDK's CMake 3.22.1 to PATH so it takes
-          # precedence over any pre-installed CMake on the runner.
+          # precedence over the runner's pre-installed CMake 3.31.x.
           echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
 
       - name: Verify Java and Android toolchain
@@ -142,11 +155,30 @@ jobs:
       - name: Verify generated Capacitor project
         shell: bash
         run: |
-          set -e
+          # cap sync regenerates capacitor.build.gradle and capacitor.settings.gradle.
+          # Both must reference the custom forgeai-device-capacity plugin.
+          failures=0
 
-          test -f android/app/capacitor.build.gradle
-          grep -q "forgeai-device-capacity" android/app/capacitor.build.gradle
-          grep -q "forgeai-device-capacity" android/capacitor.settings.gradle
+          for f in \
+            android/app/capacitor.build.gradle \
+            android/capacitor.settings.gradle; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING FILE: $f"
+              failures=$((failures + 1))
+            elif grep -q "forgeai-device-capacity" "$f"; then
+              echo "OK: forgeai-device-capacity found in $f"
+            else
+              echo "MISSING: forgeai-device-capacity not in $f"
+              failures=$((failures + 1))
+            fi
+          done
+
+          if [ "$failures" -gt 0 ]; then
+            echo "Capacitor project verification failed ($failures issue(s))."
+            exit 1
+          fi
+
+          echo "Capacitor project checks passed."
 
       - name: Build Android APK
         shell: bash
