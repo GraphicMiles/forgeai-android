@@ -68,9 +68,10 @@ jobs:
           java -version
           adb version
           cmake --version
-          cmake_version=$(cmake --version | head -n1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?')
+          # Extract MAJOR.MINOR.PATCH, stripping any suffix like -g37088a8
+          cmake_version=$(cmake --version | head -n1 | awk '{print $NF}' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
           echo "Detected CMake version: $cmake_version"
-          echo "$cmake_version" | grep -qE '^3\.22' || { echo "CMake version check failed: expected 3.22.1, found $cmake_version"; exit 1; }
+          echo "$cmake_version" | grep -qE '^3\.22\.' || { echo "CMake version check failed: expected 3.22.x, found $cmake_version"; exit 1; }
 
           test -f package.json
           test -f package-lock.json
