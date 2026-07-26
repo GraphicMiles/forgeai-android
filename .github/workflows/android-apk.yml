@@ -84,10 +84,10 @@ jobs:
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0" \
-            "cmake;3.25.1" \
-            "ndk;26.3.11579264"
+            "cmake;3.22.1" \
+            "ndk;26.1.10909125"
 
-          echo "$ANDROID_HOME/cmake/3.25.1/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
 
       - name: Install npm dependencies
         run: npm ci
