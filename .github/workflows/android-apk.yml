@@ -63,30 +63,61 @@ jobs:
       - name: Verify Java and Android toolchain
         shell: bash
         run: |
-          set -e
-
           java -version
           adb version
           cmake --version
+
           # Extract MAJOR.MINOR.PATCH, stripping any suffix like -g37088a8
           cmake_version=$(cmake --version | head -n1 | awk '{print $NF}' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
           echo "Detected CMake version: $cmake_version"
           echo "$cmake_version" | grep -qE '^3\.22\.' || { echo "CMake version check failed: expected 3.22.x, found $cmake_version"; exit 1; }
 
-          test -f package.json
-          test -f package-lock.json
-          test -f third_party/llama.cpp/include/llama.h
-          test -f android/gradle/wrapper/gradle-wrapper.properties
-          test -f android/app/src/main/cpp/CMakeLists.txt
-          test -f android/app/src/main/cpp/OnDeviceRuntime.cpp
-          test -f android/app/src/main/java/ai/forgeai/app/OnDeviceRuntime.java
-          test -f android/app/src/main/java/ai/forgeai/app/MainActivity.java
+          # Verify required files exist
+          failures=0
+          for f in \
+            package.json \
+            package-lock.json \
+            third_party/llama.cpp/include/llama.h \
+            android/gradle/wrapper/gradle-wrapper.properties \
+            android/app/src/main/cpp/CMakeLists.txt \
+            android/app/src/main/cpp/OnDeviceRuntime.cpp \
+            android/app/src/main/java/ai/forgeai/app/OnDeviceRuntime.java \
+            android/app/src/main/java/ai/forgeai/app/MainActivity.java; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING FILE: $f"
+              failures=$((failures + 1))
+            else
+              echo "OK: $f"
+            fi
+          done
 
-          grep -q "gradle-8.7" android/gradle/wrapper/gradle-wrapper.properties
-          grep -q "com.android.tools.build:gradle:8.6.1" android/build.gradle
-          grep -q "26.1.10909125" android/app/build.gradle
-          grep -q "GGML_BACKEND_DL ON" android/app/src/main/cpp/CMakeLists.txt
-          grep -q "GGML_CPU_ALL_VARIANTS OFF" android/app/src/main/cpp/CMakeLists.txt
+          # Verify expected content in key files
+          checks=(
+            "gradle-8.7|android/gradle/wrapper/gradle-wrapper.properties"
+            "com.android.tools.build:gradle:8.6.1|android/build.gradle"
+            "26.1.10909125|android/app/build.gradle"
+            "GGML_BACKEND_DL ON|android/app/src/main/cpp/CMakeLists.txt"
+            "GGML_CPU_ALL_VARIANTS OFF|android/app/src/main/cpp/CMakeLists.txt"
+          )
+          for entry in "${checks[@]}"; do
+            pattern="${entry%%|*}"
+            file="${entry#*|}"
+            if [ ! -f "$file" ]; then
+              echo "SKIP grep: $file does not exist"
+            elif grep -q "$pattern" "$file"; then
+              echo "OK: grep '$pattern' in $file"
+            else
+              echo "MISSING PATTERN: '$pattern' not found in $file"
+              failures=$((failures + 1))
+            fi
+          done
+
+          if [ "$failures" -gt 0 ]; then
+            echo "Verification found $failures issue(s). See above for details."
+            exit 1
+          fi
+
+          echo "All toolchain checks passed."
 
       - name: Install JavaScript dependencies
         shell: bash
