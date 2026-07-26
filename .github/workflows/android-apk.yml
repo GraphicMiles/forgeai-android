@@ -56,6 +56,10 @@ jobs:
             "cmake;3.22.1" \
             "ndk;26.1.10909125"
 
+          # Prepend the Android SDK's CMake 3.22.1 to PATH so it takes
+          # precedence over any pre-installed CMake on the runner.
+          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
       - name: Verify Java and Android toolchain
         shell: bash
         run: |
