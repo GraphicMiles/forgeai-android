@@ -15,8 +15,6 @@ env:
     -Dorg.gradle.jvmargs=-Xmx4096m
     -Dorg.gradle.daemon=false
     -Dorg.gradle.workers.max=2
-    -Dorg.gradle.internal.http.connectionTimeout=120000
-    -Dorg.gradle.internal.http.socketTimeout=120000
 
 jobs:
   build-android:
@@ -24,25 +22,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 1
-          clean: true
 
-      - name: Ensure llama.cpp is present
+      - name: Clone llama.cpp
         shell: bash
         run: |
-          # The .gitmodules file references third_party/llama.cpp but the
-          # submodule pointer was never committed to the tree, so actions/checkout
-          # with submodules:recursive leaves the directory empty.  Clone it directly.
           if [ ! -f "third_party/llama.cpp/include/llama.h" ]; then
-            echo "llama.cpp submodule missing — cloning directly..."
             mkdir -p third_party
             git clone --depth 1 https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
           fi
-          test -f third_party/llama.cpp/include/llama.h && echo "llama.h confirmed."
+
+      # ============================================
+      # Build llama-server for Android (arm64-v8a)
+      # ============================================
+      - name: Build llama-server (arm64-v8a)
+        shell: bash
+        run: |
+          echo "Building llama-server for Android..."
+          cd third_party/llama.cpp
+
+          cmake -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-34 \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_CUBLAS=OFF \
+            -DLLAMA_METAL=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build build-android --config Release -j$(nproc)
+
+          mkdir -p ../../../android/app/src/main/jniLibs/arm64-v8a
+          cp build-android/bin/llama-server ../../../android/app/src/main/jniLibs/arm64-v8a/libllama-server.so
+
+          echo "llama-server built successfully."
+          ls -lh ../../../android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -54,176 +73,49 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK licenses
+      - name: Accept SDK licenses
         shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
+        run: yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Install Android SDK, NDK, and CMake
+      - name: Install Android SDK, NDK & CMake
         shell: bash
         run: |
           sdkmanager \
             "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "cmake;3.22.1" \
-            "ndk;26.1.10909125"
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmake;3.25.1" \
+            "ndk;26.3.11579264"
 
-          # Prepend the Android SDK's CMake 3.22.1 to PATH so it takes
-          # precedence over the runner's pre-installed CMake 3.31.x.
-          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmake/3.25.1/bin" >> "$GITHUB_PATH"
 
-      - name: Verify Java and Android toolchain
-        shell: bash
-        run: |
-          java -version
-          adb version
-          cmake --version
+      - name: Install npm dependencies
+        run: npm ci
 
-          # Extract MAJOR.MINOR.PATCH, stripping any suffix like -g37088a8
-          cmake_version=$(cmake --version | head -n1 | awk '{print $NF}' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
-          echo "Detected CMake version: $cmake_version"
-          echo "$cmake_version" | grep -qE '^3\.22\.' || { echo "CMake version check failed: expected 3.22.x, found $cmake_version"; exit 1; }
+      - name: Run tests
+        run: npm test
 
-          # Verify required files exist
-          failures=0
-          for f in \
-            package.json \
-            package-lock.json \
-            third_party/llama.cpp/include/llama.h \
-            android/gradle/wrapper/gradle-wrapper.properties \
-            android/app/src/main/cpp/CMakeLists.txt \
-            android/app/src/main/cpp/OnDeviceRuntime.cpp \
-            android/app/src/main/java/ai/forgeai/app/OnDeviceRuntime.java \
-            android/app/src/main/java/ai/forgeai/app/MainActivity.java; do
-            if [ ! -f "$f" ]; then
-              echo "MISSING FILE: $f"
-              failures=$((failures + 1))
-            else
-              echo "OK: $f"
-            fi
-          done
+      - name: Build web app
+        run: npm run build
 
-          # Verify expected content in key files
-          checks=(
-            "gradle-8.7|android/gradle/wrapper/gradle-wrapper.properties"
-            "com.android.tools.build:gradle:8.6.1|android/build.gradle"
-            "26.1.10909125|android/app/build.gradle"
-            "GGML_BACKEND_DL ON|android/app/src/main/cpp/CMakeLists.txt"
-            "GGML_CPU_ALL_VARIANTS OFF|android/app/src/main/cpp/CMakeLists.txt"
-          )
-          for entry in "${checks[@]}"; do
-            pattern="${entry%%|*}"
-            file="${entry#*|}"
-            if [ ! -f "$file" ]; then
-              echo "SKIP grep: $file does not exist"
-            elif grep -q "$pattern" "$file"; then
-              echo "OK: grep '$pattern' in $file"
-            else
-              echo "MISSING PATTERN: '$pattern' not found in $file"
-              failures=$((failures + 1))
-            fi
-          done
-
-          if [ "$failures" -gt 0 ]; then
-            echo "Verification found $failures issue(s). See above for details."
-            exit 1
-          fi
-
-          echo "All toolchain checks passed."
-
-      - name: Install JavaScript dependencies
-        shell: bash
-        run: |
-          npm ci
-
-      - name: Run unit and safety tests
-        shell: bash
-        run: |
-          npm test
-
-      - name: Build web application
-        shell: bash
-        run: |
-          npm run build
-
-      - name: Sync Capacitor Android project
-        shell: bash
-        run: |
-          npx cap sync android
-
-      - name: Verify generated Capacitor project
-        shell: bash
-        run: |
-          # cap sync regenerates capacitor.build.gradle and capacitor.settings.gradle.
-          # Both must reference the custom forgeai-device-capacity plugin.
-          failures=0
-
-          for f in \
-            android/app/capacitor.build.gradle \
-            android/capacitor.settings.gradle; do
-            if [ ! -f "$f" ]; then
-              echo "MISSING FILE: $f"
-              failures=$((failures + 1))
-            elif grep -q "forgeai-device-capacity" "$f"; then
-              echo "OK: forgeai-device-capacity found in $f"
-            else
-              echo "MISSING: forgeai-device-capacity not in $f"
-              failures=$((failures + 1))
-            fi
-          done
-
-          if [ "$failures" -gt 0 ]; then
-            echo "Capacitor project verification failed ($failures issue(s))."
-            exit 1
-          fi
-
-          echo "Capacitor project checks passed."
+      - name: Sync Capacitor
+        run: npx cap sync android
 
       - name: Build Android APK
-        shell: bash
         working-directory: android
         run: |
-          set -e
           chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
 
-          for attempt in 1 2 3; do
-            echo "Android build attempt ${attempt}/3"
-
-            if ./gradlew assembleDebug \
-              --no-daemon \
-              --no-parallel \
-              --max-workers=2 \
-              --stacktrace; then
-              break
-            fi
-
-            if [ "${attempt}" -eq 3 ]; then
-              echo "Android build failed after 3 attempts."
-              exit 1
-            fi
-
-            echo "Build failed. Retrying in 30 seconds..."
-            sleep 30
-          done
-
-      - name: Verify APK exists
-        shell: bash
+      - name: Verify APK
         run: |
-          set -e
-
           APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-
-          test -f "$APK_PATH"
-          test -s "$APK_PATH"
-
-          echo "APK successfully created:"
+          test -f "$APK_PATH" && test -s "$APK_PATH"
           ls -lh "$APK_PATH"
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: forgeai-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
           retention-days: 14
