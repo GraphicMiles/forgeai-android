@@ -27,42 +27,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Clone llama.cpp
-        shell: bash
-        run: |
-          if [ ! -f "third_party/llama.cpp/include/llama.h" ]; then
-            mkdir -p third_party
-            git clone --depth 1 https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
-          fi
-
-      # ============================================
-      # Build llama-server for Android (arm64-v8a)
-      # ============================================
-      - name: Build llama-server (arm64-v8a)
-        shell: bash
-        run: |
-          echo "Building llama-server for Android..."
-          cd third_party/llama.cpp
-
-          cmake -B build-android \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-34 \
-            -DLLAMA_BUILD_SERVER=ON \
-            -DLLAMA_CUBLAS=OFF \
-            -DLLAMA_METAL=OFF \
-            -DLLAMA_BUILD_EXAMPLES=OFF \
-            -DLLAMA_BUILD_TESTS=OFF \
-            -DCMAKE_BUILD_TYPE=Release
-
-          cmake --build build-android --config Release -j$(nproc)
-
-          mkdir -p ../../../android/app/src/main/jniLibs/arm64-v8a
-          cp build-android/bin/llama-server ../../../android/app/src/main/jniLibs/arm64-v8a/libllama-server.so
-
-          echo "llama-server built successfully."
-          ls -lh ../../../android/app/src/main/jniLibs/arm64-v8a/
-
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
@@ -73,13 +37,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept SDK licenses
-        shell: bash
-        run: yes | sdkmanager --licenses >/dev/null || true
-
-      - name: Install Android SDK, NDK & CMake
+      - name: Install Android SDK, NDK, and CMake
         shell: bash
         run: |
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager \
             "platform-tools" \
             "platforms;android-34" \
@@ -87,35 +48,39 @@ jobs:
             "cmake;3.22.1" \
             "ndk;26.1.10909125"
 
-          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
-
-      - name: Install npm dependencies
+      - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Run tests
+      # Downloads the exact llama.cpp revision required by the CMake project
+      # and verifies Java/SDK/NDK/CMake before the expensive build begins.
+      - name: Verify Android build environment
+        run: npm run android:preflight
+
+      - name: Run unit tests
         run: npm test
 
-      - name: Build web app
+      - name: Build web assets
         run: npm run build
 
-      - name: Sync Capacitor
+      - name: Sync Capacitor Android project
         run: npx cap sync android
 
-      - name: Build Android APK
+      - name: Build direct llama.cpp Android APK
         working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
 
-      - name: Verify APK
+      - name: Verify APK artifact
+        shell: bash
         run: |
           APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-          test -f "$APK_PATH" && test -s "$APK_PATH"
+          test -s "$APK_PATH"
           ls -lh "$APK_PATH"
+          sha256sum "$APK_PATH"
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: forgeai-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           retention-days: 14
