@@ -3,9 +3,10 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <atomic>
 #include "llama.h"
 
-namespace { std::mutex mutex; llama_model * model = nullptr; }
+namespace { std::mutex mutex; llama_model * model = nullptr; std::atomic<bool> cancel_requested{false}; }
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_ai_forgeai_app_OnDeviceRuntime_nativeLoad(JNIEnv *env, jclass, jstring path) {
@@ -30,9 +31,15 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeIsLoaded(JNIEnv *, jclass) {
     std::lock_guard<std::mutex> lock(mutex); return model != nullptr;
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_ai_forgeai_app_OnDeviceRuntime_nativeCancel(JNIEnv *, jclass) {
+    cancel_requested.store(true);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_ai_forgeai_app_OnDeviceRuntime_nativeGenerate(JNIEnv *env, jclass, jstring prompt, jint maxTokens) {
     const char *raw = env->GetStringUTFChars(prompt, nullptr);
+    cancel_requested.store(false);
     std::lock_guard<std::mutex> lock(mutex);
     if (!model) { env->ReleaseStringUTFChars(prompt, raw); return nullptr; }
     const llama_vocab *vocab = llama_model_get_vocab(model);
@@ -49,6 +56,7 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeGenerate(JNIEnv *env, jclass, jstring 
     std::string output;
     if (llama_decode(ctx, batch) != 0) { llama_sampler_free(sampler); llama_free(ctx); return nullptr; }
     for (int i = 0; i < maxTokens; ++i) {
+        if (cancel_requested.load()) { llama_sampler_free(sampler); llama_free(ctx); return nullptr; }
         llama_token token = llama_sampler_sample(sampler, ctx, -1);
         if (llama_vocab_is_eog(vocab, token)) break;
         char piece[256]; int n = llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, true); if (n > 0) output.append(piece, n);
