@@ -70,7 +70,7 @@ jobs:
 
       - name: Build direct llama.cpp Android APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
+        run: bash ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
 
       - name: Verify APK artifact
         shell: bash
