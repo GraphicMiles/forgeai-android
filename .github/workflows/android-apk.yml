@@ -53,6 +53,9 @@ jobs:
 
       # Downloads the exact llama.cpp revision required by the CMake project
       # and verifies Java/SDK/NDK/CMake before the expensive build begins.
+      - name: Bootstrap pinned llama.cpp
+        run: npm run llama:bootstrap
+
       - name: Verify Android build environment
         run: npm run android:preflight
 
