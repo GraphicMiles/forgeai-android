@@ -43,8 +43,8 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager \
             "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
             "cmake;3.22.1" \
             "ndk;26.1.10909125"
 
@@ -61,6 +61,12 @@ jobs:
 
       - name: Run unit tests
         run: npm test
+
+      - name: Run static analysis
+        run: npm run lint
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
 
       - name: Build web assets
         run: npm run build
