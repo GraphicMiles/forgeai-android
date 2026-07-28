@@ -19,6 +19,7 @@ A local-first coding assistant for Android, with a browser/Ollama development pr
 - VS Code-style CodeMirror editor with line numbers, syntax highlighting, folding, search, completion, bracket matching, and lazy-loaded language support.
 - On-demand Prettier formatting for JavaScript, TypeScript, JSON, CSS, HTML, Markdown, and YAML.
 - Android SKILL.md import with manifest validation, static security scanning, disabled-by-default installation, enable/disable, and removal.
+- Approval-gated existing-file patches and new-file creation with exact content review, reread verification, and Undo.
 - Local planner/context/coder/reviewer/verifier roles with model-call, file, and time budgets.
 - User-editable approved project memory, bounded repository symbol/import/call index, task timeline, and proactive suggestions.
 - Fast, balanced, and reviewed response modes plus a user-controlled foreground autonomous queue that stops at patch approval.
