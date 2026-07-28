@@ -44,7 +44,7 @@ React UI
 
 ## Official Android models
 
-The Model Zoo is generated from `src/models/catalog.js`. Every listed GGUF has:
+The Model Zoo is generated from `src/models/catalog.js` and currently offers eight models from 94 MB through 1.7 GB. Every listed GGUF has:
 
 - an immutable Hugging Face revision URL;
 - exact file size;

@@ -71,6 +71,9 @@ jobs:
       - name: Validate immutable release model catalog
         run: npm run catalog:validate-release
 
+      - name: Verify model source ranges and GGUF headers
+        run: npm run catalog:verify-sources
+
       - name: Build web assets
         run: npm run build
 
