@@ -5,6 +5,8 @@
 #include <cstring>
 #include <atomic>
 #include "llama.h"
+#include <android/log.h>
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "ForgeAI", __VA_ARGS__)
 
 namespace { std::mutex mutex; llama_model * model = nullptr; std::atomic<bool> cancel_requested{false}; }
 
@@ -17,6 +19,7 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeLoad(JNIEnv *env, jclass, jstring path
     llama_model_params params = llama_model_default_params();
     params.n_gpu_layers = 0;
     model = llama_model_load_from_file(raw, params);
+    if (!model) LOGE("llama_model_load_from_file failed for %s", raw);
     env->ReleaseStringUTFChars(path, raw);
     return model != nullptr;
 }
