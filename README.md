@@ -22,7 +22,8 @@ A local-first coding assistant for Android, with a browser/Ollama development pr
 - Approval-gated existing-file patches and new-file creation with exact content review, reread verification, and Undo.
 - Local planner/context/coder/reviewer/verifier roles with model-call, file, and time budgets.
 - User-editable approved project memory, bounded repository symbol/import/call index, task timeline, and proactive suggestions.
-- Fast, balanced, and reviewed response modes plus a user-controlled foreground autonomous queue that stops at patch approval.
+- Fast, balanced, and reviewed response modes plus restricted and opt-in Full Autonomous modes.
+- Full Autonomous Android mode can run app-sandbox shell commands, use public web research, operate app-private JGit clones, call GitHub APIs, and auto-apply verified workspace actions.
 - Device GGUF import with header validation and a recorded SHA-256.
 - Local load/prefill/generation benchmark information.
 
@@ -103,10 +104,11 @@ GitHub Actions also builds and uploads `forgeai-debug-apk` on every push to `mai
 
 - Android project access requires a user-selected SAF document tree.
 - App tools accept relative workspace paths only.
-- Writes, renames, deletes, and future execution require approval.
+- Restricted autonomy modes require approval for writes. Full Autonomous mode is a separate explicit opt-in that permits autonomous workspace writes and app-sandbox terminal/Git operations.
 - Text reads/writes are capped at 2 MiB; RAG reads use a lower per-file cap.
 - Common secret files and generated/dependency directories are blocked by default.
-- Android shell execution is not implemented.
+- Android terminal commands run as the ForgeAI app user inside app-private storage; they have no root access and only Android-installed/bundled binaries are available.
+- GitHub PATs are encrypted with Android Keystore and are never added to the model prompt or terminal environment.
 - Browser Ollama endpoints may be remote; the app discloses workspace files before adding them to a prompt.
 
 ## Remaining acceptance work
