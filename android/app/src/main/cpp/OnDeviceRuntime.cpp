@@ -13,6 +13,7 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeLoad(JNIEnv *env, jclass, jstring path
     const char *raw = env->GetStringUTFChars(path, nullptr);
     std::lock_guard<std::mutex> lock(mutex);
     if (model) { llama_model_free(model); model = nullptr; }
+    llama_backend_init();
     llama_model_params params = llama_model_default_params();
     params.n_gpu_layers = 0;
     model = llama_model_load_from_file(raw, params);
