@@ -206,6 +206,7 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeGenerate(
 
     llama_sampler_chain_params sampler_params = llama_sampler_chain_default_params();
     llama_sampler * sampler = llama_sampler_chain_init(sampler_params);
+    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(64, 1.15f, 0.0f, 0.0f));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.90f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.70f));
