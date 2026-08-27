@@ -64,7 +64,10 @@ android {
             // The release build is signed with the debug key so CI can produce an
             // installable artifact; swap in a real keystore before shipping.
             signingConfig = signingConfigs.debug
+            // Nothing is shrunk: JGit-style reflection and the JNI bridge are
+            // easy to break, and 27 MiB leaves plenty of room under the budget.
             minifyEnabled = false
+            shrinkResources = false
             ndk { debugSymbolLevel "none" }
         }
     }
