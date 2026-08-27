@@ -35,3 +35,15 @@ ones to take and in what order.
 
 10. **Speed reads 11.1 t/s from the last run** with nothing to say it is
     historical. Either label it "last run" or clear it.
+
+## Status after the 28 August build
+
+Fixed: 1 (the engine holds a reply back until it knows it is prose, and the app
+drops it again if it looks machine-shaped), 2 ("1 line"), 3 (Skip is #E4E4E8 and
+sits second, after Allow), 4 (an empty preview no longer renders), 5 (the trace
+says "Waiting on you" and the shimmer stops), 6 (the held tool is a row in
+"waiting on you" state), 9 ("Ready to use" unless a job is running), 10 (speed is
+labelled "Last run", cleared when a new job starts, and given in words a second).
+
+Still open: 7 (imported model duplicating the catalogue entry), 8 (titles
+truncating mid-word in Your own files).
