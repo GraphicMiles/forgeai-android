@@ -378,22 +378,42 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Everything Luna says shares one column: indented 24 from the gutter,
+  /// 80% of the width, and no card behind it. The user's words are the only
+  /// filled shape in the thread, so the two sides never look symmetrical.
+  static const double _agentIndent = 24;
+  static const double _agentWidth = 0.8;
+
+  Widget _agentColumn(Widget child, {double bottom = 11}) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(_agentIndent, 0, 20, bottom),
+      child: FractionallySizedBox(
+        widthFactor: _agentWidth,
+        alignment: Alignment.topLeft,
+        child: child,
+      ),
+    );
+  }
+
   List<Widget> _thread(LunaCore core) {
     final List<Widget> out = <Widget>[];
     for (final Map<String, dynamic> message in core.messages) {
       final String role = (message['role'] as String?) ?? '';
       final String content = (message['content'] as String?) ?? '';
       if (role == 'observation' || content.isEmpty) continue;
-      out.add(Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 11),
-        child: role == 'user' ? _userBubble(content) : _lunaBubble(content),
-      ));
+      if (role == 'user') {
+        // 24 under a question, 11 under anything else: the answer belongs to
+        // the question above it, and the spacing should say so.
+        out.add(Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: _userBubble(content),
+        ));
+      } else {
+        out.add(_agentColumn(Text(content, style: LunaTheme.body)));
+      }
     }
     if (core.streaming.isNotEmpty) {
-      out.add(Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 11),
-        child: _lunaBubble(core.streaming, streaming: true),
-      ));
+      out.add(_agentColumn(StreamedAnswer(text: core.streaming)));
     }
     return out;
   }
@@ -403,35 +423,27 @@ class _ChatScreenState extends State<ChatScreen> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: <Widget>[
         Flexible(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 280),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: LunaTheme.ink,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(7),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              // Hugs its words; 80% is only the point at which it wraps.
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * _agentWidth),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: LunaTheme.ink,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(15),
+                    topRight: Radius.circular(15),
+                    bottomLeft: Radius.circular(15),
+                    bottomRight: Radius.circular(5),
+                  ),
+                ),
+                child: Text(text, style: LunaTheme.bubble),
               ),
             ),
-            child: Text(text, style: LunaTheme.bubble),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _lunaBubble(String text, {bool streaming = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        const Padding(padding: EdgeInsets.only(top: 2), child: Mark(size: 22)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: streaming
-              ? StreamedAnswer(text: text)
-              : Text(text, style: LunaTheme.body),
         ),
       ],
     );
@@ -442,7 +454,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final String tool = step['tool'] ?? '';
       final String state = step['state'] ?? '';
       final String path = step['path'] ?? '';
-      final String detail = state == 'replayed'
+      final String detail = state == 'held'
+          ? 'waiting on you'
+          : state == 'replayed'
           ? 'already read'
           : state == 'blocked'
               ? 'over the limit'
@@ -453,81 +467,100 @@ class _ChatScreenState extends State<ChatScreen> {
                       : path.isEmpty
                       ? ''
                       : path.split('/').last;
-      final String label = state == 'running' || state == 'unfinished' ||
-              (state == 'denied' && tool == 'load_model')
+      final String label = state == 'running' || state == 'held' ||
+              state == 'unfinished' || (state == 'denied' && tool == 'load_model')
           ? (_liveLabels[tool] ?? tool)
           : (_stepLabels[tool] ?? tool);
       return TraceStep(label: label, state: state, detail: detail);
     }).toList();
 
-    return AgentTrace(
+    return _agentColumn(AgentTrace(
       steps: steps,
       running: core.running,
+      waiting: core.waitingOnYou,
       elapsed: core.running ? core.workElapsed : core.runElapsed,
-    );
+    ));
   }
 
-  /// The one filled-black surface on this screen.
+  /// The one filled-black surface on this screen. It fits its words: a short
+  /// question is a short card, and Skip is legible rather than ghosted.
   Widget _approval(LunaCore core) {
     final Map<String, dynamic> approval = core.pendingApproval!;
-    final String preview = (approval['preview'] as String?) ?? '';
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 13),
-      decoration: BoxDecoration(color: LunaTheme.ink, borderRadius: LunaTheme.rCard),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Glyph(FontAwesomeIcons.hand, size: 11, color: LunaTheme.onInkDim),
-              const SizedBox(width: 7),
-              Text('Needs your approval',
-                  style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.onInkDim)),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text((approval['headline'] as String?) ?? 'Allow this?', style: LunaTheme.decision),
-          const SizedBox(height: 4),
-          Text((approval['consequence'] as String?) ?? '',
-              style: LunaTheme.text(size: 12.5, color: LunaTheme.onInkFaint, height: 1.4)),
-          if (preview.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(top: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              constraints: const BoxConstraints(maxHeight: 132),
-              decoration: const BoxDecoration(
-                  color: Color(0xFF17171A), borderRadius: LunaTheme.rField),
-              child: SingleChildScrollView(
-                child: Text(preview,
-                    style: LunaTheme.monoStyle(size: 11.5, color: const Color(0xFFD9D9DE))),
-              ),
+    final String preview = ((approval['preview'] as String?) ?? '').trim();
+    // An empty preview used to render as a lone ellipsis chip: a box with
+    // nothing in it, above the two buttons that matter.
+    final bool showPreview = preview.isNotEmpty && preview != '…' && preview != '...';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_agentIndent, 2, 20, 11),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * _agentWidth),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(13, 12, 13, 11),
+            decoration: BoxDecoration(color: LunaTheme.ink, borderRadius: LunaTheme.rCard),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Glyph(FontAwesomeIcons.hand, size: 10, color: LunaTheme.onInkDim),
+                    const SizedBox(width: 6),
+                    Text('Needs your approval',
+                        style: LunaTheme.text(
+                            size: 10.5, weight: 600, color: LunaTheme.onInkDim)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text((approval['headline'] as String?) ?? 'Allow this?',
+                    style: LunaTheme.decision),
+                if (((approval['consequence'] as String?) ?? '').isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 3),
+                  Text((approval['consequence'] as String?) ?? '',
+                      style: LunaTheme.text(
+                          size: 11.5, color: LunaTheme.onInkFaint, height: 1.4)),
+                ],
+                if (showPreview)
+                  Container(
+                    margin: const EdgeInsets.only(top: 9),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    constraints: const BoxConstraints(maxHeight: 120),
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF17171A), borderRadius: LunaTheme.rField),
+                    child: SingleChildScrollView(
+                      child: Text(preview,
+                          style: LunaTheme.monoStyle(
+                              size: 11, color: const Color(0xFFE4E4E8))),
+                    ),
+                  ),
+                const SizedBox(height: 11),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _approvalButton(
+                      label: 'Allow',
+                      icon: FontAwesomeIcons.check,
+                      background: LunaTheme.onInk,
+                      foreground: LunaTheme.ink,
+                      onTap: () => core.approve('${approval['id']}', true),
+                    ),
+                    const SizedBox(width: 7),
+                    _approvalButton(
+                      label: 'Skip',
+                      icon: FontAwesomeIcons.xmark,
+                      background: LunaTheme.inkButton,
+                      foreground: const Color(0xFFE4E4E8),
+                      onTap: () => core.approve('${approval['id']}', false),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          const SizedBox(height: 13),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _approvalButton(
-                  label: 'Skip',
-                  icon: FontAwesomeIcons.xmark,
-                  background: LunaTheme.inkButton,
-                  foreground: const Color(0xFFD9D9DE),
-                  onTap: () => core.approve('${approval['id']}', false),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _approvalButton(
-                  label: 'Allow',
-                  icon: FontAwesomeIcons.check,
-                  background: LunaTheme.onInk,
-                  foreground: LunaTheme.ink,
-                  onTap: () => core.approve('${approval['id']}', true),
-                ),
-              ),
-            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -535,22 +568,25 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Luna asking you something. The job is stopped until this is answered.
   Widget _question(LunaCore core) {
     final Map<String, dynamic> question = core.pendingQuestion!;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 13),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_agentIndent, 2, 20, 11),
+      child: Container(
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 11),
       decoration: BoxDecoration(color: LunaTheme.ink, borderRadius: LunaTheme.rCard),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Glyph(FontAwesomeIcons.circleQuestion, size: 11, color: LunaTheme.onInkDim),
-              const SizedBox(width: 7),
+              Glyph(FontAwesomeIcons.circleQuestion, size: 10, color: LunaTheme.onInkDim),
+              const SizedBox(width: 6),
               Text('Luna needs to know',
-                  style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.onInkDim)),
+                  style: LunaTheme.text(size: 10.5, weight: 600, color: LunaTheme.onInkDim)),
             ],
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text('${question['question']}', style: LunaTheme.decision),
           const SizedBox(height: 11),
           Container(
@@ -575,37 +611,35 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 11),
+          const SizedBox(height: 10),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Expanded(
-                child: _approvalButton(
-                  label: 'Skip',
-                  icon: FontAwesomeIcons.xmark,
-                  background: LunaTheme.inkButton,
-                  foreground: const Color(0xFFD9D9DE),
-                  onTap: () {
-                    core.answerQuestion('${question['id']}', '');
-                    _answer.clear();
-                  },
-                ),
+              _approvalButton(
+                label: 'Answer',
+                icon: FontAwesomeIcons.check,
+                background: LunaTheme.onInk,
+                foreground: LunaTheme.ink,
+                onTap: () {
+                  core.answerQuestion('${question['id']}', _answer.text);
+                  _answer.clear();
+                },
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _approvalButton(
-                  label: 'Answer',
-                  icon: FontAwesomeIcons.check,
-                  background: LunaTheme.onInk,
-                  foreground: LunaTheme.ink,
-                  onTap: () {
-                    core.answerQuestion('${question['id']}', _answer.text);
-                    _answer.clear();
-                  },
-                ),
+              const SizedBox(width: 7),
+              _approvalButton(
+                label: 'Skip',
+                icon: FontAwesomeIcons.xmark,
+                background: LunaTheme.inkButton,
+                foreground: const Color(0xFFE4E4E8),
+                onTap: () {
+                  core.answerQuestion('${question['id']}', '');
+                  _answer.clear();
+                },
               ),
             ],
           ),
         ],
+      ),
       ),
     );
   }
@@ -621,15 +655,14 @@ class _ChatScreenState extends State<ChatScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 13),
         decoration: BoxDecoration(color: background, borderRadius: LunaTheme.rPill),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Glyph(icon, size: 12, color: foreground),
-            const SizedBox(width: 7),
-            Text(label, style: LunaTheme.text(size: 13.5, weight: 600, color: foreground)),
+            Glyph(icon, size: 10.5, color: foreground),
+            const SizedBox(width: 6),
+            Text(label, style: LunaTheme.text(size: 12.5, weight: 600, color: foreground)),
           ],
         ),
       ),
@@ -648,12 +681,12 @@ class _ChatScreenState extends State<ChatScreen> {
             : core.thinking
                 ? 'Thinking'
                 : 'Working';
-    return AgentWorkingLine(
+    return _agentColumn(AgentWorkingLine(
       label: label,
       elapsed: core.workElapsed,
       waiting: core.waitingOnYou,
       onStop: core.stop,
-    );
+    ), bottom: 4);
   }
 
   /// The way back into a job that stopped. Nothing is lost: the steps that

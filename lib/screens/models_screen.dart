@@ -324,7 +324,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
             children: <Widget>[
               Glyph(FontAwesomeIcons.bolt, size: 11, color: LunaTheme.onInkDim),
               const SizedBox(width: 7),
-              Text('Running now',
+              Text(core.running ? 'Working now' : 'Ready to use',
                   style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.onInkDim)),
               const Spacer(),
               if (core.keepWarm)
@@ -343,10 +343,12 @@ class _ModelsScreenState extends State<ModelsScreen> {
               const SizedBox(width: 7),
               _heroCell('Params', '${model['params']}'),
               const SizedBox(width: 7),
+              // Tokens a second is the model's unit, not a person's, and a
+              // number left over from a finished run has to say it is old.
               _heroCell(
-                  'Speed',
+                  'Last run',
                   core.tokensPerSecond > 0
-                      ? '${core.tokensPerSecond.toStringAsFixed(1)} t/s'
+                      ? '${(core.tokensPerSecond * 0.75).toStringAsFixed(0)} words/s'
                       : '—'),
             ],
           ),
@@ -389,7 +391,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
           const SizedBox(width: 8),
           _stat('Storage free', formatBytes(freeDisk)),
           const SizedBox(width: 8),
-          _stat('Threads', threads == 0 ? '—' : '$threads'),
+          _stat('Cores used', threads == 0 ? '—' : '$threads'),
         ],
       ),
     );
