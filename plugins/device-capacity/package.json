@@ -1,5 +1,5 @@
 {
-  "name": "@forgeai/device-capacity",
+  "name": "@luna/device-capacity",
   "version": "1.0.0",
   "private": true,
   "description": "Capacitor Android plugin for device RAM and storage capacity.",

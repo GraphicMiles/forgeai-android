@@ -7,7 +7,7 @@ import TypingIndicator from './TypingIndicator';
 import AgentReasoningPanel from './AgentReasoningPanel';
 import ActionCard from './ActionCard';
 import EmptyState from './EmptyState';
-import { isFullAutoMode, getCurrentAutomationTier } from '../agent/automation/automationTiers.js';
+import { isUnattended } from '../agent/executionMode.js';
 import './ChatContainer.css';
 
 export default function ChatContainer({
@@ -33,11 +33,6 @@ export default function ChatContainer({
   onClearChat,
   onOpenZoo,
   onOpenCollection,
-  proactiveSuggestions = [],
-  autonomousQueue = [],
-  onQueueSuggestion,
-  onRunQueuedTask,
-  onRemoveQueuedTask,
   activeModel = null,
   availableModels = [],
   onModelChange,
@@ -50,8 +45,6 @@ export default function ChatContainer({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [menuForId, setMenuForId] = useState(null);
-  // Session-scoped dismissal for proactive suggestion cards (e.g. the "no README" Documentation card).
-  const [dismissedSuggestions, setDismissedSuggestions] = useState(() => new Set());
 
   const handleSuggestionClick = useCallback((text) => {
     setPrefilledText(text);
@@ -95,7 +88,7 @@ export default function ChatContainer({
   };
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
-  const topbarTitle = activeConversation?.title || 'ForgeAI';
+  const topbarTitle = activeConversation?.title || 'Luna';
   const localModels = availableModels.filter(model => model.source !== 'cloud' && !model.cloud);
   const cloudModels = availableModels.filter(model => model.source === 'cloud' || model.cloud);
   const activeModelIsCloud = activeModel?.source === 'cloud' || activeModel?.cloud;
@@ -109,7 +102,6 @@ export default function ChatContainer({
       if (messages[i].role === 'assistant') { inflightIndex = i; break; }
     }
   }
-  const visibleSuggestions = proactiveSuggestions.filter(suggestion => !dismissedSuggestions.has(suggestion.type));
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -191,10 +183,9 @@ export default function ChatContainer({
           </button>
         </div>
 
-        {/* Full-Auto Indicator */}
-        {isFullAutoMode() && (
+        {isUnattended() && (
           <div className="status-pill danger">
-            <AlertTriangle size={13} /> FULL-AUTO ({getCurrentAutomationTier()})
+            <AlertTriangle size={13} /> UNATTENDED
           </div>
         )}
 
@@ -451,39 +442,6 @@ export default function ChatContainer({
         <button className="scroll-to-bottom" onClick={scrollToBottom} aria-label="Scroll to latest messages">
           <ArrowDown size={18} />
         </button>
-      )}
-      {!isTyping && autonomousQueue.some(task => !['completed', 'cancelled'].includes(task.status)) && (
-        <div className="autonomy-queue" aria-label="Android autonomous task queue">
-          {autonomousQueue.filter(task => !['completed', 'cancelled'].includes(task.status)).slice(0, 3).map(task => (
-            <div key={task.id}>
-              <span>{task.type} · {task.status}</span>
-              {task.status === 'queued' && <button onClick={() => onRunQueuedTask?.(task.id)}>Run</button>}
-              <button onClick={() => onRemoveQueuedTask?.(task.id)}>×</button>
-            </div>
-          ))}
-        </div>
-      )}
-      {!isTyping && visibleSuggestions.length > 0 && (
-        <div className="proactive-suggestions" aria-label="Suggested next actions">
-          {visibleSuggestions.map(suggestion => (
-            <div className="suggestion-card" key={suggestion.type}>
-              <button className="suggestion-fill" onClick={() => handleSuggestionClick(suggestion.prompt)} title={suggestion.reason}>
-                <span>{suggestion.type.replace(/-/g, ' ')}</span>
-                <small>{suggestion.reason}</small>
-              </button>
-              <button className="suggestion-queue" onClick={() => onQueueSuggestion?.(suggestion)} title="Add to the user-controlled queue">Queue</button>
-              <button
-                type="button"
-                className="suggestion-dismiss"
-                onClick={() => setDismissedSuggestions(previous => new Set(previous).add(suggestion.type))}
-                aria-label="Dismiss suggestion"
-                title="Dismiss"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
       )}
       <MessageInput onSend={onSendMessage} onStop={onStopGeneration} disabled={isTyping} prefilledText={prefilledText} onPrefilledTextConsumed={() => setPrefilledText('')} />
     </div>

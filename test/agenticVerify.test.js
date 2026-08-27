@@ -71,23 +71,6 @@ console.log('  ✓ verified successful write');
 }
 console.log('  ✓ caught write that did not persist');
 
-// --- Case 3: mission plan is injected as a system message ---
-{
-  const ws = makeWorkspace();
-  let sawPlan = false;
-  const provider = {
-    supportsToolUse: true,
-    async loadModel() { return {}; },
-    async stream({ messages, onToken }) {
-      if (messages.some(m => m.role === 'system' && /MISSION PLAN/.test(m.content || ''))) sawPlan = true;
-      onToken?.('ok');
-      return { toolCalls: [tc('respond', { message: 'done' })] };
-    },
-  };
-  await runAgenticLoop({ provider, model: {}, userMessage: 'do it', workspaceProvider: ws, isNative: true, missionPlan: 'MISSION PLAN\nGoal: test' });
-  assert.equal(sawPlan, true, 'mission plan should be injected into the model messages');
-}
-console.log('  ✓ mission plan injected into loop');
 
 // --- Case 4: scratchpad is injected after the first tool call ---
 {

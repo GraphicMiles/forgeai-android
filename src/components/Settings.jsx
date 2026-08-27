@@ -1,41 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Bot, Bug, Cpu, Database, Plug, RefreshCw, Shield, SlidersHorizontal, Trash2, Wifi } from 'lucide-react';
+import { Bot, Bug, Cpu, Database, Plug, RefreshCw, ShieldCheck, Trash2, Wifi } from 'lucide-react';
 import { readErrorLog, clearErrorLog, recordError } from '../utils/errorLog.js';
-import { skillRegistry } from '../skills/skillRegistry.js';
-import { scanSkillPackage } from '../skills/skillScanner.js';
-import { parseSkillMarkdown } from '../skills/skillPackage.js';
-import { clearGithubToken, getFullAutonomyStatus, hasGithubToken, pickSkillFile, setFullAutonomy, storeGithubToken } from '../nativeBridge.js';
-import { readProjectMemory } from '../memory/agentMemory.js';
-import { AUTONOMY_LEVELS, readAutonomyLevel, writeAutonomyLevel } from '../agent/autonomyPolicy.js';
-import { isToolExecutionTier } from '../agent/automation/automationTiers.js';
-import { RESPONSE_QUALITY, readResponseQuality, writeResponseQuality } from '../agent/responseQuality.js';
-import {
-  createSafetyPolicy,
-  getCurrentSafetyPolicy,
-  saveSafetyPolicy,
-  POLICY_LEVELS,
-  getLevelConfig,
-} from '../safety/SafetyPolicy.js';
+import { clearGithubToken, hasGithubToken, setFullAutonomy, storeGithubToken } from '../nativeBridge.js';
+import { EXECUTION_MODES, readExecutionMode, writeExecutionMode } from '../agent/executionMode.js';
 import { isFailoverEnabled, setFailoverEnabled } from '../providers/cloudProviderStore.js';
-import AutomationSettings from './AutomationSettings.jsx';
-import SkillValidatorSettings from './SkillValidatorSettings.jsx';
-import ResearchSettings from './ResearchSettings.jsx';
-import GitHubAutomationSettings from './GitHubAutomationSettings.jsx';
-import SocialMediaSettings from './SocialMediaSettings.jsx';
-import ExperimentalFeatures from './ExperimentalFeatures.jsx';
-import TaskTimeline from './TaskTimeline.jsx';
-import ProjectMemoryPanel from './ProjectMemoryPanel.jsx';
-import RepositoryIndexPanel from './RepositoryIndexPanel.jsx';
 import DropdownMenu from './DropdownMenu.jsx';
 import './Settings.css';
 
 const SETTINGS_SECTIONS = Object.freeze([
-  { id: 'general', label: 'General', icon: SlidersHorizontal, description: 'Runtime endpoint, local data, and app basics.' },
-  { id: 'agent', label: 'Agent', icon: Bot, description: 'Autonomy, response quality, memory, and repository context.' },
-  { id: 'integrations', label: 'Integrations', icon: Plug, description: 'Research, GitHub, social automation, and experimental features.' },
-  { id: 'security', label: 'Security', icon: Shield, description: 'Safety policy, skills, validators, and trust settings.' },
-  { id: 'diagnostics', label: 'Diagnostics', icon: Bug, description: 'Runtime status and local error logs.' },
+  { id: 'agent', label: 'Agent', icon: Bot, description: 'How much Luna does without asking.' },
+  { id: 'connections', label: 'Connections', icon: Plug, description: 'Runtime endpoint, cloud failover, and credentials.' },
+  { id: 'data', label: 'Data', icon: Database, description: 'Local data and diagnostics.' },
 ]);
+
+const EXECUTION_OPTIONS = [
+  { value: EXECUTION_MODES.ASK, label: 'Ask first' },
+  { value: EXECUTION_MODES.AUTO, label: 'Run unattended' },
+];
 
 function SettingsHeader({ activeSection, onSectionChange }) {
   return (
@@ -89,30 +70,17 @@ function SettingField({ label, htmlFor, children, help }) {
 export default function Settings({
   endpoint,
   onEndpointChange,
-  onClearChat,
   onReset,
   isNative = false,
-  workspaceId = 'no-workspace',
-  workspaceProvider = null,
-  workspaceTree = [],
 }) {
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState('agent');
   const [notice, setNotice] = useState(null);
   const [value, setValue] = useState(endpoint);
   const [errors, setErrors] = useState(() => readErrorLog());
-  const [skills, setSkills] = useState(() => skillRegistry.list());
-  const [autonomy, setAutonomy] = useState(readAutonomyLevel);
-  const [responseQuality, setResponseQuality] = useState(readResponseQuality);
-  const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('forgeai_google_api_key') || '');
-  const [googleCx, setGoogleCx] = useState(() => localStorage.getItem('forgeai_google_cx') || '');
+  const [executionMode, setExecutionMode] = useState(readExecutionMode);
+  const [failover, setFailover] = useState(() => isFailoverEnabled());
   const [githubPat, setGithubPat] = useState('');
   const [githubStored, setGithubStored] = useState(false);
-  const [nativeFullAutonomy, setNativeFullAutonomy] = useState(false);
-  const [failover, setFailover] = useState(() => isFailoverEnabled());
-  const [safetyPolicy, setSafetyPolicy] = useState(() => getCurrentSafetyPolicy());
-  const [developerMode, setDeveloperMode] = useState(() => getCurrentSafetyPolicy().getLevel() === POLICY_LEVELS.UNRESTRICTED);
-
-  const memory = readProjectMemory(workspaceId);
 
   const showNotice = (message, type = 'success') => setNotice({ message, type, at: Date.now() });
 
@@ -120,208 +88,103 @@ export default function Settings({
 
   useEffect(() => {
     if (!isNative) return;
-    hasGithubToken().then(result => setGithubStored(Boolean(result.stored))).catch(error => recordError(error, 'settings-github-token-status'));
-    getFullAutonomyStatus().then(result => setNativeFullAutonomy(Boolean(result.enabled))).catch(error => recordError(error, 'settings-autonomy-status'));
+    hasGithubToken().then(result => setGithubStored(Boolean(result.stored)))
+      .catch(error => recordError(error, 'settings-github-token-status'));
   }, [isNative]);
 
   const saveEndpoint = () => {
     const next = value.trim().replace(/\/$/, '');
     if (!next) return showNotice('Endpoint cannot be empty.', 'error');
-    try { localStorage.setItem('forgeai_endpoint', next); }
+    try { localStorage.setItem('luna_endpoint', next); }
     catch (error) { recordError(error, 'settings-save-endpoint'); }
     onEndpointChange?.(next);
     showNotice('Runtime endpoint saved.');
   };
 
-  const toggleSkill = (id, enabled) => {
-    try {
-      skillRegistry.setEnabled(id, enabled);
-      setSkills(skillRegistry.list());
-      showNotice('Skill setting updated.');
-    } catch (error) {
-      recordError(error, 'settings-toggle-skill');
-      showNotice(error.message, 'error');
-    }
-  };
-
-  const changeAutonomy = async nextValue => {
-    if (nextValue === AUTONOMY_LEVELS.FULL) {
-      const accepted = window.confirm('Full Autonomous mode allows the local model to run arbitrary app-sandbox shell commands, modify app-private Git clones, use configured network research, commit, rebase, push, and trigger GitHub APIs without per-action approval. Web content can contain prompt injection. Enable it?');
+  const changeExecutionMode = async next => {
+    if (next === EXECUTION_MODES.AUTO) {
+      const accepted = window.confirm(
+        'Unattended mode lets Luna write and delete files, run sandbox shell commands, and commit or push Git changes without asking each time.\n\nWeb pages and repository content can contain prompt injection. Enable it?',
+      );
       if (!accepted) return;
     }
-    try {
-      setAutonomy(writeAutonomyLevel(nextValue));
-      if (isNative) {
-        const result = await setFullAutonomy(nextValue === AUTONOMY_LEVELS.FULL || isToolExecutionTier());
-        setNativeFullAutonomy(Boolean(result.enabled));
-      }
-      showNotice('Autonomy level updated.');
-    } catch (error) {
-      recordError(error, 'settings-full-autonomy');
-      showNotice(`Could not update autonomy: ${error.message}`, 'error');
+    setExecutionMode(writeExecutionMode(next));
+    if (isNative) {
+      try { await setFullAutonomy(next === EXECUTION_MODES.AUTO); }
+      catch (error) { recordError(error, 'settings-execution-mode'); }
     }
+    showNotice('Execution mode updated.');
   };
 
-  const changeResponseQuality = nextValue => {
+  const saveGithubToken = async () => {
+    if (!githubPat.trim()) return showNotice('Enter a GitHub personal access token first.', 'error');
     try {
-      setResponseQuality(writeResponseQuality(nextValue));
-      showNotice('Response quality updated.');
-    } catch (error) {
-      recordError(error, 'settings-response-quality');
-      showNotice(error.message, 'error');
-    }
-  };
-
-  const importSkill = async () => {
-    try {
-      const selected = await pickSkillFile();
-      if (!selected?.content) return;
-      const manifest = parseSkillMarkdown(selected.content);
-      const report = scanSkillPackage(manifest, { 'SKILL.md': selected.content });
-      if (report.verdict === 'reject') throw new Error(`Security scanner rejected this skill with ${report.summary.critical} critical finding(s).`);
-      if (report.verdict === 'review' && !window.confirm(`Skill scanner found ${report.summary.warnings} warning(s). Install it disabled for review?`)) return;
-      const installed = skillRegistry.install(manifest, report);
-      setSkills(skillRegistry.list());
-      showNotice(`${installed.name} was imported disabled for review.`);
-    } catch (error) {
-      recordError(error, 'settings-import-skill');
-      showNotice(`Skill import failed: ${error.message}`, 'error');
-    }
-  };
-
-  const removeSkill = id => {
-    if (!window.confirm('Remove this external skill?')) return;
-    try {
-      skillRegistry.remove(id);
-      setSkills(skillRegistry.list());
-      showNotice('External skill removed.');
-    } catch (error) {
-      recordError(error, 'settings-remove-skill');
-      showNotice(error.message, 'error');
-    }
-  };
-
-  const changeSafetyLevel = newLevel => {
-    if (newLevel === POLICY_LEVELS.UNRESTRICTED) {
-      const confirmed = window.confirm(
-        '⚠️ WARNING: Unrestricted mode disables most safety checks including skill scanning, patch validation, terminal restrictions, and sensitive path blocking.\n\n' +
-        'This is intended only for enterprise power users and local AI research with trusted models.\n\n' +
-        'Are you sure you want to enable unrestricted mode?'
-      );
-      if (!confirmed) return;
-    }
-
-    const newPolicy = createSafetyPolicy(getLevelConfig(newLevel));
-    const saved = saveSafetyPolicy(newPolicy);
-    if (!saved) showNotice('Safety policy changed for this session, but could not be persisted.', 'error');
-    else showNotice('Safety policy updated.');
-    setSafetyPolicy(newPolicy);
-    setDeveloperMode(newLevel === POLICY_LEVELS.UNRESTRICTED);
-  };
-
-  const toggleDeveloperMode = () => changeSafetyLevel(developerMode ? POLICY_LEVELS.STRICT : POLICY_LEVELS.UNRESTRICTED);
-
-  const saveSearchSettings = () => {
-    try {
-      localStorage.setItem('forgeai_google_api_key', googleApiKey.trim());
-      localStorage.setItem('forgeai_google_cx', googleCx.trim());
-      showNotice('Search settings saved.');
-    } catch (error) {
-      recordError(error, 'settings-save-search');
-      showNotice(`Could not save search settings: ${error.message}`, 'error');
-    }
-  };
-
-  const storePat = async () => {
-    try {
-      if (!githubPat.trim()) throw new Error('Enter a GitHub PAT first.');
       await storeGithubToken(githubPat.trim());
       setGithubPat('');
       setGithubStored(true);
-      showNotice('GitHub token stored securely.');
+      showNotice('GitHub token stored in the Android Keystore.');
     } catch (error) {
       recordError(error, 'settings-store-github-token');
-      showNotice(`Could not store token: ${error.message}`, 'error');
+      showNotice(`Could not store the token: ${error.message}`, 'error');
     }
   };
 
-  const clearPat = async () => {
+  const forgetGithubToken = async () => {
     try {
       await clearGithubToken();
       setGithubStored(false);
-      showNotice('GitHub token cleared.');
+      showNotice('GitHub token removed.');
     } catch (error) {
       recordError(error, 'settings-clear-github-token');
-      showNotice(`Could not clear token: ${error.message}`, 'error');
+      showNotice(`Could not remove the token: ${error.message}`, 'error');
     }
   };
 
-  const renderGeneral = () => (
-    <div className="settings-section-grid">
-      {!isNative && (
-        <SettingCard icon={Wifi} title="Ollama development preview" description="Browser mode uses Ollama as a local development endpoint. Android production inference uses the bundled llama.cpp runtime.">
-          <SettingField label="Endpoint" htmlFor="ollama-endpoint">
-            <div className="setting-row">
-              <input id="ollama-endpoint" value={value} onChange={event => setValue(event.target.value)} placeholder="http://localhost:11434" />
-              <button onClick={saveEndpoint}><RefreshCw size={14} /> Save</button>
-            </div>
-          </SettingField>
-        </SettingCard>
-      )}
-
-      <SettingCard icon={Database} title="Local data" description="Chats and model metadata stay in app storage. Android GGUF inference works offline after a model is installed.">
-        <div className="setting-row wrap">
-          <button onClick={onClearChat}>Clear active chat</button>
-          <button className="danger" onClick={onReset}><Trash2 size={14} /> Reset app data</button>
-        </div>
-      </SettingCard>
-    </div>
-  );
-
   const renderAgent = () => (
     <div className="settings-section-grid">
-      <SettingCard icon={Bot} title="Agent behavior" description="Control the approval model, response quality, and how much the agent can do without asking.">
-        <div className="settings-two-col">
-          <SettingField label="Autonomy level" htmlFor="autonomy-level" help={nativeFullAutonomy ? 'Native full autonomy is enabled.' : 'Restricted modes never auto-apply writes or execute commands.'}>
-            <DropdownMenu
-              value={autonomy}
-              onChange={next => { void changeAutonomy(next); }}
-              label="Autonomy level"
-              options={[
-                { value: AUTONOMY_LEVELS.OFF, label: 'Off' },
-                { value: AUTONOMY_LEVELS.SUGGEST, label: 'Suggest only' },
-                { value: AUTONOMY_LEVELS.READ_ONLY, label: 'Automatic read-only context' },
-                { value: AUTONOMY_LEVELS.PREPARE, label: 'Prepare patches for approval' },
-                { value: AUTONOMY_LEVELS.FULL, label: 'Full Autonomous — terminal, network, Git writes' },
-              ]}
-            />
-          </SettingField>
-          <SettingField label="Response quality" htmlFor="response-quality" help="Reviewed mode uses three local generations and is slower.">
-            <DropdownMenu
-              value={responseQuality}
-              onChange={changeResponseQuality}
-              label="Response quality"
-              options={[
-                { value: RESPONSE_QUALITY.FAST, label: 'Fast — one model pass' },
-                { value: RESPONSE_QUALITY.BALANCED, label: 'Balanced — normal streaming' },
-                { value: RESPONSE_QUALITY.REVIEWED, label: 'Reviewed — draft, critic, revision' },
-              ]}
-            />
-          </SettingField>
-        </div>
-        <p className="setting-help">Project memory: {memory.facts.length} approved fact(s), {memory.tasks.length} bounded task record(s). Model guesses are not persisted as facts.</p>
+      <SettingCard
+        icon={ShieldCheck}
+        title="Execution mode"
+        description="Reading files, searching code, and web lookups never interrupt you. This controls everything that changes something."
+      >
+        <SettingField
+          label="When Luna wants to write, delete, run a command, or push"
+          htmlFor="execution-mode"
+          help={executionMode === EXECUTION_MODES.AUTO
+            ? 'Unattended: actions run immediately. You can still stop a run at any point.'
+            : 'Ask first: each action shows the exact path, content, or command before it runs.'}
+        >
+          <DropdownMenu
+            id="execution-mode"
+            value={executionMode}
+            options={EXECUTION_OPTIONS}
+            onChange={changeExecutionMode}
+          />
+        </SettingField>
       </SettingCard>
-
-      <AutomationSettings />
-      <ProjectMemoryPanel workspaceId={workspaceId} />
-      {workspaceProvider && <RepositoryIndexPanel workspaceId={workspaceId} workspaceProvider={workspaceProvider} workspaceTree={workspaceTree} />}
-      <TaskTimeline workspaceId={workspaceId} />
     </div>
   );
 
-  const renderIntegrations = () => (
+  const renderConnections = () => (
     <div className="settings-section-grid">
-      <SettingCard icon={Plug} title="Cloud provider failover" description="If your active cloud model runs out of quota or gets rate-limited mid-task, automatically continue on the next configured provider (ordered by priority) instead of stopping.">
+      <SettingCard
+        icon={Wifi}
+        title="Ollama development preview"
+        description="Browser mode talks to a local Ollama endpoint. On Android, inference runs on the bundled llama.cpp runtime instead."
+      >
+        <SettingField label="Endpoint" htmlFor="ollama-endpoint">
+          <div className="setting-row">
+            <input id="ollama-endpoint" value={value} onChange={event => setValue(event.target.value)} />
+            <button onClick={saveEndpoint}><RefreshCw size={14} /> Save</button>
+          </div>
+        </SettingField>
+      </SettingCard>
+
+      <SettingCard
+        icon={Plug}
+        title="Cloud provider failover"
+        description="If the active cloud model runs out of quota or gets rate-limited mid-task, continue on the next configured provider instead of stopping."
+      >
         <label className="toggle-row">
           <input
             type="checkbox"
@@ -330,94 +193,45 @@ export default function Settings({
           />
           <span>Auto-failover between cloud providers {failover ? '(on)' : '(off)'}</span>
         </label>
-        <p className="setting-help">Add multiple providers in My Collection → Cloud (Groq, Cerebras, Gemini, OpenRouter, etc.). Bad API keys and missing models are never failed over — only quota/rate-limit/server/network errors.</p>
+        <p className="setting-help">Add providers in My Collection → Cloud. Bad API keys and missing models are never failed over — only quota, rate-limit, server, and network errors.</p>
       </SettingCard>
+
       {isNative && (
-        <SettingCard icon={Plug} title="Native research and GitHub credentials" description="Google search credentials are optional. GitHub PATs are stored in the native credential vault.">
-          <div className="settings-two-col">
-            <SettingField label="Google API key" htmlFor="google-api-key">
-              <input id="google-api-key" type="password" value={googleApiKey} onChange={event => setGoogleApiKey(event.target.value)} />
-            </SettingField>
-            <SettingField label="Programmable Search Engine ID" htmlFor="google-cx">
-              <input id="google-cx" value={googleCx} onChange={event => setGoogleCx(event.target.value)} />
-            </SettingField>
-          </div>
-          <button onClick={saveSearchSettings}>Save search settings</button>
-          <div className="settings-divider" />
-          <SettingField label="GitHub PAT" htmlFor="github-pat" help={`PAT stored: ${githubStored ? 'Yes' : 'No'}. The token is never returned to JavaScript after storage.`}>
-            <input id="github-pat" type="password" value={githubPat} onChange={event => setGithubPat(event.target.value)} placeholder={githubStored ? 'Token stored' : 'github_pat_...'} />
+        <SettingCard
+          icon={Plug}
+          title="GitHub token"
+          description="Stored in the Android Keystore. It is never added to a model prompt or a terminal environment."
+        >
+          <SettingField label="Personal access token" htmlFor="github-pat" help={`Token stored: ${githubStored ? 'yes' : 'no'}.`}>
+            <div className="setting-row">
+              <input id="github-pat" type="password" value={githubPat} onChange={event => setGithubPat(event.target.value)} placeholder="ghp_…" />
+              <button onClick={saveGithubToken}>Save</button>
+              {githubStored && <button className="danger" onClick={forgetGithubToken}>Forget</button>}
+            </div>
           </SettingField>
-          <div className="setting-row wrap">
-            <button onClick={() => { void storePat(); }}>Store PAT</button>
-            <button className="danger" onClick={() => { void clearPat(); }}>Clear PAT</button>
-          </div>
         </SettingCard>
       )}
-      {!isNative && (
-        <SettingCard icon={Plug} title="Native-only integrations" description="GitHub token vault and native research credentials are available in the Android build. Web mode keeps these disabled to avoid storing secrets insecurely." />
-      )}
-      <ResearchSettings />
-      <GitHubAutomationSettings />
-      <SocialMediaSettings />
-      <ExperimentalFeatures />
     </div>
   );
 
-  const renderSecurity = () => (
+  const renderData = () => (
     <div className="settings-section-grid">
-      <SettingCard icon={Shield} title="Safety policy" description="Enterprise and power-user configurable safety levels. Strict is the default.">
-        <div className="policy-status">
-          <span>Current policy</span>
-          <strong>{safetyPolicy.getLevel().toUpperCase()}</strong>
-          {safetyPolicy.isUnrestricted() && <em>UNRESTRICTED</em>}
-        </div>
-        <SettingField label="Compliance level" htmlFor="safety-level">
-          <DropdownMenu
-            value={safetyPolicy.getLevel()}
-            onChange={changeSafetyLevel}
-            label="Compliance level"
-            options={[
-              { value: POLICY_LEVELS.STRICT, label: 'Strict (Enterprise default)' },
-              { value: POLICY_LEVELS.MODERATE, label: 'Moderate' },
-              { value: POLICY_LEVELS.MINIMAL, label: 'Minimal' },
-              { value: POLICY_LEVELS.UNRESTRICTED, label: 'Unrestricted (Power user / Research)' },
-            ]}
-          />
-        </SettingField>
-        <label className="toggle-row">
-          <input type="checkbox" checked={developerMode} onChange={toggleDeveloperMode} />
-          <span><strong>Developer Mode</strong> — unrestricted safety mode</span>
-        </label>
-        <p className="setting-help">Active rules: {safetyPolicy.getPolicySummary().activeRules.join(', ')}</p>
+      <SettingCard icon={Cpu} title="Runtime" description={isNative
+        ? 'Android runs the bundled llama.cpp CPU runtime. Pick or mount a model from your collection.'
+        : 'Web mode uses Ollama as a development preview.'}>
+        <p className="setting-help">Platform: {(typeof window !== 'undefined' && window.Capacitor?.getPlatform?.()) || 'web'}</p>
       </SettingCard>
 
-      <SettingCard icon={Shield} title="Android agent skills" description="Skills load on demand and only receive their declared ForgeAI tools. Skill scripts are never executed on Android.">
-        {isNative && <button onClick={importSkill}>Import SKILL.md</button>}
-        <div className="settings-list">
-          {skills.map(skill => (
-            <label className="settings-toggle-row" key={skill.id}>
-              <span className="settings-row-icon"><Shield size={18} /></span>
-              <span className="settings-toggle-copy"><strong>{skill.name}{skill.external ? ' · External' : ''}</strong><small>{skill.description}</small></span>
-              {skill.external && <button className="danger compact" type="button" onClick={(event) => { event.preventDefault(); removeSkill(skill.id); }}>Remove</button>}
-              <input className="settings-switch" type="checkbox" checked={skill.enabled} onChange={event => toggleSkill(skill.id, event.target.checked)} />
-            </label>
-          ))}
-        </div>
-      </SettingCard>
-
-      <SkillValidatorSettings />
-    </div>
-  );
-
-  const renderDiagnostics = () => (
-    <div className="settings-section-grid">
-      <SettingCard icon={Cpu} title="Runtime" description={isNative ? 'Android uses the bundled direct llama.cpp CPU runtime. Select or mount a model from My Collection.' : 'Web mode uses Ollama only as a development preview.'}>
-        <p className="setting-help">Platform: {typeof window !== 'undefined' && window.Capacitor?.getPlatform?.() || 'web'}</p>
-      </SettingCard>
-      <SettingCard icon={Bug} title="Error log" description="Runtime errors are stored locally on this device for debugging.">
+      <SettingCard icon={Database} title="Local data" description="Chats and model metadata stay in app storage. Downloaded models and workspace backups are never touched by a reset.">
         <div className="setting-row wrap">
-          <button onClick={() => setErrors(readErrorLog())}>Refresh log</button>
-          <button onClick={() => { clearErrorLog(); setErrors([]); showNotice('Error log cleared.'); }}>Clear log</button>
+          <button className="danger" onClick={onReset}><Trash2 size={14} /> Reset app data</button>
+        </div>
+      </SettingCard>
+
+      <SettingCard icon={Bug} title="Error log" description="Runtime errors are recorded locally for debugging.">
+        <div className="setting-row wrap">
+          <button onClick={() => setErrors(readErrorLog())}>Refresh</button>
+          <button onClick={() => { clearErrorLog(); setErrors([]); showNotice('Error log cleared.'); }}>Clear</button>
         </div>
         <pre className="settings-error-log">
           {errors.length ? errors.map(error => `${error.time} [${error.context}] ${error.message}`).join('\n') : 'No recorded errors.'}
@@ -425,14 +239,6 @@ export default function Settings({
       </SettingCard>
     </div>
   );
-
-  const renderActiveSection = () => {
-    if (activeSection === 'agent') return renderAgent();
-    if (activeSection === 'integrations') return renderIntegrations();
-    if (activeSection === 'security') return renderSecurity();
-    if (activeSection === 'diagnostics') return renderDiagnostics();
-    return renderGeneral();
-  };
 
   const activeMeta = SETTINGS_SECTIONS.find(section => section.id === activeSection) || SETTINGS_SECTIONS[0];
 
@@ -445,7 +251,7 @@ export default function Settings({
           <h3>{activeMeta.label}</h3>
           <p>{activeMeta.description}</p>
         </div>
-        {renderActiveSection()}
+        {activeSection === 'connections' ? renderConnections() : activeSection === 'data' ? renderData() : renderAgent()}
       </div>
     </div>
   );

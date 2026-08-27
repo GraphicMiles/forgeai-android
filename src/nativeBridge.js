@@ -1,15 +1,12 @@
 /**
- * ForgeAI Native Bridge
+ * Luna Native Bridge
  * Provides interface between web app and native Android/Desktop features
  * 
  * Supports Capacitor 7+ API
  */
 
-import { Filesystem } from '@capacitor/filesystem';
 import { Haptics } from '@capacitor/haptics';
 import { App } from '@capacitor/app';
-import { LocalNotifications } from '@capacitor/local-notifications';
-import { StatusBar } from '@capacitor/status-bar';
 import { registerPlugin } from '@capacitor/core';
 import { formatPrompt } from './models/promptProfiles.js';
 import { getModelProfile } from './models/catalog.js';
@@ -21,7 +18,6 @@ const TerminalRuntime = registerPlugin('TerminalRuntime');
 const ResearchRuntime = registerPlugin('ResearchRuntime');
 const CredentialVault = registerPlugin('CredentialVault');
 const AutonomyRuntime = registerPlugin('AutonomyRuntime');
-const GithubRuntime = registerPlugin('GithubRuntime');
 const GitRuntime = registerPlugin('GitRuntime');
 
 export async function pickWorkspaceFolder() { return WorkspaceStorage.pickFolder(); }
@@ -43,35 +39,25 @@ export async function pauseWorkspaceModelDownload(uri, path) { return WorkspaceS
 export async function cancelWorkspaceModelDownload(uri, path) { return WorkspaceStorage.cancelDownload({ uri, path }); }
 export async function importModelToRuntime(uri, path) { return WorkspaceStorage.importToRuntime({ uri, path }); }
 export async function pickModelFile() { return WorkspaceStorage.pickModelFile(); }
-export async function pickSkillFile() { return WorkspaceStorage.pickSkillFile(); }
 export async function importDocumentToRuntime(uri, name) { return WorkspaceStorage.importDocumentToRuntime({ uri, name }); }
 
 export async function setFullAutonomy(enabled) { if (!isNative) throw new Error('Full autonomy requires Android.'); return AutonomyRuntime.setEnabled({ enabled }); }
-export async function getFullAutonomyStatus() { return isNative ? AutonomyRuntime.getStatus() : { enabled: false }; }
 export async function runTerminalCommand({ command, cwd = '', timeoutSeconds = 120, requestId }, onOutput) {
   if (!isNative) throw new Error('Terminal requires Android.');
   const listener = await TerminalRuntime.addListener('terminalOutput', event => { if (!requestId || event.requestId === requestId) onOutput?.(event.text); });
   try { return await TerminalRuntime.execute({ command, cwd, timeoutSeconds, requestId }); }
   finally { await listener.remove(); }
 }
-export async function cancelTerminalCommand(requestId) { return TerminalRuntime.cancel({ requestId }); }
-export async function getTerminalInfo() { return isNative ? TerminalRuntime.getInfo() : { shell: null }; }
 export async function searchOnline({ query, googleApiKey = '', googleCx = '' }) { if (!isNative) throw new Error('Native research requires Android.'); return ResearchRuntime.search({ query, googleApiKey, googleCx }); }
 export async function fetchPublicUrl(url) { if (!isNative) throw new Error('Native research requires Android.'); return ResearchRuntime.fetchUrl({ url }); }
 export async function storeGithubToken(token) { return CredentialVault.storeGithubToken({ token }); }
 export async function hasGithubToken() { return CredentialVault.hasGithubToken(); }
 export async function clearGithubToken() { return CredentialVault.clearGithubToken(); }
-export async function githubApi({ method = 'GET', path, body = '' }) { return GithubRuntime.api({ method, path, body }); }
-export async function importGithubArchive(repository, ref = 'HEAD') { return GithubRuntime.importArchive({ repository, ref }); }
 export async function gitClone(repository, branch = '') { return GitRuntime.cloneRepository({ repository, branch }); }
 export async function gitStatus(path) { return GitRuntime.status({ path }); }
 export async function gitLog(path, max = 20) { return GitRuntime.log({ path, max }); }
-export async function gitFetch(path) { return GitRuntime.fetch({ path }); }
-export async function gitPull(path) { return GitRuntime.pull({ path }); }
-export async function gitCheckout(path, branch, create = false, startPoint = 'HEAD') { return GitRuntime.checkout({ path, branch, create, startPoint }); }
 export async function gitCommit(path, message, authorName, authorEmail) { return GitRuntime.commit({ path, message, authorName, authorEmail }); }
 export async function gitPush(path, force = false) { return GitRuntime.push({ path, force }); }
-export async function gitRebase(path, upstream) { return GitRuntime.rebase({ path, upstream }); }
 
 export async function getOnDeviceRuntimeInfo() {
   if (!isNative) return { available: false, reason: 'On-device runtime is available only in the Android build.' };
@@ -146,9 +132,7 @@ export const isNative = typeof window !== 'undefined' && (
 );
 
 // Platform detection
-export const isAndroid = isNative && window.Capacitor.getPlatform() === 'android';
-export const isIOS = isNative && window.Capacitor.getPlatform() === 'ios';
-export const isDesktop = !isNative;
+const isAndroid = isNative && window.Capacitor.getPlatform() === 'android';
 
 const asPositiveNumber = (value) => {
   const parsed = Number(value);
@@ -208,171 +192,6 @@ export async function getDeviceCapacity() {
     platform,
   };
 }
-
-/**
- * File System Operations
- */
-export const fileSystem = {
-  /**
-   * Read a file as UTF-8 text
-   */
-  async readFile(path) {
-    if (isNative) {
-      try {
-        const result = await Filesystem.readFile({ path, encoding: 'utf8' });
-        return result.data;
-      } catch (err) {
-        throw new Error(`Cannot read "${path}": ${err.message || 'file not found'}`);
-      }
-    }
-    try {
-      const response = await fetch(path);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.text();
-    } catch (err) {
-      throw new Error(`Cannot read "${path}": ${err.message}`);
-    }
-  },
-
-  /**
-   * Write content to a file, creating parent directories as needed
-   */
-  async writeFile(path, content) {
-    if (isNative) {
-      const dir = path.substring(0, path.lastIndexOf('/'));
-      if (dir) {
-        try { await Filesystem.mkdir({ path: dir, recursive: true }); } catch { /* exists */ }
-      }
-      try {
-        const uri = await Filesystem.writeFile({ path, data: content || '' });
-        return uri;
-      } catch (err) {
-        const msg = err.message || '';
-        if (msg.includes('permission') || msg.includes('denied')) {
-          throw new Error(`Permission denied writing to "${path}". Grant storage permission or use Downloads/ForgeAI folder.`);
-        }
-        throw new Error(`Cannot write "${path}": ${msg}`);
-      }
-    }
-    const blob = new Blob([content || ''], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = path.split('/').pop() || 'file.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-  },
-
-  /**
-   * List directory contents
-   */
-  async listDirectory(path) {
-    if (isNative) {
-      try {
-        const result = await Filesystem.readDir({ path });
-        return result.files.map(f => ({
-          name: f.name,
-          type: f.type === 'directory' ? 'folder' : 'file',
-          path: `${path}/${f.name}`,
-        }));
-      } catch (err) {
-        throw new Error(`Cannot list "${path}": ${err.message}`);
-      }
-    }
-    return [];
-  },
-
-  /**
-   * Check if file or folder exists
-   */
-  async exists(path) {
-    if (isNative) {
-      try { await Filesystem.stat({ path }); return true; } catch { return false; }
-    }
-    return false;
-  },
-
-  /**
-   * Create directory (recursive)
-   */
-  async createDirectory(path) {
-    if (isNative) {
-      try {
-        await Filesystem.mkdir({ path, recursive: true });
-      } catch (err) {
-        const msg = err.message || '';
-        if (msg.includes('permission') || msg.includes('denied')) {
-          throw new Error(`Permission denied creating "${path}". Use Downloads/ForgeAI or grant storage permission.`);
-        }
-        if (!msg.includes('exists')) {
-          throw new Error(`Cannot create directory "${path}": ${msg}`);
-        }
-      }
-    }
-  },
-
-  /**
-   * Delete a file or directory (recursive)
-   */
-  async deleteFile(path) {
-    if (isNative) {
-      try {
-        const stat = await Filesystem.stat({ path });
-        if (stat.type === 'directory') {
-          await Filesystem.rmdir({ path, recursive: true });
-        } else {
-          await Filesystem.deleteFile({ path });
-        }
-      } catch (err) {
-        throw new Error(`Cannot delete "${path}": ${err.message}`);
-      }
-    }
-  },
-
-  /**
-   * Rename or move a file/folder
-   */
-  async rename(oldPath, newPath) {
-    if (isNative) {
-      try {
-        await Filesystem.rename({ from: oldPath, to: newPath });
-      } catch (err) {
-        throw new Error(`Cannot rename "${oldPath}" to "${newPath}": ${err.message}`);
-      }
-    } else {
-      throw new Error('Rename is not supported in the browser.');
-    }
-  },
-
-  /**
-   * Recursively load a file tree from a directory (max depth 4)
-   */
-  async loadTree(rootPath, depth = 0) {
-    if (depth > 4) return [];
-    let entries;
-    try {
-      entries = await this.listDirectory(rootPath);
-    } catch {
-      return [];
-    }
-    const tree = [];
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue; // skip hidden
-      if (entry.type === 'folder') {
-        const children = await this.loadTree(entry.path, depth + 1);
-        tree.push({ ...entry, children });
-      } else {
-        tree.push(entry);
-      }
-    }
-    // folders first, then files, alphabetically
-    tree.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    return tree;
-  },
-};
 
 /**
  * Haptic Feedback
@@ -469,8 +288,8 @@ export const app = {
       return await App.getInfo();
     }
     return {
-      name: 'ForgeAI Web',
-      id: 'ai.forgeai.web',
+      name: 'Luna Web',
+      id: 'ai.luna.web',
       version: '0.0.1',
     };
   },
@@ -495,68 +314,6 @@ export const app = {
       return () => App.removeListener('deepLink', callback);
     }
     return () => {};
-  },
-};
-
-/**
- * Status Bar (Android)
- */
-export const statusBar = {
-  async hide() {
-    if (isNative) {
-      try {
-        await StatusBar.hide();
-      } catch {
-        // Not available
-      }
-    }
-  },
-  async show() {
-    if (isNative) {
-      try {
-        await StatusBar.show();
-      } catch {
-        // Not available
-      }
-    }
-  },
-  async setStyle(style) {
-    if (isNative) {
-      try {
-        await StatusBar.setStyle({ style });
-      } catch {
-        // Not available
-      }
-    }
-  },
-};
-
-/**
- * Notifications (Android)
- */
-export const notifications = {
-  async request() {
-    if (isNative) {
-      try {
-        const result = await LocalNotifications.requestPermissions();
-        return result.granted;
-      } catch {
-        return false;
-      }
-    }
-    return false;
-  },
-
-  async show(title, body) {
-    if (isNative) {
-      try {
-        await LocalNotifications.schedule({
-          notifications: [{ title, body, id: Date.now().toString() }],
-        });
-      } catch {
-        // Not available
-      }
-    }
   },
 };
 
@@ -605,35 +362,3 @@ export async function checkOllamaConnection(url = 'http://localhost:11434') {
   }
 }
 
-/**
- * Device Info
- */
-export async function getDeviceInfo() {
-  if (isNative) {
-    const info = await App.getInfo();
-    return {
-      platform: window.Capacitor.getPlatform(),
-      version: info.version,
-      ...info,
-    };
-  }
-  return {
-    platform: 'web',
-    version: '0.0.1',
-  };
-}
-
-export default {
-  isNative,
-  isAndroid,
-  isIOS,
-  isDesktop,
-  fileSystem,
-  haptics,
-  app,
-  statusBar,
-  notifications,
-  checkOllamaConnection,
-  getDeviceCapacity,
-  getDeviceInfo,
-};

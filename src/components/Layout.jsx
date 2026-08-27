@@ -32,7 +32,7 @@ export default function Layout({
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
           <span className="brand-text">
-            <span className="brand-name display">ForgeAI</span>
+            <span className="brand-name display">Luna</span>
             <span className="brand-sub mono">{model}</span>
           </span>
         </div>

@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'forgeai_cloud_providers_v1';
-const FAILOVER_KEY = 'forgeai_provider_failover_v1';
+const STORAGE_KEY = 'luna_cloud_providers_v1';
+const FAILOVER_KEY = 'luna_provider_failover_v1';
 
 /**
  * Cloud provider catalog.

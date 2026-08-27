@@ -6,7 +6,7 @@
  * Files can be exported as a ZIP or downloaded individually.
  */
 
-const VIRTUAL_STORAGE_KEY = 'forgeai_virtual_workspace';
+const VIRTUAL_STORAGE_KEY = 'luna_virtual_workspace';
 
 export class VirtualWorkspace {
   constructor() {
@@ -249,7 +249,7 @@ export class VirtualWorkspace {
     
     const a = document.createElement('a');
     a.href = url;
-    a.download = `forgeai-workspace-${Date.now()}.json`;
+    a.download = `luna-workspace-${Date.now()}.json`;
     a.click();
     
     URL.revokeObjectURL(url);

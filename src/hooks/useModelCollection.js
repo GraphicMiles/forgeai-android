@@ -6,8 +6,8 @@ import {
   downloadOnDeviceModel, pauseOnDeviceDownload, cancelOnDeviceDownload, deleteOnDeviceModel, loadOnDeviceModel, unloadOnDeviceModel, isNative, downloadModelToWorkspace, pauseWorkspaceModelDownload, cancelWorkspaceModelDownload, importModelToRuntime, pickModelFile, importDocumentToRuntime, deleteWorkspaceItem, listWorkspace
 } from '../nativeBridge';
 
-const STORAGE_KEY = 'forgeai_models';
-const ACTIVE_MODEL_KEY = 'forgeai_active_model';
+const STORAGE_KEY = 'luna_models';
+const ACTIVE_MODEL_KEY = 'luna_active_model';
 const read = (key, fallback) => { try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; } };
 const readModels = () => { const v = read(STORAGE_KEY, []); return Array.isArray(v) ? v.filter(i => i && typeof i.id === 'string') : []; };
 const readActive = () => { const v = read(ACTIVE_MODEL_KEY, null); return v && typeof v.id === 'string' ? v : null; };
@@ -66,7 +66,7 @@ export default function useModelCollection({ endpoint = 'http://localhost:11434'
   // Re-discover durable SAF models after reinstall or APK replacement.
   useEffect(() => {
     if (!isNative) return;
-    const uri = localStorage.getItem('forgeai_model_folder_uri');
+    const uri = localStorage.getItem('luna_model_folder_uri');
     if (!uri?.startsWith('content://')) return;
     let cancelled = false;
     const flatten = (nodes, out = []) => { for (const node of nodes || []) { if (node.type === 'folder') flatten(node.children, out); else if (node.path?.toLowerCase().endsWith('.gguf')) out.push(node.path); } return out; };
@@ -109,7 +109,7 @@ export default function useModelCollection({ endpoint = 'http://localhost:11434'
       let result;
       if (isNative && model.downloadUrl) {
         // Android models must use an explicitly selected durable folder.
-        const modelFolderUri = localStorage.getItem('forgeai_model_folder_uri') || '';
+        const modelFolderUri = localStorage.getItem('luna_model_folder_uri') || '';
         if (!modelFolderUri.startsWith('content://')) throw new Error('Choose a model folder before downloading on Android.');
         if (modelFolderUri.startsWith('content://')) {
           const durablePath = model.file || `${model.id}.gguf`;
@@ -170,7 +170,7 @@ export default function useModelCollection({ endpoint = 'http://localhost:11434'
 
   const pauseDownload = useCallback(async (model) => {
     if (isNative) {
-      const uri = localStorage.getItem('forgeai_model_folder_uri') || '';
+      const uri = localStorage.getItem('luna_model_folder_uri') || '';
       const result = uri.startsWith('content://')
         ? await pauseWorkspaceModelDownload(uri, model.file || `${model.id}.gguf`)
         : await pauseOnDeviceDownload(model.file || `${model.id}.gguf`);
@@ -185,7 +185,7 @@ export default function useModelCollection({ endpoint = 'http://localhost:11434'
   const cancelDownload = useCallback(async (modelId) => {
     // Abort the JS request and the native download thread
     controllers.current.get(modelId)?.abort();
-    if (isNative) { const uri = localStorage.getItem('forgeai_model_folder_uri') || ''; const filename = downloadFiles.current.get(modelId) || `${modelId}.gguf`; if (uri.startsWith('content://')) await cancelWorkspaceModelDownload(uri, filename).catch(() => {}); else await cancelOnDeviceDownload(filename).catch(() => {}); }
+    if (isNative) { const uri = localStorage.getItem('luna_model_folder_uri') || ''; const filename = downloadFiles.current.get(modelId) || `${modelId}.gguf`; if (uri.startsWith('content://')) await cancelWorkspaceModelDownload(uri, filename).catch(() => {}); else await cancelOnDeviceDownload(filename).catch(() => {}); }
     controllers.current.delete(modelId);
     downloadFiles.current.delete(modelId);
     // Remove from downloads entirely so it can be retried immediately

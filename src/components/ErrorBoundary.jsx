@@ -5,7 +5,7 @@ import './ErrorBoundary.css';
 export default class ErrorBoundary extends Component {
   state = { error: null };
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { recordError(error, 'react-boundary'); console.error('ForgeAI UI error', error, info); }
+  componentDidCatch(error, info) { recordError(error, 'react-boundary'); console.error('Luna UI error', error, info); }
   reset = () => { this.setState({ error: null }); };
   reload = () => { window.location.reload(); };
   render() {

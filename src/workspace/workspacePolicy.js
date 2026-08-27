@@ -1,15 +1,13 @@
-import { getCurrentSafetyPolicy } from '../safety/SafetyPolicy.js';
+/**
+ * Workspace policy — the hard limits and blocklists that apply to every read
+ * and write, whether it comes from the editor or from one of Luna's tools.
+ * Fixed constants: a configurable policy engine was more surface than value.
+ */
 
-export function getWorkspaceLimits() {
-  const policy = getCurrentSafetyPolicy();
-  return Object.freeze({
-    uiReadBytes: policy.getMaxReadBytes?.() || 2 * 1024 * 1024,
-    ragReadBytes: 256 * 1024,
-    writeBytes: policy.getMaxWriteBytes?.() || 2 * 1024 * 1024,
-  });
-}
-
-export const WORKSPACE_LIMITS = getWorkspaceLimits();
+export const WORKSPACE_LIMITS = Object.freeze({
+  uiReadBytes: 2 * 1024 * 1024,
+  writeBytes: 2 * 1024 * 1024,
+});
 
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.hg', '.svn', '.ssh', '.gnupg', '.aws',
@@ -20,7 +18,7 @@ const SENSITIVE_EXACT = new Set([
   'id_rsa', 'id_ed25519', 'credentials', 'credentials.json',
 ]);
 const SENSITIVE_EXTENSIONS = ['.pem', '.key', '.p12', '.pfx', '.jks', '.keystore'];
-const INTERNAL_MARKERS = ['.forgeai-tmp-', '.forgeai-old-', '.forgeai-trash-'];
+const INTERNAL_MARKERS = ['.luna-tmp-', '.luna-old-', '.luna-trash-'];
 
 export function isSensitiveWorkspacePath(path) {
   const parts = String(path || '').split('/').filter(Boolean).map(part => part.toLowerCase());
@@ -41,14 +39,8 @@ export function isInternalWorkspacePath(path) {
 }
 
 export function assertWorkspacePathAllowed(path, operation = 'access') {
-  const policy = getCurrentSafetyPolicy();
-  if (!policy.shouldEnforceWorkspacePolicy()) {
-    return path; // unrestricted mode
-  }
-  if (isInternalWorkspacePath(path)) throw new Error(`ForgeAI internal transaction files cannot be used for ${operation}.`);
-  if (policy.shouldBlockSensitivePaths() && isSensitiveWorkspacePath(path)) {
-    throw new Error(`Sensitive workspace paths are blocked for ${operation}.`);
-  }
+  if (isInternalWorkspacePath(path)) throw new Error(`Luna internal transaction files cannot be used for ${operation}.`);
+  if (isSensitiveWorkspacePath(path)) throw new Error(`Sensitive workspace paths are blocked for ${operation}.`);
   return path;
 }
 

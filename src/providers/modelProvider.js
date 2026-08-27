@@ -6,7 +6,6 @@ import {
   streamOllamaChat,
   unloadOnDeviceModel,
 } from '../nativeBridge.js';
-import { customProfileManager } from '../models/customPromptProfiles.js';
 import { getCloudProvider, getCloudProviderPreset } from './cloudProviderStore.js';
 import { parseLlamaFunctionSyntax } from '../agent/toolSchemas.js';
 
@@ -42,16 +41,8 @@ export class OnDeviceProvider {
       throw wrapped;
     }
   }
-  async stream({ model, messages, signal, onToken }) { 
-    // Apply custom profile formatting if available
-    const customProfile = customProfileManager.resolveProfileForModel(model);
-    let finalMessages = messages;
-    
-    if (customProfile && !customProfileManager.isRawMode()) {
-      // Note: formatting is handled in nativeBridge for now
-    }
-    
-    return runOnDeviceChat({ model, messages: finalMessages, signal, onToken }); 
+  async stream({ model, messages, signal, onToken }) {
+    return runOnDeviceChat({ model, messages, signal, onToken });
   }
   async stop() { return { stopped: true }; }
   async unloadModel() { return unloadOnDeviceModel(); }
@@ -202,7 +193,7 @@ export class OpenAICompatibleProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.apiKey}`,
-        ...(config.provider === 'openrouter' ? { 'HTTP-Referer': 'https://forgeai.local', 'X-Title': 'ForgeAI' } : {}),
+        ...(config.provider === 'openrouter' ? { 'HTTP-Referer': 'https://luna.local', 'X-Title': 'Luna' } : {}),
       },
       body: JSON.stringify(body),
     });

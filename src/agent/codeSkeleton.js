@@ -10,7 +10,10 @@
  * but degrades gracefully for others).
  */
 
-import { escapeRegExp } from '../utils/escapeRegExp.js';
+// Escape a string for safe use inside a RegExp (user/model-supplied symbols).
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 const SIGNATURE_PATTERNS = [
   // export function foo(...) / async function

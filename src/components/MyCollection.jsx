@@ -3,12 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, Trash2, Pause, MessageSquare,
   ChevronDown, Wifi, WifiOff, Database, RefreshCw,
-  UserPlus, Settings, Plus, MoreVertical, ArrowUpRight
+  Plus, MoreVertical, ArrowUpRight
 } from 'lucide-react';
 import { App as CapacitorApp } from '@capacitor/app';
-import CustomProfileModal from './CustomProfileModal.jsx';
 import { isNative } from '../nativeBridge.js';
-import { isRawModeEnabled, setRawMode } from '../models/customPromptProfiles.js';
 
 function openExternal(url) {
   if (!url) return;
@@ -279,9 +277,6 @@ export default function MyCollection({
   const [actionsOpen, setActionsOpen] = useState(false);
   // Power-user metadata (hashes, revision, license) hidden behind this toggle inside the expanded card.
   const [techDetailsOpen, setTechDetailsOpen] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [selectedModelForProfile, setSelectedModelForProfile] = useState(null);
-  const [rawMode, setRawModeState] = useState(isRawModeEnabled());
 
   const usedStorageBytes = models.reduce(
     (total, model) => total + getModelSizeBytes(model),
@@ -332,15 +327,7 @@ export default function MyCollection({
               <Plus size={16} /> Import GGUF
             </button>
           ) : (
-            <button
-              className="collection-import"
-              onClick={() => {
-                setSelectedModelForProfile(null);
-                setShowProfileModal(true);
-              }}
-            >
-              <UserPlus size={16} /> Create Profile
-            </button>
+            <span className="collection-hint">Add a cloud provider or import a GGUF.</span>
           )}
           <div className="collection-menu-anchor">
             <button
@@ -355,31 +342,6 @@ export default function MyCollection({
             </button>
             {actionsOpen && (
               <div className="collection-menu" onClick={(event) => event.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !rawMode;
-                    setRawMode(next);
-                    setRawModeState(next);
-                    setActionsOpen(false);
-                  }}
-                  title="Raw Mode: disables all system prompt injection"
-                >
-                  <Settings size={13} /> Raw Mode
-                  <span className={`menu-state ${rawMode ? 'on' : ''}`}>{rawMode ? 'On' : 'Off'}</span>
-                </button>
-                {isNative && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedModelForProfile(null);
-                      setShowProfileModal(true);
-                      setActionsOpen(false);
-                    }}
-                  >
-                    <UserPlus size={13} /> Create Profile
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -644,17 +606,6 @@ export default function MyCollection({
                               Delete
                             </button>
 
-                            <button
-                              className="btn-custom-profile"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedModelForProfile(model);
-                                setShowProfileModal(true);
-                              }}
-                              title="Create custom prompt profile for this model"
-                            >
-                              <UserPlus size={13} /> Profile
-                            </button>
                           </div>
                         </div>
 
@@ -715,19 +666,6 @@ export default function MyCollection({
         </>
       )}
 
-      {/* Custom Profile Modal */}
-      <CustomProfileModal
-        isOpen={showProfileModal}
-        onClose={() => {
-          setShowProfileModal(false);
-          setSelectedModelForProfile(null);
-        }}
-        model={selectedModelForProfile}
-        onSave={(profile) => {
-          // Optional: show success toast or refresh list
-          console.log('Custom profile saved:', profile.name);
-        }}
-      />
     </div>
   );
 }

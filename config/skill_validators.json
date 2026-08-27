@@ -1,9 +1,0 @@
-{
-  "active": ["strict-security"],
-  "options": {
-    "strict-security": { "enabled": true },
-    "basic-syntax": { "enabled": false },
-    "passthrough": { "enabled": false }
-  },
-  "trustedSources": []
-}

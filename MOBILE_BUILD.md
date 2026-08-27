@@ -1,4 +1,4 @@
-# Build and install from an Android phone
+# Build and install Luna from an Android phone
 
 No laptop is required if GitHub Actions is enabled for the repository.
 
@@ -7,11 +7,31 @@ No laptop is required if GitHub Actions is enabled for the repository.
 3. Tap **Run workflow** and run it on `main`.
 4. Wait for the workflow to finish.
 5. Open the completed workflow run.
-6. Download the `forgeai-debug-apk` artifact.
+6. Download the `luna-debug-apk` artifact.
 7. Extract the ZIP on the phone and tap `app-debug.apk`.
 8. Allow the browser or file manager to install unknown apps when Android asks.
-9. Install and launch ForgeAI.
+9. Install and launch Luna.
 
-The workflow runs tests, builds the web app, syncs Capacitor, builds the Android native runtime, and uploads the APK. It does not prove that every phone is compatible; the app must still reject devices when measured RAM or storage is insufficient.
+The workflow runs the test suites, builds the web app, syncs Capacitor, compiles the Android
+native runtime (llama.cpp included), and uploads the APK.
 
-For the current on-device milestone, the Android build contains the guarded llama.cpp native foundation. The React app still needs the final model-download and model-selection wiring before this should be treated as a standalone offline release.
+## Building on a machine
+
+```bash
+npm ci
+npm run android:build
+```
+
+This bootstraps llama.cpp, runs the environment preflight, builds the web bundle, syncs
+Capacitor, and assembles a debug APK.
+
+Requirements: JDK 21, Android SDK, NDK, and CMake.
+
+## Notes
+
+- The application id is `ai.luna.app`. It was renamed from the previous `ai.forgeai.app`, so a
+  build of this branch installs alongside older builds rather than upgrading them, and
+  `public/.well-known/assetlinks.json` needs the signing fingerprint re-paired with the new
+  package name before app links will verify.
+- Native capabilities (SAF workspace, terminal, Git, on-device models, research) exist only in
+  the Android build. `npm run dev` gives a browser shell where those tools are unavailable.

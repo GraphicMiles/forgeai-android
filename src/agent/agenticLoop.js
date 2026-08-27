@@ -1,7 +1,7 @@
 /**
  * Agentic Loop — Multi-Step Tool-Use Engine
  * 
- * This is the core architecture that makes ForgeAI behave like Claude Code / Arena AI.
+ * This is the core architecture that makes Luna behave like Claude Code / Arena AI.
  * Instead of single-pass generation with regex routing, the model:
  * 
  * 1. Receives tool schemas + full conversation context
@@ -18,6 +18,7 @@ import { Scratchpad } from './scratchpad.js';
 import { extractSkeleton, shouldUseSkeleton, extractSymbolBody } from './codeSkeleton.js';
 import { compactToolResults, selectRelevantTools } from './tokenBudget.js';
 import { performOnlineResearch } from './onlineResearch.js';
+import { describeToolCall } from './toolPolicy.js';
 import {
   gitClone, gitStatus, gitCommit, gitPush, gitLog,
   runTerminalCommand,
@@ -143,7 +144,7 @@ function createToolExecutor(workspaceProvider, options = {}) {
           try {
             const result = await runTerminalCommand({
               command: args.command,
-              cwd: args.cwd || localStorage.getItem('forgeai_last_git_repo') || '',
+              cwd: args.cwd || localStorage.getItem('luna_last_git_repo') || '',
               timeoutSeconds: 120,
             });
             const output = result?.output || result?.text || '';
@@ -190,7 +191,7 @@ function createToolExecutor(workspaceProvider, options = {}) {
           if (!isNative) return { success: false, error: 'Git requires Android native mode.' };
           try {
             const result = await gitClone(args.url, args.branch || '');
-            try { localStorage.setItem('forgeai_last_git_repo', result.path); } catch {}
+            try { localStorage.setItem('luna_last_git_repo', result.path); } catch {}
             return { success: true, path: result.path, url: args.url };
           } catch (error) {
             return { success: false, url: args.url, error: error.message };
@@ -199,7 +200,7 @@ function createToolExecutor(workspaceProvider, options = {}) {
 
         case 'git_status': {
           if (!isNative) return { success: false, error: 'Git requires Android native mode.' };
-          const path = localStorage.getItem('forgeai_last_git_repo') || '';
+          const path = localStorage.getItem('luna_last_git_repo') || '';
           if (!path) return { success: false, error: 'No repository cloned.' };
           try {
             const result = await gitStatus(path);
@@ -211,10 +212,10 @@ function createToolExecutor(workspaceProvider, options = {}) {
 
         case 'git_commit': {
           if (!isNative) return { success: false, error: 'Git requires android native mode.' };
-          const path = localStorage.getItem('forgeai_last_git_repo') || '';
+          const path = localStorage.getItem('luna_last_git_repo') || '';
           if (!path) return { success: false, error: 'No repository cloned.' };
           try {
-            const result = await gitCommit(path, args.message || 'ForgeAI change', 'ForgeAI User', 'forgeai@localhost');
+            const result = await gitCommit(path, args.message || 'Luna change', 'Luna User', 'luna@localhost');
             return { success: true, ...result };
           } catch (error) {
             return { success: false, error: error.message };
@@ -223,7 +224,7 @@ function createToolExecutor(workspaceProvider, options = {}) {
 
         case 'git_push': {
           if (!isNative) return { success: false, error: 'Git requires android native mode.' };
-          const path = localStorage.getItem('forgeai_last_git_repo') || '';
+          const path = localStorage.getItem('luna_last_git_repo') || '';
           if (!path) return { success: false, error: 'No repository cloned.' };
           try {
             const result = await gitPush(path, args.force || false);
@@ -235,7 +236,7 @@ function createToolExecutor(workspaceProvider, options = {}) {
 
         case 'git_diff': {
           if (!isNative) return { success: false, error: 'Git requires android native mode.' };
-          const path = localStorage.getItem('forgeai_last_git_repo') || '';
+          const path = localStorage.getItem('luna_last_git_repo') || '';
           if (!path) return { success: false, error: 'No repository cloned.' };
           try {
             const result = await runTerminalCommand({ command: 'git diff', cwd: path, timeoutSeconds: 30 });
@@ -247,7 +248,7 @@ function createToolExecutor(workspaceProvider, options = {}) {
 
         case 'git_log': {
           if (!isNative) return { success: false, error: 'Git requires android native mode.' };
-          const path = localStorage.getItem('forgeai_last_git_repo') || '';
+          const path = localStorage.getItem('luna_last_git_repo') || '';
           if (!path) return { success: false, error: 'No repository cloned.' };
           try {
             const result = await gitLog(path, args.count || 10);
@@ -302,7 +303,13 @@ export async function runAgenticLoop({
   onIteration,
   signal,
   workspaceFiles = [],
-  missionPlan = '',
+  // Per-tool gate: (toolName) => 'allow' | 'approve'. Defaults to allow-all so
+  // callers that don't care (tests, read-only flows) are unaffected.
+  toolPolicy,
+  // Async: ({ tool, args, description }) => boolean. Called only for tool calls
+  // the policy marks 'approve'. Returning false feeds the refusal back to the
+  // model so it can adapt instead of silently failing.
+  requestApproval,
 }) {
   const executeTool = createToolExecutor(workspaceProvider, { isNative, onToolCall, signal, workspaceFiles });
   const currentDate = new Date().toISOString().split('T')[0];
@@ -327,49 +334,40 @@ export async function runAgenticLoop({
     ? (relevantNames ? allTools.filter(t => relevantNames.includes(t.function.name)) : allTools)
     : undefined;
 
+  const identity = `You are Luna, a local utility agent that runs natively on the user's Android device.
+
+You are not a chat window with tools bolted on: the device is your workplace. You act directly on the
+user's own files through a folder they granted you, on an app-private sandbox shell, on Git repositories,
+and on the web. Everything you do happens on this phone.
+
+Work like a careful engineer with someone looking over your shoulder:
+- Prefer doing the work over describing it. If a tool can answer the question, use the tool.
+- Read before you write. Never guess a file's contents.
+- Write COMPLETE file content — never partial diffs or "... rest unchanged ...".
+- Take one step at a time: call one tool, read its result, then decide the next action.
+- If a command fails, read the error and try a different approach instead of repeating it.
+- Verify what you changed before you claim it worked.
+- Mutating actions may require the user's approval. If one is declined, do not retry it — say what you
+  would have done, or offer another route.
+- If the request is genuinely ambiguous, ask with ask_user rather than guessing.
+- When the work is finished, call respond with a short, concrete summary of what actually happened.`;
+
   const commonGuidelines = `Current date: ${currentDate}
 
-BEHAVIOR GUIDELINES:
-- ALWAYS read files before modifying them to understand the full context.
-- When writing files, provide COMPLETE file content — never partial diffs or "... rest unchanged ...".
-- If a terminal command fails, read the error, understand it, and try a different approach.
-- Use search_code to find where things are defined before making changes.
-- For multi-file changes, read all relevant files first, then make coordinated edits.
-- After making changes, verify them by reading the modified files or running tests.
-- If you're unsure about something, use ask_user to clarify.
-- Be thorough and precise. Don't guess — read the code.
-- When done, use the respond tool to give your final answer to the user.
-
-WORKFLOW:
-1. Understand what the user wants
-2. Read relevant files to understand current code
-3. Plan your approach
-4. Execute changes (create/write files, run commands)
-5. Verify your changes work
-6. Respond to the user with what you did`;
+${identity}`;
 
   const systemPrompt = useNativeTools
-    ? `You are ForgeAI, an advanced AI coding assistant with full access to the user's workspace, terminal, git, and web search.
+    ? `${commonGuidelines}
 
-Use the provided function tools to take actions. Call one tool at a time and wait for its result before the next. Do not describe tool calls in text or wrap them in code fences — invoke them via the tool-calling interface only.
+Use the provided function tools to take actions. Do not describe tool calls in text or wrap them in code fences — invoke them through the tool-calling interface only.`
+    : `${commonGuidelines}
 
-${commonGuidelines}`
-    : `You are ForgeAI, an advanced AI coding assistant with full access to the user's workspace, terminal, git, and web search.
-
-${formatToolSchemasForPrompt()}
-
-${commonGuidelines}`;
+${formatToolSchemasForPrompt()}`;
 
   // Build the conversation messages for the model
   const modelMessages = [
     { role: 'system', content: systemPrompt },
   ];
-
-  // Inject the mission plan (if the planner produced one) so the model follows
-  // its own ordered plan and finishes the whole job instead of the first edit.
-  if (missionPlan && typeof missionPlan === 'string') {
-    modelMessages.push({ role: 'system', content: missionPlan });
-  }
 
   // Add relevant history (last 8 turns)
   const relevantHistory = history.slice(-8);
@@ -472,7 +470,21 @@ ${commonGuidelines}`;
     for (const call of toolCalls) {
       onToolCall?.({ tool: call.tool, args: call.args, iteration });
 
-      const result = await executeTool(call.tool, call.args);
+      // Approval gate: decided per call, from the actual tool + arguments.
+      let result;
+      const verdict = toolPolicy ? toolPolicy(call.tool) : 'allow';
+      if (verdict === 'approve' && typeof requestApproval === 'function') {
+        const approved = await requestApproval({
+          tool: call.tool,
+          args: call.args,
+          description: describeToolCall(call.tool, call.args),
+        });
+        result = approved
+          ? await executeTool(call.tool, call.args)
+          : { success: false, declined: true, error: 'The user declined this action. Do not retry it; explain what you would have done, or propose a different approach.' };
+      } else {
+        result = await executeTool(call.tool, call.args);
+      }
       toolResults.push({ tool: call.tool, args: call.args, result });
       // Keep the scratchpad's progress record current (skip control tools).
       if (call.tool !== 'respond' && call.tool !== 'ask_user') {

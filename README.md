@@ -1,130 +1,102 @@
-# ForgeAI
+# Luna
 
-A local-first coding assistant for Android, with a browser/Ollama development preview. Android production inference runs GGUF models directly through JNI and a pinned llama.cpp revision; it does not require Ollama or a local HTTP model server.
+**A local utility agent that lives on your Android phone.**
 
-## Current capabilities
+Luna is not a chat window with tools bolted on. The device is her workplace: she reads and
+writes the folders you grant her, runs commands in a private sandbox shell, works with Git
+repositories, and looks things up on the web — using a model you choose, on-device or remote.
 
-### Android
+---
 
-- Direct CPU llama.cpp inference from app-private GGUF runtime copies.
-- Incremental JNI-to-Capacitor token streaming.
-- Request-scoped cancellation, including llama.cpp CPU abort during prompt prefill.
-- One loaded model and one active generation at a time.
-- Stable native generation error codes and exactly-once terminal events.
-- Immutable, checksummed official model catalog.
-- SAF folder picker for a user-approved project workspace.
-- Contained file CRUD through one workspace provider.
-- Sensitive-file filtering, binary/size limits, RAG disclosure, and recoverable writes.
-- Undo for writes, renames, and deletes.
-- VS Code-style CodeMirror editor with line numbers, syntax highlighting, folding, search, completion, bracket matching, and lazy-loaded language support.
-- On-demand Prettier formatting for JavaScript, TypeScript, JSON, CSS, HTML, Markdown, and YAML.
-- Android SKILL.md import with manifest validation, static security scanning, disabled-by-default installation, enable/disable, and removal.
-- Approval-gated existing-file patches and new-file creation with exact content review, reread verification, and Undo.
-- Local planner/context/coder/reviewer/verifier roles with model-call, file, and time budgets.
-- User-editable approved project memory, bounded repository symbol/import/call index, task timeline, and proactive suggestions.
-- Fast, balanced, and reviewed response modes plus restricted and opt-in Full Autonomous modes.
-- Full Autonomous Android mode can run app-sandbox shell commands, use public web research, operate app-private JGit clones, call GitHub APIs, and auto-apply verified workspace actions.
-- Device GGUF import with header validation and a recorded SHA-256.
-- Local load/prefill/generation benchmark information.
+## The four pillars
 
-### Browser development preview
+Everything in this repository serves one of four things. Anything that did not was removed.
 
-- Ollama chat/pull/delete integration.
-- A small virtual workspace persisted in browser storage.
-- The same relative-path policy and recoverable workspace operations.
+### 1. The agent
+A single agentic loop (`src/agent/agenticLoop.js`) that plans, calls one tool at a time,
+verifies its own writes, and finishes by responding.
 
-## Architecture
+- **Tools** — `src/agent/toolSchemas.js`: read/write files, create files and folders, delete,
+  list, search code, read a single symbol, run terminal commands, Git (`status`, `diff`, `log`,
+  `clone`, `commit`, `push`), web search and page fetch, ask the user, respond.
+- **Approval policy** — `src/agent/toolPolicy.js`: read-only tools always run; mutating tools
+  need approval unless the user has switched to unattended mode. A declined action is never retried.
+- **Execution mode** — `src/agent/executionMode.js`: `ask` (default) or `auto`.
+- **Context discipline** — `tokenBudget.js` (budgeted history), `codeSkeleton.js` (large files come
+  back as an outline instead of raw text), `scratchpad.js` (working notes carried across turns).
+- **Research** — `onlineResearch.js` plus native search/fetch providers.
 
-```text
-Android
-React/Capacitor UI
-  → ModelProvider / WorkspaceProvider / ToolRegistry
-  → OnDeviceRuntime + WorkspaceStorage Capacitor plugins
-  → JNI
-  → pinned llama.cpp
-  → GGUF
+### 2. The model zoo
+Bring your own model, local or hosted.
 
-Browser preview
-React UI
-  → OllamaProvider
-  → user-configured Ollama endpoint
+- **On-device**: GGUF models run through the bundled llama.cpp runtime (`OnDeviceRuntime`),
+  downloaded and managed inside the app (`src/components/ModelZoo.jsx`, `MyCollection.jsx`).
+- **Local network**: any Ollama endpoint.
+- **Cloud providers**: API-key providers are fully supported and stay supported
+  (`src/providers/cloudProviderStore.js`), with automatic failover (`providerFailover.js`).
+- Device capability checks (`useDeviceCapability`, `DeviceCapacity` plugin) stop the app from
+  offering models the phone cannot actually load.
+
+### 3. The SAF workspace
+Real access to real user files, through Android's Storage Access Framework.
+
+- The user picks a folder; `WorkspaceStorage.java` holds the persisted URI permission.
+- `src/workspace/workspaceProvider.js` is the single I/O surface; `workspacePolicy.js` enforces
+  size limits (2 MiB read/write), blocks sensitive paths, and hides internal `.luna-*` markers.
+- `src/components/Workspace.jsx` + `src/editor/CodeEditor.jsx` give a file tree and an editor.
+
+### 4. Minimal settings
+Three tabs, no dials that do nothing (`src/components/Settings.jsx`):
+
+- **Agent** — execution mode (ask first / run unattended, behind a confirmation).
+- **Connections** — Ollama endpoint, cloud failover, GitHub token (stored in the Android Keystore
+  via `CredentialVault.java`).
+- **Data** — runtime info, error log, reset app data.
+
+---
+
+## Project layout
+
 ```
+src/
+  agent/        agentic loop, tool schemas, approval policy, execution mode, context tools
+  components/   chat, workspace, model zoo, collection, settings, shared UI
+  hooks/        useAgentPipeline, useWorkspace, useConversations, useInference, useModelCollection
+  models/       model catalog, manifest, prompt profiles
+  providers/    model provider abstraction, cloud provider store, failover
+  workspace/    SAF workspace provider + policy
+  research/     web search / fetch providers
+  editor/       CodeMirror editor + formatting
+  nativeBridge.js  the only file that talks to Capacitor plugins
 
-## Official Android models
-
-The Model Zoo is generated from `src/models/catalog.js` and currently offers eight models from 94 MB through 1.7 GB. Every listed GGUF has:
-
-- an immutable Hugging Face revision URL;
-- exact file size;
-- trusted SHA-256;
-- source, revision, license, and quantization metadata;
-- a runtime prompt/context profile.
-
-User-imported GGUF files are labelled `hash-recorded`, not publisher-verified, unless they match a trusted manifest.
+android/app/src/main/java/ai/luna/app/
+  WorkspaceStorage.java   SAF folder access, read/write/list/backup
+  OnDeviceRuntime.java    llama.cpp bridge (cpp/ holds the native glue)
+  TerminalRuntime.java    sandboxed shell
+  GitRuntime.java         JGit clone/commit/push/status/diff/log
+  ResearchRuntime.java    web search and page fetch
+  CredentialVault.java    Keystore-backed token storage
+  AutonomyRuntime.java    unattended-mode foreground service
+  MainActivity.java
+```
 
 ## Development
 
 ```bash
 npm ci
-npm run lint
-npm test
-npm run catalog:validate-release
-npm run build
+npm run dev        # web shell (native features are unavailable in the browser)
+npm run lint       # oxlint — must be 0 warnings / 0 errors
+npm test           # node test suites
+npm run build      # vite production build
 ```
 
-Browser preview:
+Android:
 
 ```bash
-npm run dev
+npm run android:build   # bootstrap llama.cpp, preflight, build, cap sync, gradle assembleDebug
 ```
 
-## Android build
+Or build from the phone with GitHub Actions — see [MOBILE_BUILD.md](MOBILE_BUILD.md).
 
-Requirements:
-
-- Java 21+
-- Android SDK platform 35
-- Android Build Tools 35.0.0
-- NDK 26.1.10909125
-- CMake 3.22.1
-
-```bash
-npm run android:build
-```
-
-The debug APK is written to:
-
-```text
-android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-GitHub Actions also builds and uploads `forgeai-debug-apk` on every push to `main` and on manual dispatch.
-
-## Safety boundaries
-
-- Android project access requires a user-selected SAF document tree.
-- App tools accept relative workspace paths only.
-- Restricted autonomy modes require approval for writes. Full Autonomous mode is a separate explicit opt-in that permits autonomous workspace writes and app-sandbox terminal/Git operations.
-- Text reads/writes are capped at 2 MiB; RAG reads use a lower per-file cap.
-- Common secret files and generated/dependency directories are blocked by default.
-- Android terminal commands run as the ForgeAI app user inside app-private storage; they have no root access and only Android-installed/bundled binaries are available.
-- GitHub PATs are encrypted with Android Keystore and are never added to the model prompt or terminal environment.
-- Browser Ollama endpoints may be remote; the app discloses workspace files before adding them to a prompt.
-
-## Remaining acceptance work
-
-Automated tests and APK compilation do not replace physical-device acceptance. Before release, test on real ARM64 phones:
-
-1. checksummed model download and import;
-2. airplane-mode token streaming;
-3. cancellation during prefill and generation;
-4. model switch/unload/delete/restart;
-5. workspace write/rename/delete undo across restart;
-6. SAF behavior with multiple Android document providers;
-7. benchmark and memory behavior under sustained generation.
-
-Phase 4 will add structured model actions, unified diffs, reviewable patch application, code retrieval, history, and desktop-only approved validation commands. Phase 5 will add the Tauri desktop product and release hardening.
-
-## License
-
-MIT. See `LICENSE`. Model licenses are shown per catalog entry; the current official entries are Apache-2.0.
+App id `ai.luna.app`. See [docs/PRUNE_REPORT.md](docs/PRUNE_REPORT.md) for what was removed in the
+rebuild and [docs/AUDIT_INVENTORY.md](docs/AUDIT_INVENTORY.md) for the pre-rebuild inventory.

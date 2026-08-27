@@ -17,5 +17,5 @@ project(':capacitor-local-notifications').projectDir = new File('../node_modules
 include ':capacitor-status-bar'
 project(':capacitor-status-bar').projectDir = new File('../node_modules/@capacitor/status-bar/android')
 
-include ':forgeai-device-capacity'
-project(':forgeai-device-capacity').projectDir = new File('../plugins/device-capacity/android')
+include ':luna-device-capacity'
+project(':luna-device-capacity').projectDir = new File('../plugins/device-capacity/android')

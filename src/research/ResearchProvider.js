@@ -4,7 +4,6 @@
  */
 
 import { nativeResearchProvider } from './NativeResearchProvider.js';
-import { isExperimentalEnabled } from '../utils/experimentalFeatures.js';
 import { isNative } from '../nativeBridge.js';
 
 export const RESEARCH_DEPTH = Object.freeze({
@@ -13,7 +12,7 @@ export const RESEARCH_DEPTH = Object.freeze({
   RAW: 'raw',
 });
 
-const STORAGE_KEY = 'forgeai_research_settings';
+const STORAGE_KEY = 'luna_research_settings';
 const DEFAULT_SETTINGS = Object.freeze({
   depth: RESEARCH_DEPTH.STANDARD,
   archiveMode: false,
@@ -86,7 +85,7 @@ export class ResearchProvider {
   }
 
   async search(query, options = {}) {
-    const experimentalEnabled = isExperimentalEnabled('realResearch');
+    const experimentalEnabled = isNative;
     const depth = options.depth || this.depth;
 
     if (experimentalEnabled && isNative) {
@@ -121,7 +120,7 @@ export class ResearchProvider {
   }
 
   async fetchFullPage(url) {
-    const experimentalEnabled = isExperimentalEnabled('realResearch');
+    const experimentalEnabled = isNative;
 
     if (experimentalEnabled && isNative) {
       return await nativeResearchProvider.fetchFullPage(url);

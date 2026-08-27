@@ -1,6 +1,6 @@
 {
-  "appId": "ai.forgeai.app",
-  "appName": "ForgeAI",
+  "appId": "ai.luna.app",
+  "appName": "Luna",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

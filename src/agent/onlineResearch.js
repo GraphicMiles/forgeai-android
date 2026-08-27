@@ -76,8 +76,8 @@ function relevanceScore(query, item) {
 }
 
 export async function performOnlineResearch(query, { maxRetries = 2, backoffMs = 1000 } = {}) {
-  const googleApiKey = localStorage.getItem('forgeai_google_api_key') || '';
-  const googleCx = localStorage.getItem('forgeai_google_cx') || '';
+  const googleApiKey = localStorage.getItem('luna_google_api_key') || '';
+  const googleCx = localStorage.getItem('luna_google_cx') || '';
   
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {

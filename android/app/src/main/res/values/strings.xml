@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ForgeAI</string>
-    <string name="title_activity_main">ForgeAI</string>
-    <string name="package_name">ai.forgeai.app</string>
-    <string name="custom_url_scheme">ai.forgeai.app</string>
+    <string name="app_name">Luna</string>
+    <string name="title_activity_main">Luna</string>
+    <string name="package_name">ai.luna.app</string>
+    <string name="custom_url_scheme">ai.luna.app</string>
 </resources>
