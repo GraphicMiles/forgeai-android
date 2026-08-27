@@ -222,7 +222,7 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  IconData _iconFor(String name) {
+  FaIconData _iconFor(String name) {
     final String lower = name.toLowerCase();
     if (lower.endsWith('.md') || lower.endsWith('.txt')) return FontAwesomeIcons.fileLines;
     if (lower.endsWith('.json') || lower.endsWith('.yaml') || lower.endsWith('.yml')) {

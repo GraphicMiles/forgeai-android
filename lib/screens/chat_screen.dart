@@ -164,7 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _pill(IconData icon, String label) {
+  Widget _pill(FaIconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
       decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
@@ -376,7 +376,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _approvalButton({
     required String label,
-    required IconData icon,
+    required FaIconData icon,
     required Color background,
     required Color foreground,
     required VoidCallback onTap,

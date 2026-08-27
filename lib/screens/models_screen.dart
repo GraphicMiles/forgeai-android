@@ -346,7 +346,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
         if (failure != null) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: Text(failure!,
+            child: Text(failure,
                 style: LunaTheme.text(size: 13, color: LunaTheme.ink2, height: 1.5)),
           );
         }

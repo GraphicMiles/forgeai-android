@@ -81,7 +81,7 @@ class _MarkPainter extends CustomPainter {
 class Glyph extends StatelessWidget {
   const Glyph(this.icon, {super.key, this.size = 13.5, this.color = LunaTheme.ink2});
 
-  final IconData icon;
+  final FaIconData icon;
   final double size;
   final Color color;
 
@@ -93,7 +93,7 @@ class Glyph extends StatelessWidget {
 class IconButtonSoft extends StatelessWidget {
   const IconButtonSoft({super.key, required this.icon, this.onTap, this.active = false, this.label});
 
-  final IconData icon;
+  final FaIconData icon;
   final VoidCallback? onTap;
   final bool active;
   final String? label;
@@ -248,7 +248,7 @@ class LunaRow extends StatelessWidget {
     this.child,
   });
 
-  final IconData? icon;
+  final FaIconData? icon;
   final String title;
   final String? subtitle;
   final Widget? trailing;
@@ -318,7 +318,7 @@ class PillButton extends StatelessWidget {
   });
 
   final String label;
-  final IconData? icon;
+  final FaIconData? icon;
   final VoidCallback? onTap;
   final bool soft;
   final bool small;
@@ -476,7 +476,7 @@ class LunaChip extends StatelessWidget {
 class Note extends StatelessWidget {
   const Note({super.key, required this.icon, required this.children});
 
-  final IconData icon;
+  final FaIconData icon;
   final List<InlineSpan> children;
 
   @override
@@ -516,7 +516,7 @@ class EmptyState extends StatelessWidget {
     this.mascot = false,
   });
 
-  final IconData icon;
+  final FaIconData icon;
   final String title;
   final String body;
   final Widget? action;
