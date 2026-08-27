@@ -248,7 +248,7 @@ class TraceStep {
   final String detail;
 
   bool get isDone => state == 'done' || state == 'replayed';
-  bool get isRefused => state == 'denied' || state == 'blocked';
+  bool get isRefused => state == 'denied' || state == 'blocked' || state == 'unfinished';
   bool get isRunning => state == 'running';
 }
 

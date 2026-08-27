@@ -51,6 +51,9 @@ public final class AgentEngine {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+
+    /** A turn ends exactly once, whoever gets there first. */
+    private final AtomicBoolean finished = new AtomicBoolean(true);
     private final BlockingQueue<Boolean> approvals = new ArrayBlockingQueue<>(1);
     private final BlockingQueue<String> answers = new ArrayBlockingQueue<>(1);
 
@@ -301,7 +304,13 @@ public final class AgentEngine {
     // --- turn ----------------------------------------------------------------
 
     public void send(final String text) {
-        if (text == null || text.trim().isEmpty() || running.get()) {
+        if (text == null || text.trim().isEmpty()) {
+            return;
+        }
+        if (running.get()) {
+            // Silence here is how a wedged job eats every message after it.
+            append("assistant", "A job is still running. Stop it first, then send this again.", null);
+            emit("run_done", new JSONObject());
             return;
         }
         append("user", text.trim(), null);
@@ -313,11 +322,20 @@ public final class AgentEngine {
         });
     }
 
+    /**
+     * Stop means stop. Cancelling the runtime handles generation, but a model
+     * load is native and cannot be interrupted, so the turn is also ended here
+     * and now — otherwise the app looks alive and quietly drops everything the
+     * user types next.
+     */
     public void stop() {
         stopRequested.set(true);
         runtime.cancel();
         approvals.offer(Boolean.FALSE);
         answers.offer("");
+        if (running.getAndSet(false)) {
+            finishWithMessage("Stopped.");
+        }
     }
 
     /** The answer to an ask_user question. An empty answer counts as "skip". */
@@ -338,6 +356,7 @@ public final class AgentEngine {
     private void runTurn(String userText) {
         running.set(true);
         stopRequested.set(false);
+        finished.set(false);
         long started = System.currentTimeMillis();
         RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
         guards.begin();
@@ -348,7 +367,7 @@ public final class AgentEngine {
             ModelStore.Entry local = activeLocalModel();
             JSONObject cloud = activeCloudProvider();
             if (local == null && cloud == null) {
-                finishWithMessage("Pick a model first — Models tab. Nothing has been sent anywhere.");
+                finishWithMessage(noModelReason());
                 return;
             }
             if (local != null && !loadIfNeeded(local)) {
@@ -466,7 +485,9 @@ public final class AgentEngine {
             } catch (JSONException ignored) {
                 // The event still carries meaning without the timing.
             }
-            emit("run_done", done);
+            if (finished.compareAndSet(false, true)) {
+                emit("run_done", done);
+            }
         } catch (Exception error) {
             errors.record("agent", error);
             finishWithMessage("Something went wrong in the loop: " + error);
@@ -558,7 +579,11 @@ public final class AgentEngine {
             return true;
         }
         emit("loading_model", new JSONObject());
-        return runtime.load(entry.id, models.fileFor(entry));
+        boolean ok = runtime.load(entry.id, models.fileFor(entry));
+        // The step has to be closed either way. A row that spins forever is
+        // worse than a row that says it failed.
+        emitStep("load_model", "", ok ? "done" : "denied");
+        return ok;
     }
 
     private ModelStore.Entry activeLocalModel() {
@@ -566,8 +591,66 @@ public final class AgentEngine {
         if (id.isEmpty() || id.startsWith("cloud:")) {
             return null;
         }
+        if (id.startsWith("imported:")) {
+            return importedEntry(id);
+        }
         ModelStore.Entry entry = ModelStore.find(id);
-        return entry != null && models.isInstalled(entry) ? entry : null;
+        // A file that is on disk and has some size in it is runnable. The exact
+        // size only decides whether a download finished, and that check has
+        // already happened by the time it is sitting here.
+        return entry != null && models.fileFor(entry).length() > 0L ? entry : null;
+    }
+
+    /** A model the user imported, or null when the file is no longer there. */
+    private ModelStore.Entry importedEntry(String id) {
+        JSONObject model = prefs.importedModel(id);
+        if (model == null) {
+            return null;
+        }
+        String stored = model.optString("file");
+        File file = new File(stored);
+        if (!file.exists()) {
+            // Imports are copied into the models folder, so the name still finds
+            // it even if the recorded path is stale.
+            file = new File(models.modelsDir(), new File(stored).getName());
+        }
+        if (!file.exists() || file.length() <= 0L) {
+            return null;
+        }
+        return ModelStore.imported(id, model.optString("name", file.getName()), file);
+    }
+
+    /**
+     * Why there is nothing to run. "Pick a model" is a lie when a model is
+     * picked and its file has gone missing, and a lie in a failure message
+     * costs an hour of looking in the wrong place.
+     */
+    private String noModelReason() {
+        String id = prefs.activeModelId();
+        if (id.isEmpty()) {
+            return "Pick a model first — Model Zoo tab. Nothing has been sent anywhere.";
+        }
+        if (id.startsWith("cloud:")) {
+            return "That cloud provider is no longer set up. Add the key again in the Model Zoo.";
+        }
+        if (id.startsWith("imported:")) {
+            JSONObject model = prefs.importedModel(id);
+            if (model == null) {
+                return "That imported model is no longer in the list. Import the file again.";
+            }
+            return "The file for " + model.optString("name", "that model")
+                + " is not in Luna's models folder any more. Import it again.";
+        }
+        ModelStore.Entry entry = ModelStore.find(id);
+        if (entry == null) {
+            return "The selected model is not one Luna knows about. Pick another in the Model Zoo.";
+        }
+        File file = models.fileFor(entry);
+        if (!file.exists()) {
+            return entry.name + " is selected but not downloaded. Get it in the Model Zoo.";
+        }
+        return entry.name + " is only " + (file.length() / (1024L * 1024L)) + " MB on disk, and it should be "
+            + (entry.sizeBytes / (1024L * 1024L)) + " MB. The download did not finish — get it again.";
     }
 
     private JSONObject activeCloudProvider() {
@@ -804,6 +887,10 @@ public final class AgentEngine {
     }
 
     private void finishWithMessage(String text) {
+        if (!finished.compareAndSet(false, true)) {
+            // The turn already ended — a stop that raced the loop, usually.
+            return;
+        }
         append("assistant", text, null);
         saveTranscript();
         JSONObject event = new JSONObject();

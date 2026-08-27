@@ -128,6 +128,16 @@ public final class ModelStore {
         this.context = context.getApplicationContext();
     }
 
+    /**
+     * A model you brought yourself, dressed up as a catalogue entry so the rest
+     * of the engine does not have to care where it came from. There is no
+     * publisher and no checksum, so the size is whatever is on disk.
+     */
+    public static Entry imported(String id, String name, File file) {
+        return new Entry(id, name, describeGguf(file), file.getName(), file.length(), 0,
+            4096, 512, "", "", "You are a helpful assistant.");
+    }
+
     public static Entry find(String id) {
         for (Entry entry : CATALOG) {
             if (entry.id.equals(id)) {

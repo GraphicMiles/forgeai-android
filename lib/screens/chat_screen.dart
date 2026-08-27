@@ -442,12 +442,15 @@ class _ChatScreenState extends State<ChatScreen> {
           ? 'already read'
           : state == 'blocked'
               ? 'over the limit'
-              : state == 'denied'
-                  ? 'not allowed'
-                  : path.isEmpty
+              : state == 'unfinished'
+                  ? 'did not finish'
+                  : state == 'denied'
+                      ? (tool == 'load_model' ? 'would not load' : 'not allowed')
+                      : path.isEmpty
                       ? ''
                       : path.split('/').last;
-      final String label = state == 'running'
+      final String label = state == 'running' || state == 'unfinished' ||
+              (state == 'denied' && tool == 'load_model')
           ? (_liveLabels[tool] ?? tool)
           : (_stepLabels[tool] ?? tool);
       return TraceStep(label: label, state: state, detail: detail);
