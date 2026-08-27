@@ -47,6 +47,9 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      - name: Engine logic tests
+        run: bash scripts/logic-tests.sh
+
       - name: Restore the upload key
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

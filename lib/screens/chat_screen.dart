@@ -292,6 +292,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (core.pendingApproval != null) _approval(core),
               if (core.pendingQuestion != null) _question(core),
               if (core.running) _running(core),
+              if (core.canCarryOn) _carryOn(core),
             ],
           ),
         ),
@@ -649,6 +650,31 @@ class _ChatScreenState extends State<ChatScreen> {
       elapsed: core.workElapsed,
       waiting: core.waitingOnYou,
       onStop: core.stop,
+    );
+  }
+
+  /// The way back into a job that stopped. Nothing is lost: the steps that
+  /// already worked are in the transcript, and Luna is told not to redo them.
+  Widget _carryOn(LunaCore core) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+      child: Row(
+        children: <Widget>[
+          PillButton(
+            label: 'Carry on',
+            icon: FontAwesomeIcons.play,
+            small: true,
+            onTap: core.carryOn,
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              'Picks up from the last step that worked.',
+              style: LunaTheme.text(size: 12, color: LunaTheme.ink3),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

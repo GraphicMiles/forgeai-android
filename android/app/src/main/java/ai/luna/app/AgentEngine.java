@@ -30,7 +30,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class AgentEngine {
 
-    private static final int MAX_HISTORY_CHARS = 6000;
+    /** Roughly how many characters one token is worth for these models. */
+    private static final int CHARS_PER_TOKEN = 3;
+
+    /** What a cloud model gets. Their windows are large; this is the sane cap. */
+    private static final int CLOUD_HISTORY_CHARS = 12000;
 
     /** How the engine talks to Flutter. */
     public interface Events {
@@ -266,6 +270,20 @@ public final class AgentEngine {
         } finally {
             WorkspaceStore.closeQuietly(input);
         }
+        noteInterruptedTurn();
+    }
+
+    /**
+     * A job that was killed with the app leaves a user message and no answer.
+     * Say so on the way back in, rather than showing a conversation that looks
+     * like Luna ignored the question.
+     */
+    private void noteInterruptedTurn() {
+        if (!dangling(transcript)) {
+            return;
+        }
+        append("assistant", "That job stopped when Luna closed. Anything above this line did happen; "
+            + "nothing after it ran. Tap Carry on and I will pick it up.", "interrupted");
     }
 
     private void saveTranscript() {
@@ -328,13 +346,62 @@ public final class AgentEngine {
      * and now — otherwise the app looks alive and quietly drops everything the
      * user types next.
      */
+    /**
+     * Pick a stopped job back up. The transcript already holds every step that
+     * succeeded, so the model is told to continue rather than start again.
+     */
+    public void resume() {
+        if (running.get()) {
+            return;
+        }
+        if (lastUserInstruction().isEmpty()) {
+            return;
+        }
+        send("Carry on from where you stopped. The steps recorded above already happened — "
+            + "do not repeat them, and do not start over.");
+    }
+
+    /** True when the last thing in the chat is a stop or an interruption. */
+    public boolean canResume() {
+        return !running.get() && resumable(transcript);
+    }
+
+    /** Pure: a chat can be carried on when it stopped and there was an order. */
+    static boolean resumable(List<JSONObject> messages) {
+        if (messages.isEmpty() || lastUserInstruction(messages).isEmpty()) {
+            return false;
+        }
+        String meta = messages.get(messages.size() - 1).optString("meta");
+        return meta.equals("interrupted") || meta.equals("stopped");
+    }
+
+    /** Pure: the turn never got an answer, so the app died in the middle of it. */
+    static boolean dangling(List<JSONObject> messages) {
+        return !messages.isEmpty()
+            && !messages.get(messages.size() - 1).optString("role").equals("assistant");
+    }
+
+    private String lastUserInstruction() {
+        return lastUserInstruction(transcript);
+    }
+
+    static String lastUserInstruction(List<JSONObject> messages) {
+        for (int index = messages.size() - 1; index >= 0; index--) {
+            JSONObject message = messages.get(index);
+            if (message.optString("role").equals("user")) {
+                return message.optString("content");
+            }
+        }
+        return "";
+    }
+
     public void stop() {
         stopRequested.set(true);
         runtime.cancel();
         approvals.offer(Boolean.FALSE);
         answers.offer("");
         if (running.getAndSet(false)) {
-            finishWithMessage("Stopped.");
+            finishWithMessage("Stopped.", "stopped");
         }
     }
 
@@ -376,14 +443,18 @@ public final class AgentEngine {
             }
 
             String answer = "";
+            // A run that ends because it hit a limit is a run that can be
+            // picked up again, and the chat should offer that.
+            boolean cutShort = false;
             while (true) {
                 if (stopRequested.get()) {
-                    finishWithMessage("Stopped.");
+                    finishWithMessage("Stopped.", "stopped");
                     return;
                 }
                 if (guards.elapsedMillis() > (long) prefs.budgetSeconds() * 1000L) {
                     answer = "I hit the time limit for one job (" + prefs.budgetSeconds()
                         + " seconds) and stopped. " + guards.describe() + ".";
+                    cutShort = true;
                     break;
                 }
 
@@ -419,7 +490,7 @@ public final class AgentEngine {
                     String question = args.optString("question", args.optString("text", ""));
                     String reply = askUser(question);
                     if (stopRequested.get()) {
-                        finishWithMessage("Stopped.");
+                        finishWithMessage("Stopped.", "stopped");
                         return;
                     }
                     appendObservation(tool, reply.isEmpty()
@@ -474,8 +545,9 @@ public final class AgentEngine {
 
             if (answer.isEmpty()) {
                 answer = "I ran out of steps before finishing. Tell me which part to pick up.";
+                cutShort = true;
             }
-            append("assistant", answer, null);
+            append("assistant", answer, cutShort ? "stopped" : null);
             saveTranscript();
 
             JSONObject done = new JSONObject();
@@ -760,8 +832,9 @@ public final class AgentEngine {
     /** ChatML, which every model in the catalogue was trained on. */
     private String buildPrompt(ModelStore.Entry entry) {
         StringBuilder out = new StringBuilder();
-        out.append("<|im_start|>system\n").append(systemPrompt(entry.systemPrompt)).append("<|im_end|>\n");
-        for (JSONObject message : trimmedHistory()) {
+        String system = systemPrompt(entry.systemPrompt);
+        out.append("<|im_start|>system\n").append(system).append("<|im_end|>\n");
+        for (JSONObject message : trimmedHistory(historyBudget(entry, system))) {
             String role = message.optString("role");
             String content = message.optString("content");
             if (role.equals("observation")) {
@@ -781,7 +854,7 @@ public final class AgentEngine {
             system.put("role", "system");
             system.put("content", systemPrompt(null));
             out.add(system);
-            for (JSONObject message : trimmedHistory()) {
+            for (JSONObject message : trimmedHistory(CLOUD_HISTORY_CHARS)) {
                 JSONObject copy = new JSONObject();
                 String role = message.optString("role");
                 copy.put("role", role.equals("assistant") ? "assistant" : "user");
@@ -796,12 +869,31 @@ public final class AgentEngine {
         return out;
     }
 
+    /**
+     * How much conversation actually fits. The window has to hold the system
+     * prompt and the answer as well, so the history gets what is left — a fixed
+     * 6000 characters used to overflow a 2048-token model and the turn died
+     * with "longer than the context window" instead of forgetting the oldest
+     * part, which is what it should do.
+     */
+    private int historyBudget(ModelStore.Entry entry, String system) {
+        int window = entry.contextTokens > 0 ? entry.contextTokens : 2048;
+        int reserved = entry.maxOutputTokens + (system.length() / CHARS_PER_TOKEN) + 128;
+        int left = (window - reserved) * CHARS_PER_TOKEN;
+        return Math.max(1200, left);
+    }
+
     /** Keep the tail of the conversation that fits the context budget. */
-    private List<JSONObject> trimmedHistory() {
+    private List<JSONObject> trimmedHistory(int budgetChars) {
+        return tail(transcript, budgetChars);
+    }
+
+    /** Pure: the newest messages that fit, oldest first, never empty. */
+    static List<JSONObject> tail(List<JSONObject> messages, int budgetChars) {
         List<JSONObject> out = new ArrayList<>();
-        int budget = MAX_HISTORY_CHARS;
-        for (int index = transcript.size() - 1; index >= 0; index--) {
-            JSONObject message = transcript.get(index);
+        int budget = budgetChars;
+        for (int index = messages.size() - 1; index >= 0; index--) {
+            JSONObject message = messages.get(index);
             int cost = message.optString("content").length();
             if (cost > budget && !out.isEmpty()) {
                 break;
@@ -887,11 +979,15 @@ public final class AgentEngine {
     }
 
     private void finishWithMessage(String text) {
+        finishWithMessage(text, null);
+    }
+
+    private void finishWithMessage(String text, String meta) {
         if (!finished.compareAndSet(false, true)) {
             // The turn already ended — a stop that raced the loop, usually.
             return;
         }
-        append("assistant", text, null);
+        append("assistant", text, meta);
         saveTranscript();
         JSONObject event = new JSONObject();
         try {
