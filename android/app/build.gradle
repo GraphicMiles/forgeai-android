@@ -40,7 +40,10 @@ android {
 
     defaultConfig {
         applicationId = "ai.luna.app"
-        minSdk = 23
+        // 24, not 23: Android 6 can only verify a v1 (JAR) signature, and the
+        // release APK is signed v2/v3. A phone that cannot run a local model is
+        // not the phone this is for anyway.
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -90,8 +93,8 @@ android {
                 storePassword = signingValue("storePassword", "LUNA_KEYSTORE_PASSWORD", "")
                 keyAlias = signingValue("keyAlias", "LUNA_KEY_ALIAS", "luna")
                 keyPassword = signingValue("keyPassword", "LUNA_KEY_PASSWORD", "")
-                // v1 as well as v2/v3: minSdk is 23, and 23 predates v2.
-                enableV1Signing = true
+                // v2 and v3 only: everything from Android 7 up verifies those.
+                enableV1Signing = false
                 enableV2Signing = true
                 enableV3Signing = true
             }
