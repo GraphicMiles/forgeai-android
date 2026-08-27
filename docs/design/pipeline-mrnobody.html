@@ -42,8 +42,8 @@
   .turn .col .brand{width:20px;height:20px}
   .turn .body{flex:1;min-width:0;max-width:calc(100% - 28px);
     display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-  .card{background:var(--bubble);border-radius:16px 16px 16px 5px;padding:9px 11px;
-    max-width:100%;align-self:stretch}
+  /* the agent side has no bubble: the mark in the gutter is the attribution */
+  .card{background:transparent;border-radius:0;padding:0;align-self:stretch;max-width:100%}
 
   /* ── PixelLoader: 3×3, 4px cells, 1.5px gap, 650ms, (c+|r-1|)×90ms ──── */
   .pix{display:grid;grid-template-columns:repeat(3,4px);gap:1.5px;flex:none}
