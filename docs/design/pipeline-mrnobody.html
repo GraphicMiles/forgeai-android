@@ -35,8 +35,10 @@
 
   /* ── turns: a standard two-sided chat ───────────────────────────────── */
   .userTurn{display:flex;justify-content:flex-end}
-  .userTurn .msg{max-width:80%;background:var(--accent);color:var(--accentInk);
-    padding:7px 10px;border-radius:14px 14px 4px 14px;font-size:12.5px;font-weight:500;line-height:1.4}
+  /* the bubble is exactly as wide as its words, never a line more */
+  .userTurn .msg{width:fit-content;max-width:80%;background:var(--accent);color:var(--accentInk);
+    padding:5px 9px;border-radius:13px 13px 4px 13px;font-size:12.5px;font-weight:500;
+    line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
   /* no avatar gutter: the mark leads the working line and the trace header */
   .turn{display:flex;margin-left:1.5rem}
   /* 11px of thread gap + 13px here = the 1.5rem the answer owes the question */
