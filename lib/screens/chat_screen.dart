@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/luna_core.dart';
 import '../theme.dart';
+import '../widgets/agent_response.dart';
 import '../widgets/common.dart';
 
 /// Chat — the working screen.
@@ -42,13 +43,32 @@ class _ChatScreenState extends State<ChatScreen> {
     'load_model': 'Loaded the model',
   };
 
+  /// What the same tool is called while it is still happening.
+  static const Map<String, String> _liveLabels = <String, String>{
+    'list_files': 'Listing the folder',
+    'read_file': 'Reading a file',
+    'search_code': 'Searching the folder',
+    'write_file': 'Writing a file',
+    'create_file': 'Creating a file',
+    'create_folder': 'Creating a folder',
+    'delete_file': 'Deleting a file',
+    'rename_file': 'Renaming a file',
+    'open_page': 'Opening a page',
+    'read_page': 'Reading the page',
+    'github_file': 'Fetching from GitHub',
+    'ask_user': 'Waiting on you',
+    'load_model': 'Loading the model',
+  };
+
   final TextEditingController _answer = TextEditingController();
   String _attached = '';
 
   @override
   void initState() {
     super.initState();
-    _clock = Timer.periodic(const Duration(seconds: 1), (Timer _) {
+    // Fast enough for the tenth of a second the trace shows, slow enough not
+    // to be a second animation of its own.
+    _clock = Timer.periodic(const Duration(milliseconds: 200), (Timer _) {
       if (mounted && widget.core.running) setState(() {});
     });
   }
@@ -368,7 +388,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (core.streaming.isNotEmpty) {
       out.add(Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 11),
-        child: _lunaBubble(core.streaming),
+        child: _lunaBubble(core.streaming, streaming: true),
       ));
     }
     return out;
@@ -398,84 +418,45 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _lunaBubble(String text) {
+  Widget _lunaBubble(String text, {bool streaming = false}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         const Padding(padding: EdgeInsets.only(top: 2), child: Mark(size: 22)),
         const SizedBox(width: 10),
-        Expanded(child: Text(text, style: LunaTheme.body)),
+        Expanded(
+          child: streaming
+              ? StreamedAnswer(text: text)
+              : Text(text, style: LunaTheme.body),
+        ),
       ],
     );
   }
 
   Widget _steps(LunaCore core) {
-    final List<Widget> rows = <Widget>[];
-    for (int index = 0; index < core.steps.length; index++) {
-      final Map<String, String> step = core.steps[index];
-      final String state = step['state'] ?? '';
-      final bool done = state == 'done' || state == 'replayed';
-      final bool refused = state == 'denied' || state == 'blocked';
+    final List<TraceStep> steps = core.steps.map((Map<String, String> step) {
       final String tool = step['tool'] ?? '';
-      rows.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 19,
-              height: 19,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: done ? LunaTheme.ink : LunaTheme.paper,
-                shape: BoxShape.circle,
-              ),
-              child: Glyph(
-                refused
-                    ? FontAwesomeIcons.xmark
-                    : done
-                        ? FontAwesomeIcons.check
-                        : FontAwesomeIcons.hourglassHalf,
-                size: 8.5,
-                color: done ? LunaTheme.onInk : LunaTheme.ink3,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _stepLabels[tool] ?? tool,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: LunaTheme.text(
-                  size: 13,
-                  weight: done ? 550 : 500,
-                  color: done ? LunaTheme.ink : LunaTheme.ink3,
-                ),
-              ),
-            ),
-            if (state == 'replayed')
-              Text('already read',
-                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3))
-            else if (state == 'blocked')
-              Text('over the limit',
-                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3))
-            else if (state == 'denied')
-              Text('not allowed',
-                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3))
-            else if ((step['path'] ?? '').isNotEmpty)
-              Text(step['path']!.split('/').last,
-                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3)),
-          ],
-        ),
-      ));
-      if (index != core.steps.length - 1) {
-        rows.add(Container(height: 1, color: const Color(0x0D000000)));
-      }
-    }
-    return Container(
-      margin: const EdgeInsets.fromLTRB(52, 10, 20, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 3),
-      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rStep),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
+      final String state = step['state'] ?? '';
+      final String path = step['path'] ?? '';
+      final String detail = state == 'replayed'
+          ? 'already read'
+          : state == 'blocked'
+              ? 'over the limit'
+              : state == 'denied'
+                  ? 'not allowed'
+                  : path.isEmpty
+                      ? ''
+                      : path.split('/').last;
+      final String label = state == 'running'
+          ? (_liveLabels[tool] ?? tool)
+          : (_stepLabels[tool] ?? tool);
+      return TraceStep(label: label, state: state, detail: detail);
+    }).toList();
+
+    return AgentTrace(
+      steps: steps,
+      running: core.running,
+      elapsed: core.running ? core.workElapsed : core.runElapsed,
     );
   }
 
@@ -649,40 +630,22 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _running(LunaCore core) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            width: 11,
-            height: 11,
-            child: CircularProgressIndicator(strokeWidth: 1.6, color: LunaTheme.ink3),
-          ),
-          const SizedBox(width: 9),
-          Text(
-            core.thinking ? 'Thinking' : 'Working',
-            style: LunaTheme.text(size: 12.5, weight: 500, color: LunaTheme.ink2),
-          ),
-          Text(
-            core.runStartedAt == null ? '' : ' · ${formatElapsed(core.runStartedAt)}',
-            style: LunaTheme.text(size: 12.5, weight: 500, color: LunaTheme.ink3),
-          ),
-          const Spacer(),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: core.stop,
-            child: Row(
-              children: <Widget>[
-                Glyph(FontAwesomeIcons.stop, size: 10.5, color: LunaTheme.ink),
-                const SizedBox(width: 6),
-                Text('Stop', style: LunaTheme.text(size: 12.5, weight: 600)),
-              ],
-            ),
-          ),
-        ],
-      ),
+    final Map<String, String>? live = core.steps.cast<Map<String, String>?>().lastWhere(
+          (Map<String, String>? step) => step?['state'] == 'running',
+          orElse: () => null,
+        );
+    final String label = core.waitingOnYou
+        ? 'Waiting on you'
+        : live != null
+            ? (_liveLabels[live['tool']] ?? 'Working')
+            : core.thinking
+                ? 'Thinking'
+                : 'Working';
+    return AgentWorkingLine(
+      label: label,
+      elapsed: core.workElapsed,
+      waiting: core.waitingOnYou,
+      onStop: core.stop,
     );
   }
 
