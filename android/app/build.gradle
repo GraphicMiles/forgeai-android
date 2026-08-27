@@ -32,6 +32,9 @@ android {
 
         externalNativeBuild {
             cmake {
+                // arm64 only here too: without it CMake still configures v7a,
+                // where llama.cpp's fp16 NEON intrinsics do not compile.
+                abiFilters "arm64-v8a"
                 arguments "-DGGML_NATIVE=OFF", "-DLLAMA_BUILD_APP=OFF", "-DLLAMA_BUILD_TESTS=OFF",
                           "-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_OPENSSL=OFF", "-DANDROID_STL=c++_shared"
             }
