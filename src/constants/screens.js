@@ -1,7 +1,6 @@
 export const SCREENS = Object.freeze({
   CHAT: 'chat',
-  ZOO: 'zoo',
-  COLLECTION: 'collection',
-  WORKSPACE: 'workspace',
+  FILES: 'files',
+  MODELS: 'models',
   SETTINGS: 'settings',
 });

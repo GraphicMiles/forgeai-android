@@ -14,13 +14,13 @@ export function showToast(message, tone = 'info') {
 
   if (!host) {
     host = document.createElement('div');
-    host.className = 'forge-toast-host';
+    host.className = 'toast-host';
     document.body.appendChild(host);
   }
 
   host.innerHTML = '';
   const toast = document.createElement('div');
-  toast.className = `forge-toast ${tone}`;
+  toast.className = `toast ${tone}`;
   toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
   const text = String(message ?? '');
   toast.textContent = text.length > 400 ? `${text.slice(0, 400)}…` : text;

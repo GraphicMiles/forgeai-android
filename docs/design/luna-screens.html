@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luna — the four screens, refined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  /* ==========================================================================
+     LUNA — four screens · refinement pass
+     Same concept. Tighter rhythm, smoother display face, honest icons.
+     ========================================================================== */
+  :root{
+    --ink:#0b0b0c; --ink-2:#3d3d42; --ink-3:#76767e; --ink-4:#a3a3ab;
+    --line:#ededf0; --fill:#f4f4f6; --fill-2:#eaeaee; --paper:#fff;
+    --display:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  body{background:#e8e8ea;color:var(--ink);font-family:var(--font);
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1600px;margin:0 auto;padding:44px 24px 90px}
+
+  h1{font-family:var(--display);font-size:40px;font-weight:800;letter-spacing:-.035em;line-height:1.05}
+  .lede{font-size:16.5px;color:#4a4a50;max-width:680px;margin-top:12px;line-height:1.6}
+  h2{font-size:12px;font-weight:600;color:var(--ink-3);letter-spacing:.06em;margin:48px 0 16px}
+
+  /* ---------- changelog ---------- */
+  .changes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}
+  .ch{background:#fff;border-radius:20px;padding:17px 19px}
+  .ch h3{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.02em;margin-bottom:10px}
+  .ch p{font-size:13px;color:var(--ink-2);line-height:1.55;margin-bottom:6px;display:flex;gap:9px}
+  .ch p i{color:var(--ink);font-size:10.5px;margin-top:5px;flex:0 0 auto}
+  .ch code{font-family:var(--mono);font-size:11.5px;background:var(--fill);border-radius:6px;padding:1px 5px}
+
+  /* ---------- phones ---------- */
+  .strip{display:flex;gap:26px;overflow-x:auto;padding:4px 4px 16px;align-items:flex-start}
+  .slot{flex:0 0 322px}
+  .cap{margin-top:14px;font-size:13px;color:#4a4a50;line-height:1.55}
+  .cap b{display:block;font-family:var(--display);color:var(--ink);font-size:14.5px;font-weight:700;
+    letter-spacing:-.02em;margin-bottom:3px}
+
+  .phone{width:322px;height:698px;background:var(--paper);border-radius:44px;overflow:hidden;position:relative}
+  .scr{position:absolute;inset:0;display:flex;flex-direction:column}
+  .sbar{display:flex;justify-content:space-between;align-items:center;padding:15px 26px 2px;
+    font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+  .sbar .r i{margin-left:6px;font-size:11px}
+  .pad{padding:0 20px}
+  .grow{flex:1;min-height:0;overflow:hidden}
+
+  /* ---------- top ---------- */
+  .top{display:flex;align-items:center;gap:9px;padding:8px 20px 10px}
+  .top .title{flex:1;font-family:var(--display);font-size:27px;font-weight:800;letter-spacing:-.038em;
+    line-height:1.1}
+  .top .title.sm{font-size:16.5px;font-weight:700;letter-spacing:-.028em}
+  .ib{width:34px;height:34px;border-radius:50%;background:var(--fill);display:grid;place-items:center;
+    font-size:13px;color:var(--ink-2);flex:0 0 auto}
+
+  .ctx{display:inline-flex;align-items:center;gap:7px;background:var(--fill);border-radius:999px;
+    padding:6px 13px;font-size:12px;color:var(--ink-2);font-weight:500}
+  .ctx i{font-size:10.5px;color:var(--ink-4)}
+  .ctx .sep{width:3px;height:3px;border-radius:50%;background:var(--ink-4)}
+
+  /* ---------- labels & rhythm ---------- */
+  .lbl{font-size:12.5px;font-weight:600;color:var(--ink-3);padding:14px 20px 7px;letter-spacing:-.005em}
+  .lbl.tight{padding-top:10px}
+
+  .group{background:var(--fill);border-radius:22px;padding:2px 14px;margin:0 20px}
+  .group .row{border-bottom:1px solid rgba(0,0,0,.05)}
+  .group .row:last-child{border-bottom:0}
+
+  .row{display:flex;align-items:center;gap:12px;padding:10px 0}
+  .row .tile{width:34px;height:34px;border-radius:12px;background:var(--paper);display:grid;
+    place-items:center;font-size:13.5px;color:var(--ink-2);flex:0 0 auto}
+  .group.plain .row .tile{background:var(--fill)}
+  .row .tx{flex:1;min-width:0}
+  .row .tx b{display:block;font-size:14.5px;font-weight:600;letter-spacing:-.018em;line-height:1.3}
+  .row .tx span{display:block;font-size:12px;color:var(--ink-3);line-height:1.35;margin-top:1px}
+  .row .end{font-size:12.5px;color:var(--ink-3);white-space:nowrap;display:flex;align-items:center;gap:8px}
+  .row .end i{font-size:12px;color:var(--ink-4)}
+  .row.off .tx b{color:var(--ink-4)}
+  .row.off .tile{color:var(--ink-4)}
+
+  .list{margin:0 20px}
+  .list .row{border-bottom:1px solid var(--line)}
+  .list .row:last-child{border-bottom:0}
+  .list .row .tile{background:var(--fill)}
+
+  /* ---------- buttons ---------- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--ink);
+    color:#fff;border-radius:999px;padding:10px 18px;font-size:13.5px;font-weight:600;letter-spacing:-.015em}
+  .btn.soft{background:var(--fill);color:var(--ink)}
+  .btn.sm{padding:6px 14px;font-size:12.5px}
+
+  /* ---------- composer sits close to the nav ---------- */
+  .comp{display:flex;align-items:center;gap:9px;margin:8px 20px 6px;background:var(--fill);
+    border-radius:999px;padding:5px 5px 5px 15px}
+  .comp .ph{flex:1;font-size:13.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden}
+  .comp .att{color:var(--ink-3);font-size:13.5px}
+  .comp .go{width:34px;height:34px;border-radius:50%;background:var(--ink);color:#fff;display:grid;
+    place-items:center;font-size:12.5px;flex:0 0 auto}
+
+  .tabs{display:flex;padding:0 12px 10px;gap:4px}
+  .tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0;
+    border-radius:15px;color:var(--ink-4);font-size:10.5px;font-weight:500;text-decoration:none}
+  .tabs a i{font-size:16.5px}
+  .tabs a.on{color:var(--ink);font-weight:600}
+
+  /* ---------- chat ---------- */
+  .thread{padding:2px 20px;display:flex;flex-direction:column;gap:11px}
+  .you{align-self:flex-end;max-width:84%;background:var(--ink);color:#fff;border-radius:20px 20px 7px 20px;
+    padding:10px 14px;font-size:14px;line-height:1.4;letter-spacing:-.01em}
+  .luna{display:flex;gap:10px;align-items:flex-start}
+  .luna .tx{font-size:14.5px;line-height:1.5;letter-spacing:-.012em}
+  .luna .tx em{font-style:normal;font-family:var(--mono);font-size:12.5px;background:var(--fill);
+    border-radius:6px;padding:1px 5px}
+  .steps{background:var(--fill);border-radius:20px;padding:3px 15px;margin:10px 20px 0 52px}
+  .step{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+  .step:last-child{border-bottom:0}
+  .step .dot{width:19px;height:19px;border-radius:50%;background:var(--ink);color:#fff;display:grid;
+    place-items:center;font-size:8.5px;flex:0 0 auto}
+  .step .dot.now{background:var(--paper);color:var(--ink-3)}
+  .step .nm{flex:1;font-size:13px;font-weight:550;letter-spacing:-.012em}
+  .step .rs{font-size:12px;color:var(--ink-3)}
+  .step.pending .nm{color:var(--ink-3);font-weight:500}
+
+  .approve{background:var(--ink);border-radius:24px;padding:16px 16px 13px;margin:12px 20px 0}
+  .approve .k{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#9a9aa2}
+  .approve .k i{font-size:11px}
+  .approve .h{font-family:var(--display);font-size:19px;font-weight:700;color:#fff;letter-spacing:-.03em;
+    margin-top:5px;line-height:1.22}
+  .approve .d{font-size:12.5px;color:#8f8f98;margin-top:4px;line-height:1.4}
+  .approve .b{display:flex;gap:8px;margin-top:13px}
+  .approve .b span{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;
+    padding:10px;font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+  .approve .y{background:#fff;color:var(--ink)}
+  .approve .n{background:#232327;color:#d9d9de}
+
+  .running{display:flex;align-items:center;gap:8px;margin:10px 20px 0;background:var(--fill);
+    border-radius:999px;padding:8px 15px;font-size:12.5px;color:var(--ink-2);font-weight:500}
+  .running .st{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--ink);font-weight:600}
+
+  /* ---------- segmented ---------- */
+  .seg{display:flex;background:var(--fill);border-radius:999px;padding:3px;margin:0 20px}
+  .seg span{flex:1;text-align:center;font-size:12.5px;padding:7px;border-radius:999px;color:var(--ink-3);
+    font-weight:500;letter-spacing:-.012em}
+  .seg span.on{background:var(--paper);color:var(--ink);font-weight:600}
+
+  /* ---------- hero ---------- */
+  .hero{background:var(--ink);border-radius:24px;padding:16px;margin:0 20px}
+  .hero .r1{display:flex;align-items:center;gap:12px}
+  .hero .r1 .nm{flex:1}
+  .hero .r1 .nm b{display:block;font-family:var(--display);color:#fff;font-size:17px;font-weight:700;
+    letter-spacing:-.03em}
+  .hero .r1 .nm span{font-size:12.5px;color:#9a9aa2}
+  .hero .pill{background:#fff;color:var(--ink);border-radius:999px;padding:5px 11px;font-size:11.5px;
+    font-weight:700;letter-spacing:-.01em}
+  .hero .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:13px}
+  .hero .cell{background:#1a1a1e;border-radius:15px;padding:10px 11px}
+  .hero .cell b{display:block;font-family:var(--display);font-size:15px;font-weight:700;color:#fff;
+    letter-spacing:-.03em}
+  .hero .cell span{font-size:11px;color:#8f8f98}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 20px}
+  .stat{background:var(--fill);border-radius:18px;padding:12px 15px;display:flex;align-items:center;gap:11px}
+  .stat i{font-size:14px;color:var(--ink-3)}
+  .stat b{display:block;font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.035em;
+    line-height:1.15}
+  .stat span{font-size:11.5px;color:var(--ink-3)}
+
+  /* ---------- misc ---------- */
+  .bar{height:5px;border-radius:999px;background:var(--fill-2);margin-top:7px;overflow:hidden}
+  .bar b{display:block;height:5px;border-radius:999px;background:var(--ink)}
+  .chip{display:inline-block;font-size:12px;border-radius:999px;padding:5px 12px;background:var(--fill);
+    color:var(--ink-2);margin:0 5px 6px 0;font-weight:500;letter-spacing:-.01em}
+  .chip.k{background:var(--ink);color:#fff;font-weight:550}
+  .sw{width:44px;height:26px;border-radius:999px;background:var(--ink);position:relative;flex:0 0 auto}
+  .sw b{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .sw.off{background:var(--fill-2)}
+  .sw.off b{left:3px;right:auto;background:var(--paper)}
+  .note{display:flex;gap:10px;background:var(--fill);border-radius:18px;padding:12px 14px;margin:9px 20px 0;
+    font-size:12.5px;color:var(--ink-2);line-height:1.45}
+  .note i{font-size:12px;color:var(--ink);margin-top:2px;flex:0 0 auto}
+  .note b{font-weight:600;color:var(--ink)}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  .crumb{display:flex;align-items:center;gap:9px;margin:0 20px;background:var(--fill);border-radius:999px;
+    padding:7px 13px;font-size:12.5px;color:var(--ink-2)}
+  .crumb .n{margin-left:auto;color:var(--ink-3);font-size:12px}
+
+  .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .rule{background:#fff;border-radius:20px;padding:18px 20px}
+  .rule h3{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.022em;margin-bottom:9px}
+  .rule p{font-size:13px;color:var(--ink-2);line-height:1.55;margin-bottom:7px}
+  .rule p i{color:var(--ink);margin-right:7px;font-size:11px}
+  @media(max-width:1080px){.changes,.rules{grid-template-columns:1fr 1fr}}
+  @media(max-width:700px){.changes,.rules{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>Luna — refined</h1>
+<p class="lede">Same concept, same mood. Tighter vertical rhythm, a smoother display face for the screen
+  titles, and every icon re-checked against the thing it labels.</p>
+
+<div class="changes">
+  <div class="ch"><h3>Rhythm</h3>
+    <p><i class="fa-solid fa-arrows-up-down"></i><span>Composer to nav closed from <code>32px</code> to
+      <code>16px</code> — the input now sits on the tab bar instead of floating above it.</span></p>
+    <p><i class="fa-solid fa-arrows-up-down"></i><span>Section labels <code>20/9</code> → <code>14/7</code>,
+      rows <code>12</code> → <code>10</code>, thread gap <code>14</code> → <code>11</code>.</span></p>
+    <p><i class="fa-solid fa-arrows-up-down"></i><span>Cards <code>26</code> → <code>24</code> radius with
+      <code>16px</code> padding; the step group is inset to align with Luna's text, not the screen edge.</span></p></div>
+
+  <div class="ch"><h3>Type</h3>
+    <p><i class="fa-solid fa-font"></i><span><b>Manrope</b> now sets every screen title, decision headline and
+      stat — rounder bowls, softer terminals, and it matches the 22px corners far better than Inter did.</span></p>
+    <p><i class="fa-solid fa-font"></i><span>Inter stays for rows, labels and body, where its larger x-height
+      is easier to read at 12–14px.</span></p>
+    <p><i class="fa-solid fa-font"></i><span>Titles up to 27px at <code>-0.038em</code> so the extra weight
+      doesn't cost hierarchy.</span></p></div>
+
+  <div class="ch"><h3>Icons</h3>
+    <p><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Attach is a <b>paperclip</b>, not a plus.</span></p>
+    <p><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Change folder is <b>folder-plus</b>, so it can't
+      be confused with the folder rows below it.</span></p>
+    <p><i class="fa-solid fa-arrow-right-arrow-left"></i><span>"Won't run" now shows <b>memory</b> — the icon
+      states the reason. Downloads use <b>cloud-arrow-down</b>, size cap uses <b>weight</b>,
+      <code>package.json</code> gets the <b>npm</b> mark.</span></p></div>
+</div>
+
+<h2>Chat · Files · Models · Settings</h2>
+<div class="strip">
+
+<!-- ============================ 1 · CHAT ============================ -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+
+  <div class="top">
+    <svg width="32" height="32" viewBox="0 0 100 100" style="flex:0 0 auto">
+      <path d="M52 5c25 0 43 20 43 45 0 27-20 45-46 45C24 95 5 74 5 49 5 23 26 5 52 5z" fill="#7c5cff"/>
+      <rect x="36" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(-11 40 49)"/>
+      <rect x="56" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(11 60 49)"/></svg>
+    <span class="title sm">Screenshots cleanup</span>
+    <span class="ib"><i class="fa-solid fa-clock-rotate-left"></i></span>
+    <span class="ib"><i class="fa-solid fa-ellipsis"></i></span>
+  </div>
+
+  <div class="pad" style="padding-bottom:10px">
+    <span class="ctx"><i class="fa-solid fa-microchip"></i>Qwen2.5 3B<span class="sep"></span>
+      <i class="fa-solid fa-folder-open"></i>Pictures</span>
+  </div>
+
+  <div class="grow">
+    <div class="thread">
+      <div class="you">clean up the screenshots folder and rename them by date</div>
+      <div class="luna">
+        <svg width="22" height="22" viewBox="0 0 100 100" style="flex:0 0 auto;margin-top:2px">
+          <path d="M52 5c25 0 43 20 43 45 0 27-20 45-46 45C24 95 5 74 5 49 5 23 26 5 52 5z" fill="#7c5cff"/>
+          <rect x="36" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(-11 40 49)"/>
+          <rect x="56" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(11 60 49)"/></svg>
+        <div class="tx">142 files, 38 of them duplicates. I've renamed the rest to <em>YYYY-MM-DD-nn</em>.</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step"><span class="dot"><i class="fa-solid fa-check"></i></span>
+        <span class="nm">Listed the folder</span><span class="rs">142</span></div>
+      <div class="step"><span class="dot"><i class="fa-solid fa-check"></i></span>
+        <span class="nm">Found duplicates</span><span class="rs">38</span></div>
+      <div class="step"><span class="dot"><i class="fa-solid fa-check"></i></span>
+        <span class="nm">Renamed files</span><span class="rs">104</span></div>
+      <div class="step pending"><span class="dot now"><i class="fa-solid fa-hourglass-half"></i></span>
+        <span class="nm">Delete duplicates</span><span class="rs">held</span></div>
+    </div>
+
+    <div class="approve">
+      <div class="k"><i class="fa-solid fa-hand"></i>Needs your approval</div>
+      <div class="h">Delete 38 duplicate<br>screenshots?</div>
+      <div class="d">214 MB in Pictures / Screenshots. This can't be undone.</div>
+      <div class="b">
+        <span class="n"><i class="fa-solid fa-xmark" style="font-size:12px"></i>Skip</span>
+        <span class="y"><i class="fa-solid fa-trash-can" style="font-size:12px"></i>Delete</span></div>
+    </div>
+
+    <div class="running"><i class="fa-solid fa-circle-notch fa-spin" style="font-size:11px"></i>
+      Working · 1m 12s<span class="st"><i class="fa-solid fa-stop" style="font-size:10.5px"></i>Stop</span></div>
+  </div>
+
+  <div class="comp"><i class="fa-solid fa-paperclip att"></i><span class="ph">Add to the job…</span>
+    <span class="go"><i class="fa-solid fa-arrow-up"></i></span></div>
+  <div class="tabs">
+    <a class="on"><i class="fa-solid fa-comment"></i>Chat</a>
+    <a><i class="fa-solid fa-folder"></i>Files</a>
+    <a><i class="fa-solid fa-cube"></i>Models</a>
+    <a><i class="fa-solid fa-sliders"></i>Settings</a></div>
+</div></div>
+<div class="cap"><b>Chat</b>Composer now sits 16px off the nav. The step group aligns with Luna's paragraph
+  rather than the screen edge, and the held step reads <i>hourglass</i>, not a spinner — it isn't running,
+  it's waiting.</div></div>
+
+<!-- ============================ 2 · FILES ============================ -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+
+  <div class="top"><span class="title">Files</span>
+    <span class="ib"><i class="fa-solid fa-magnifying-glass"></i></span>
+    <span class="ib"><i class="fa-solid fa-folder-plus"></i></span></div>
+
+  <div class="crumb"><i class="fa-solid fa-chevron-left" style="color:var(--ink-3);font-size:11px"></i>
+    <span class="mono">Documents / site / src</span><span class="n">18</span></div>
+
+  <div class="grow">
+    <div class="lbl">Folders</div>
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-folder"></i></span>
+        <div class="tx"><b>components</b><span>12 items</span></div>
+        <div class="end"><i class="fa-solid fa-chevron-right"></i></div></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-folder"></i></span>
+        <div class="tx"><b>styles</b><span>4 items</span></div>
+        <div class="end"><i class="fa-solid fa-chevron-right"></i></div></div>
+    </div>
+
+    <div class="lbl">Files</div>
+    <div class="list">
+      <div class="row"><span class="tile"><i class="fa-brands fa-html5"></i></span>
+        <div class="tx"><b>index.html</b><span>Luna edited · 2 min ago</span></div>
+        <div class="end">3 KB</div></div>
+      <div class="row"><span class="tile"><i class="fa-brands fa-js"></i></span>
+        <div class="tx"><b>app.js</b><span>Luna edited · 2 min ago</span></div>
+        <div class="end">11 KB</div></div>
+      <div class="row"><span class="tile"><i class="fa-brands fa-markdown"></i></span>
+        <div class="tx"><b>README.md</b><span>yesterday</span></div>
+        <div class="end">2 KB</div></div>
+      <div class="row"><span class="tile"><i class="fa-brands fa-npm"></i></span>
+        <div class="tx"><b>package.json</b><span>yesterday</span></div>
+        <div class="end">1 KB</div></div>
+      <div class="row off"><span class="tile"><i class="fa-solid fa-lock"></i></span>
+        <div class="tx"><b>.env</b><span>Luna can't open this</span></div>
+        <div class="end">—</div></div>
+    </div>
+
+    <div class="lbl">This repository</div>
+    <div class="group plain">
+      <div class="row"><span class="tile"><i class="fa-solid fa-code-branch"></i></span>
+        <div class="tx"><b>main</b><span>2 files changed · 1 to push</span></div>
+        <div class="end"><i class="fa-solid fa-chevron-right"></i></div></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-clock-rotate-left"></i></span>
+        <div class="tx"><b>Undo Luna's edits</b><span>backup kept from 09:38</span></div>
+        <div class="end"><i class="fa-solid fa-chevron-right"></i></div></div>
+    </div>
+  </div>
+
+  <div class="comp"><i class="fa-solid fa-paperclip att"></i><span class="ph">Ask about this folder…</span>
+    <span class="go"><i class="fa-solid fa-arrow-up"></i></span></div>
+  <div class="tabs">
+    <a><i class="fa-solid fa-comment"></i>Chat</a>
+    <a class="on"><i class="fa-solid fa-folder"></i>Files</a>
+    <a><i class="fa-solid fa-cube"></i>Models</a>
+    <a><i class="fa-solid fa-sliders"></i>Settings</a></div>
+</div></div>
+<div class="cap"><b>Files</b>Top-right is <i>folder-plus</i> — granting a new folder, not opening one.
+  <code style="font-family:var(--mono);font-size:11.5px">package.json</code> wears the npm mark, and
+  Undo uses the history clock rather than a generic arrow.</div></div>
+
+<!-- ============================ 3 · MODELS ============================ -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+
+  <div class="top"><span class="title">Models</span>
+    <span class="ib"><i class="fa-solid fa-arrows-rotate"></i></span></div>
+
+  <div class="seg"><span class="on">On device</span><span>My computer</span><span>Cloud</span></div>
+
+  <div class="grow">
+    <div class="lbl">Running now</div>
+    <div class="hero">
+      <div class="r1">
+        <svg width="36" height="36" viewBox="0 0 100 100" style="flex:0 0 auto">
+          <rect x="8" y="8" width="84" height="84" rx="28" fill="#00c46a"/>
+          <rect x="36" y="38" width="9" height="22" rx="4.5" fill="#fff" transform="rotate(-11 40 49)"/>
+          <rect x="56" y="38" width="9" height="22" rx="4.5" fill="#fff" transform="rotate(11 60 49)"/></svg>
+        <div class="nm"><b>Qwen2.5 3B</b><span>Works offline</span></div>
+        <span class="pill">Active</span>
+      </div>
+      <div class="grid">
+        <div class="cell"><b>1.9 GB</b><span>on disk</span></div>
+        <div class="cell"><b>32k</b><span>context</span></div>
+        <div class="cell"><b>14/s</b><span>tokens</span></div>
+      </div>
+    </div>
+
+    <div class="lbl">Downloading</div>
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-cloud-arrow-down"></i></span>
+        <div class="tx"><b>Phi-3 Mini</b><span>1.4 of 2.3 GB</span>
+          <span class="bar"><b style="width:62%"></b></span></div>
+        <div class="end"><i class="fa-solid fa-pause"></i></div></div>
+    </div>
+
+    <div class="lbl">You can add</div>
+    <div class="list">
+      <div class="row"><span class="tile"><i class="fa-solid fa-microchip"></i></span>
+        <div class="tx"><b>Llama 3.2 3B</b><span>2.0 GB · fits your phone</span></div>
+        <div class="end"><span class="btn soft sm">Get</span></div></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-microchip"></i></span>
+        <div class="tx"><b>Gemma 2 2B</b><span>1.6 GB · fits your phone</span></div>
+        <div class="end"><span class="btn soft sm">Get</span></div></div>
+      <div class="row off"><span class="tile"><i class="fa-solid fa-memory"></i></span>
+        <div class="tx"><b>Mistral 7B</b><span>needs 6 GB of RAM</span></div>
+        <div class="end">Won't run</div></div>
+    </div>
+
+    <div class="lbl">Your phone</div>
+    <div class="stats">
+      <div class="stat"><i class="fa-solid fa-memory"></i><div><b>4 GB</b><span>RAM</span></div></div>
+      <div class="stat"><i class="fa-solid fa-hard-drive"></i><div><b>23 GB</b><span>free</span></div></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a><i class="fa-solid fa-comment"></i>Chat</a>
+    <a><i class="fa-solid fa-folder"></i>Files</a>
+    <a class="on"><i class="fa-solid fa-cube"></i>Models</a>
+    <a><i class="fa-solid fa-sliders"></i>Settings</a></div>
+</div></div>
+<div class="cap"><b>Models</b>Three icons now carry meaning: <i>cloud-arrow-down</i> is downloading,
+  <i>microchip</i> is a model that runs on the chip, <i>memory</i> is the one your RAM can't hold —
+  the same glyph that labels the RAM stat below.</div></div>
+
+<!-- ============================ 4 · SETTINGS ============================ -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+
+  <div class="top"><span class="title">Settings</span></div>
+  <div class="seg"><span class="on">Agent</span><span>Connections</span><span>Data</span></div>
+
+  <div class="grow">
+    <div class="lbl">How Luna acts</div>
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-hand"></i></span>
+        <div class="tx"><b>Ask before acting</b><span>Stops before it changes anything</span></div>
+        <div class="sw"><b></b></div></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-bolt"></i></span>
+        <div class="tx"><b>Run unattended</b><span>Never stops to ask</span></div>
+        <div class="sw off"><b></b></div></div>
+    </div>
+    <div class="note"><i class="fa-solid fa-triangle-exclamation"></i>
+      <span>A web page Luna reads could contain instructions she follows.
+        <b>Only run unattended in folders you trust.</b></span></div>
+
+    <div class="lbl">Never needs permission</div>
+    <div class="pad">
+      <span class="chip">Read a file</span><span class="chip">List a folder</span><span class="chip">Search text</span>
+      <span class="chip">See git changes</span><span class="chip">Search the web</span><span class="chip">+4</span>
+    </div>
+
+    <div class="lbl tight">Always asks first</div>
+    <div class="pad">
+      <span class="chip k">Write</span><span class="chip k">Create</span><span class="chip k">Delete</span>
+      <span class="chip k">Run a command</span><span class="chip k">Push</span>
+    </div>
+
+    <div class="lbl">Safety</div>
+    <div class="list">
+      <div class="row"><span class="tile"><i class="fa-solid fa-weight-hanging"></i></span>
+        <div class="tx"><b>File size cap</b><span>Reading and writing</span></div>
+        <div class="end">2 MB</div></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-shield-halved"></i></span>
+        <div class="tx"><b>Protected files</b><span>Keys and credentials stay off limits</span></div>
+        <div class="end"><i class="fa-solid fa-chevron-right"></i></div></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a><i class="fa-solid fa-comment"></i>Chat</a>
+    <a><i class="fa-solid fa-folder"></i>Files</a>
+    <a><i class="fa-solid fa-cube"></i>Models</a>
+    <a class="on"><i class="fa-solid fa-sliders"></i>Settings</a></div>
+</div></div>
+<div class="cap"><b>Settings</b>The warning became a proper note with a warning glyph. Size cap uses
+  <i>weight</i> — a limit, not a shield — and the tab is <i>sliders</i>, which reads as preferences rather
+  than machinery.</div></div>
+
+</div>
+
+<h2>Unchanged on purpose</h2>
+<div class="rules">
+  <div class="rule"><h3>Hierarchy</h3>
+    <p><i class="fa-solid fa-check"></i>Still one title and one filled black surface per screen — the decision
+      on Chat, the running model on Models, the held tools on Settings.</p>
+    <p><i class="fa-solid fa-check"></i>Grey groups to scan, white rows to browse, black to act.</p></div>
+
+  <div class="rule"><h3>Softness</h3>
+    <p><i class="fa-solid fa-check"></i>44px frame, 24px cards, 22px groups, 12px tiles, pills everywhere else.
+      Radii tightened by 2px where cards felt loose, never squared off.</p>
+    <p><i class="fa-solid fa-check"></i>Still zero shadows and zero outlines on surfaces.</p></div>
+
+  <div class="rule"><h3>Colour</h3>
+    <p><i class="fa-solid fa-check"></i>Six monochrome values. The mascot remains the only coloured object
+      in the entire interface.</p>
+    <p><i class="fa-solid fa-check"></i>State still reads through fill and weight, never hue.</p></div>
+</div>
+
+</div></body></html>
