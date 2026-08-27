@@ -408,7 +408,7 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: LunaTheme.ink,
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
                 bottomLeft: Radius.circular(20),
@@ -500,7 +500,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   color: Color(0xFF17171A), borderRadius: LunaTheme.rField),
               child: SingleChildScrollView(
                 child: Text(preview,
-                    style: LunaTheme.monoStyle(size: 11.5, color: Color(0xFFD9D9DE))),
+                    style: LunaTheme.monoStyle(size: 11.5, color: const Color(0xFFD9D9DE))),
               ),
             ),
           const SizedBox(height: 13),

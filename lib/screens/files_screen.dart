@@ -132,7 +132,7 @@ class _FilesScreenState extends State<FilesScreen> {
                       if (_error != null) _errorNote(_error!),
                       if (_loading && _entries.isEmpty)
                         Padding(
-                          padding: EdgeInsets.only(top: 40),
+                          padding: const EdgeInsets.only(top: 40),
                           child: Center(
                             child: SizedBox(
                               width: 16,
@@ -194,7 +194,7 @@ class _FilesScreenState extends State<FilesScreen> {
     ];
     for (int index = 0; index < parts.length; index++) {
       crumbs.add(Padding(
-        padding: EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Glyph(FontAwesomeIcons.chevronRight, size: 8.5, color: LunaTheme.ink4),
       ));
       crumbs.add(_crumb(parts[index], () => _upTo(index), last: index == parts.length - 1));
