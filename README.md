@@ -1,102 +1,89 @@
 # Luna
 
-**A local utility agent that lives on your Android phone.**
+A local utility native agent for Android. Dart draws the interface, Java owns
+the device, and llama.cpp does the thinking on-device unless you point Luna
+somewhere else.
 
-Luna is not a chat window with tools bolted on. The device is her workplace: she reads and
-writes the folders you grant her, runs commands in a private sandbox shell, works with Git
-repositories, and looks things up on the web — using a model you choose, on-device or remote.
+Luna is not a chat window with tools bolted on. The device is her workplace:
+one folder you grant her, one model you choose, and a stop before anything
+permanent.
 
----
+## What she can do
 
-## The four pillars
+Nine tools, all scoped to the folder you grant:
 
-Everything in this repository serves one of four things. Anything that did not was removed.
+| Free | Held until you approve |
+| --- | --- |
+| List files, read a file, search | Write, create a file, create a folder, delete, rename |
 
-### 1. The agent
-A single agentic loop (`src/agent/agenticLoop.js`) that plans, calls one tool at a time,
-verifies its own writes, and finishes by responding.
+No terminal, no git, no web. Those were removed on purpose — a tool that can do
+anything cannot be reasoned about.
 
-- **Tools** — `src/agent/toolSchemas.js`: read/write files, create files and folders, delete,
-  list, search code, read a single symbol, run terminal commands, Git (`status`, `diff`, `log`,
-  `clone`, `commit`, `push`), web search and page fetch, ask the user, respond.
-- **Approval policy** — `src/agent/toolPolicy.js`: read-only tools always run; mutating tools
-  need approval unless the user has switched to unattended mode. A declined action is never retried.
-- **Execution mode** — `src/agent/executionMode.js`: `ask` (default) or `auto`.
-- **Context discipline** — `tokenBudget.js` (budgeted history), `codeSkeleton.js` (large files come
-  back as an outline instead of raw text), `scratchpad.js` (working notes carried across turns).
-- **Research** — `onlineResearch.js` plus native search/fetch providers.
+Files that hold secrets stay locked in both modes: `.env`, `.netrc`, key
+material, keystores, `.ssh`, `.gnupg`, `.aws`. Luna cannot open them at all,
+even in unattended mode. She will not read a file over 2 MiB.
 
-### 2. The model zoo
-Bring your own model, local or hosted.
+Every change she makes is backed up first, so a wrong edit is one tap of Undo.
 
-- **On-device**: GGUF models run through the bundled llama.cpp runtime (`OnDeviceRuntime`),
-  downloaded and managed inside the app (`src/components/ModelZoo.jsx`, `MyCollection.jsx`).
-- **Local network**: any Ollama endpoint.
-- **Cloud providers**: API-key providers are fully supported and stay supported
-  (`src/providers/cloudProviderStore.js`), with automatic failover (`providerFailover.js`).
-- Device capability checks (`useDeviceCapability`, `DeviceCapacity` plugin) stop the app from
-  offering models the phone cannot actually load.
+## Where the model runs
 
-### 3. The SAF workspace
-Real access to real user files, through Android's Storage Access Framework.
+- **On device** — eight GGUF models from 93 MB to 1.7 GB, pinned to immutable
+  Hugging Face revisions and checked by SHA-256. Downloads resume. Models the
+  device does not have RAM for are shown greyed with the reason.
+- **Your computer** — an Ollama address on the same network.
+- **Cloud** — any OpenAI-compatible endpoint and key. Keys go in the Android
+  keystore, never in a file.
 
-- The user picks a folder; `WorkspaceStorage.java` holds the persisted URI permission.
-- `src/workspace/workspaceProvider.js` is the single I/O surface; `workspacePolicy.js` enforces
-  size limits (2 MiB read/write), blocks sensitive paths, and hides internal `.luna-*` markers.
-- `src/components/Workspace.jsx` + `src/editor/CodeEditor.jsx` give a file tree and an editor.
+On-device models work with the radio off. A cloud model sends your prompt and
+whatever file contents it reads to that provider; the app says so where you
+turn it on.
 
-### 4. Minimal settings
-Three tabs, no dials that do nothing (`src/components/Settings.jsx`):
+## Screens
 
-- **Agent** — execution mode (ask first / run unattended, behind a confirmation).
-- **Connections** — Ollama endpoint, cloud failover, GitHub token (stored in the Android Keystore
-  via `CredentialVault.java`).
-- **Data** — runtime info, error log, reset app data.
+Four, and no more: **Chat**, **Files**, **Models**, **Settings**.
 
----
+One 27px title per screen and exactly one filled-black surface: the approval
+card in Chat, the running model in Models, the held-tool chips in Settings.
+State reads through fill and weight, never colour. The mascot is the only thing
+in the app allowed to be purple.
 
-## Project layout
+## Layout
 
 ```
-src/
-  agent/        agentic loop, tool schemas, approval policy, execution mode, context tools
-  components/   chat, workspace, model zoo, collection, settings, shared UI
-  hooks/        useAgentPipeline, useWorkspace, useConversations, useInference, useModelCollection
-  models/       model catalog, manifest, prompt profiles
-  providers/    model provider abstraction, cloud provider store, failover
-  workspace/    SAF workspace provider + policy
-  research/     web search / fetch providers
-  editor/       CodeMirror editor + formatting
-  nativeBridge.js  the only file that talks to Capacitor plugins
-
-android/app/src/main/java/ai/luna/app/
-  WorkspaceStorage.java   SAF folder access, read/write/list/backup
-  OnDeviceRuntime.java    llama.cpp bridge (cpp/ holds the native glue)
-  TerminalRuntime.java    sandboxed shell
-  GitRuntime.java         JGit clone/commit/push/status/diff/log
-  ResearchRuntime.java    web search and page fetch
-  CredentialVault.java    Keystore-backed token storage
-  AutonomyRuntime.java    unattended-mode foreground service
-  MainActivity.java
+lib/                        Dart — interface only
+  theme.dart                the design system, ported from docs/design/luna-screens.html
+  core/luna_core.dart       one method channel, one event stream, mirrored state
+  widgets/common.dart       mascot, rows, groups, sheets, pills, chips
+  screens/                  chat, files, models, settings
+android/app/src/main/
+  java/ai/luna/app/         Java — everything that touches the device
+    AgentEngine.java        the loop: prompt, parse, approve, act, repeat (max 6)
+    OnDeviceRuntime.java    JNI to llama.cpp
+    ModelStore.java         catalogue, resumable downloads, SHA-256 gate
+    WorkspaceStore.java     SAF: list, read, write, backups, undo, deny-list
+    CloudProvider.java      OpenAI-compatible chat, Ollama discovery
+    CredentialVault.java    AES/GCM in the AndroidKeystore
+    LunaBridge.java         the seam
+  cpp/                      llama.cpp binding
 ```
 
-## Development
+## Building
 
-```bash
-npm ci
-npm run dev        # web shell (native features are unavailable in the browser)
-npm run lint       # oxlint — must be 0 warnings / 0 errors
-npm test           # node test suites
-npm run build      # vite production build
+CI does it: `.github/workflows/android-apk.yml` fetches the pinned llama.cpp,
+builds a release arm64 APK and fails the run if the **unpacked** APK exceeds
+50 MiB.
+
+Locally:
+
+```
+bash scripts/bootstrap-llama-cpp.sh
+flutter pub get
+flutter build apk --release --target-platform android-arm64 --tree-shake-icons
 ```
 
-Android:
+## Known limits
 
-```bash
-npm run android:build   # bootstrap llama.cpp, preflight, build, cap sync, gradle assembleDebug
-```
-
-Or build from the phone with GitHub Actions — see [MOBILE_BUILD.md](MOBILE_BUILD.md).
-
-App id `ai.luna.app`. See [docs/PRUNE_REPORT.md](docs/PRUNE_REPORT.md) for what was removed in the
-rebuild and [docs/AUDIT_INVENTORY.md](docs/AUDIT_INVENTORY.md) for the pre-rebuild inventory.
+- One conversation. "New chat" clears it; there is no history list.
+- The release build is signed with the debug key so CI can hand you an
+  installable artifact. Swap in a real keystore before shipping.
+- arm64-v8a only.

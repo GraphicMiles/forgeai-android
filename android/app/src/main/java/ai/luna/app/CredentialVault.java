@@ -1,74 +1,84 @@
 package ai.luna.app;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
-import com.getcapacitor.JSObject;
-import com.getcapacitor.Plugin;
-import com.getcapacitor.PluginCall;
-import com.getcapacitor.PluginMethod;
-import com.getcapacitor.annotation.CapacitorPlugin;
-import java.nio.charset.StandardCharsets;
+
 import java.security.KeyStore;
+
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-@CapacitorPlugin(name = "CredentialVault")
-public class CredentialVault extends Plugin {
-    private static final String KEYSTORE = "AndroidKeyStore";
-    private static final String KEY_ALIAS = "luna-github-token";
-    private static final String PREFS = "luna-secure-vault";
-    private static final String TOKEN = "github-token";
+/**
+ * Secrets live in the Android keystore, not in a prompt and not in plain
+ * preferences. The ciphertext is stored locally; the key never leaves the chip.
+ */
+public final class CredentialVault {
 
-    private static SecretKey key() throws Exception {
-        KeyStore store = KeyStore.getInstance(KEYSTORE); store.load(null);
-        if (store.containsAlias(KEY_ALIAS)) return ((KeyStore.SecretKeyEntry) store.getEntry(KEY_ALIAS, null)).getSecretKey();
+    private static final String KEYSTORE = "AndroidKeyStore";
+    private static final String KEY_ALIAS = "luna_credentials";
+    private static final String FILE = "luna_vault";
+    private static final String TRANSFORM = "AES/GCM/NoPadding";
+    private static final int TAG_BITS = 128;
+
+    private final SharedPreferences prefs;
+
+    public CredentialVault(Context context) {
+        this.prefs = context.getApplicationContext().getSharedPreferences(FILE, Context.MODE_PRIVATE);
+    }
+
+    private SecretKey key() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance(KEYSTORE);
+        keyStore.load(null);
+        KeyStore.Entry entry = keyStore.getEntry(KEY_ALIAS, null);
+        if (entry instanceof KeyStore.SecretKeyEntry) {
+            return ((KeyStore.SecretKeyEntry) entry).getSecretKey();
+        }
         KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE);
-        generator.init(new KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+        generator.init(new KeyGenParameterSpec.Builder(
+            KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true)
             .build());
         return generator.generateKey();
     }
 
-    static void storeToken(Context context, String token) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    public void store(String name, String secret) throws Exception {
+        Cipher cipher = Cipher.getInstance(TRANSFORM);
         cipher.init(Cipher.ENCRYPT_MODE, key());
-        byte[] encrypted = cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
-        String value = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + "." + Base64.encodeToString(encrypted, Base64.NO_WRAP);
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(TOKEN, value).apply();
+        byte[] encrypted = cipher.doFinal(secret.getBytes("UTF-8"));
+        prefs.edit()
+            .putString(name + "_iv", Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+            .putString(name + "_data", Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .apply();
     }
 
-    static String getToken(Context context) throws Exception {
-        String value = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(TOKEN, "");
-        if (value.isEmpty()) return "";
-        String[] parts = value.split("\\.", 2);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, key(), new GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)));
-        return new String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), StandardCharsets.UTF_8);
+    public String read(String name) {
+        String iv = prefs.getString(name + "_iv", "");
+        String data = prefs.getString(name + "_data", "");
+        if (iv.isEmpty() || data.isEmpty()) {
+            return "";
+        }
+        try {
+            Cipher cipher = Cipher.getInstance(TRANSFORM);
+            cipher.init(Cipher.DECRYPT_MODE, key(),
+                new GCMParameterSpec(TAG_BITS, Base64.decode(iv, Base64.NO_WRAP)));
+            return new String(cipher.doFinal(Base64.decode(data, Base64.NO_WRAP)), "UTF-8");
+        } catch (Exception error) {
+            return "";
+        }
     }
 
-    @PluginMethod
-    public void storeGithubToken(PluginCall call) {
-        String token = call.getString("token", "").trim();
-        if (!(token.startsWith("ghp_") || token.startsWith("github_pat_")) || token.length() < 30) { call.reject("A valid GitHub PAT is required."); return; }
-        try { storeToken(getContext(), token); JSObject result = new JSObject(); result.put("stored", true); call.resolve(result); }
-        catch (Exception error) { call.reject("Unable to encrypt GitHub token."); }
+    public boolean has(String name) {
+        return !prefs.getString(name + "_data", "").isEmpty();
     }
 
-    @PluginMethod
-    public void hasGithubToken(PluginCall call) {
-        try { JSObject result = new JSObject(); result.put("stored", !getToken(getContext()).isEmpty()); call.resolve(result); }
-        catch (Exception error) { call.reject("Unable to inspect credential vault."); }
-    }
-
-    @PluginMethod
-    public void clearGithubToken(PluginCall call) {
-        getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(TOKEN).apply();
-        call.resolve();
+    public void clear(String name) {
+        prefs.edit().remove(name + "_iv").remove(name + "_data").apply();
     }
 }
