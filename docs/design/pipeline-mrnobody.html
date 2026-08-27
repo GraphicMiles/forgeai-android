@@ -3,201 +3,198 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Luna — the Mr Nobody pipeline, ported exactly</title>
+<title>Luna — the Mr Nobody pipeline, ported</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
   :root{
-    /* Luna's palette. One ink, one paper, one accent (the mascot only). */
-    --paper:#0B0B0C; --surface:#141418; --surface2:#17171B; --surface3:#232327;
-    --line:#232327; --lineStrong:#2C2C31;
-    --ink:#F7F7F9; --ink-dim:#C7C7CE; --ink-muted:#8E8E97; --ink-faint:#6B6B73;
-    --accent:#F7F7F9; --accentInk:#0B0B0C; --mascot:#7C5CFF;
-    --warn:#E0A93B; --warnInk:#E8C88A;
-    /* AgentMetrics, ported value for value */
-    --bodySize:13px; --bodyHeight:1.62; --lineBox:21px; --avatar:21px; --mark:19px;
-    --columnGap:10px; --indent:31px; --turnGap:20px; --stampGap:5px;
-    --paragraphGap:9px; --gutter:16px;
+    --paper:#0B0B0C; --bubble:#151519; --surface:#1A1A1F; --surface2:#232328;
+    --line:#212126; --lineSoft:#1B1B20;
+    --ink:#F4F4F6; --ink-dim:#B9B9C1; --ink-muted:#83838C; --ink-faint:#63636B;
+    --accent:#F4F4F6; --accentInk:#0B0B0C; --mascot:#7C5CFF;
     --ease:cubic-bezier(.23,1,.32,1);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;background:#000;color:var(--ink);
     font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    display:flex;gap:28px;justify-content:center;align-items:flex-start;
-    padding:30px 20px 70px;flex-wrap:wrap}
+    display:flex;gap:26px;justify-content:center;align-items:flex-start;
+    padding:28px 18px 64px;flex-wrap:wrap}
   .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
     font-variant-numeric:tabular-nums}
 
   /* ── phone ─────────────────────────────────────────────────────────── */
-  .phone{width:340px;height:700px;background:var(--paper);border-radius:34px;
-    border:1px solid #1c1c20;overflow:hidden;display:flex;flex-direction:column}
-  .top{padding:16px 18px 8px;display:flex;align-items:center;gap:10px}
-  .brand{width:22px;height:22px;border-radius:50%;background:var(--mascot);position:relative;flex:none}
-  .brand::after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;
+  .phone{width:336px;height:696px;background:var(--paper);border-radius:32px;
+    border:1px solid #191920;overflow:hidden;display:flex;flex-direction:column}
+  .top{height:46px;padding:0 14px;display:flex;align-items:center;gap:8px;flex:none;
+    border-bottom:1px solid var(--lineSoft)}
+  .brand{width:20px;height:20px;border-radius:50%;background:var(--mascot);position:relative;flex:none}
+  .brand::after{content:"";position:absolute;width:6px;height:6px;border-radius:50%;
     background:var(--paper);right:2px;top:5px}
-  .title{font-size:19px;font-weight:800;letter-spacing:-.03em}
-  .thread{flex:1;overflow-y:auto;padding:6px 0 10px;display:flex;flex-direction:column;
-    gap:var(--turnGap)}
+  .title{font-size:16px;font-weight:750;letter-spacing:-.02em}
+  .thread{flex:1;overflow-y:auto;padding:12px 14px 14px;display:flex;flex-direction:column;gap:14px}
   .thread::-webkit-scrollbar{display:none}
 
-  /* AgentTurn / UserTurn */
-  .turn{padding:0 var(--gutter);display:flex;align-items:flex-start}
-  .turn .col{width:var(--avatar);height:var(--lineBox);display:grid;place-items:center;flex:none}
-  .turn .col .brand{width:var(--mark);height:var(--mark)}
-  .turn .col .brand::after{width:6px;height:6px;right:2px;top:4px}
-  .turn .body{flex:1;min-width:0;margin-left:var(--columnGap)}
-  .userTurn{padding:0 var(--gutter);display:flex;justify-content:flex-end}
-  .userTurn .bubble{max-width:84%;background:var(--accent);color:var(--accentInk);
-    padding:9px 12px;border-radius:15px 15px 5px 15px;font-size:12.5px;font-weight:500;line-height:1.5}
-  .stamp{font-size:9px;color:var(--ink-muted);opacity:.8;margin-top:var(--stampGap)}
+  /* ── turns: a standard two-sided chat ───────────────────────────────── */
+  .userTurn{display:flex;justify-content:flex-end}
+  .userTurn .msg{max-width:78%;background:var(--accent);color:var(--accentInk);
+    padding:8px 11px;border-radius:16px 16px 5px 16px;font-size:13px;font-weight:500;line-height:1.45}
+  .turn{display:flex;align-items:flex-start;gap:8px}
+  .turn .col{width:20px;height:20px;flex:none;margin-top:1px}
+  .turn .col .brand{width:20px;height:20px}
+  .turn .body{flex:1;min-width:0;max-width:calc(100% - 28px);
+    display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+  .card{background:var(--bubble);border-radius:16px 16px 16px 5px;padding:9px 11px;
+    max-width:100%;align-self:stretch}
 
-  /* ── PixelLoader: 3×3, 4px cells, 1.5px gap, 650ms, delay (c+|r-1|)×90 ── */
+  /* ── PixelLoader: 3×3, 4px cells, 1.5px gap, 650ms, (c+|r-1|)×90ms ──── */
   .pix{display:grid;grid-template-columns:repeat(3,4px);gap:1.5px;flex:none}
   .pix i{width:4px;height:4px;border-radius:1px;background:var(--ink);
     animation:pixel .65s linear infinite}
   @keyframes pixel{0%{opacity:.15}50%{opacity:1}100%{opacity:.15}}
-  .pix i:nth-child(1){animation-delay:-.09s}   /* r0 c0 → 90ms  */
-  .pix i:nth-child(2){animation-delay:-.18s}   /* r0 c1 → 180ms */
-  .pix i:nth-child(3){animation-delay:-.27s}   /* r0 c2 → 270ms */
-  .pix i:nth-child(4){animation-delay:0s}      /* r1 c0 → 0ms   */
-  .pix i:nth-child(5){animation-delay:-.09s}
-  .pix i:nth-child(6){animation-delay:-.18s}
-  .pix i:nth-child(7){animation-delay:-.09s}
-  .pix i:nth-child(8){animation-delay:-.18s}
-  .pix i:nth-child(9){animation-delay:-.27s}
+  .pix i:nth-child(1),.pix i:nth-child(5),.pix i:nth-child(7){animation-delay:-.09s}
+  .pix i:nth-child(2),.pix i:nth-child(6),.pix i:nth-child(8){animation-delay:-.18s}
+  .pix i:nth-child(3),.pix i:nth-child(9){animation-delay:-.27s}
+  .pix i:nth-child(4){animation-delay:0s}
 
-  /* ── ShimmerLabel: 1400ms sweep, stops dead when inactive ───────────── */
+  /* ── ShimmerLabel: 1.4s, stops dead when the work stops ─────────────── */
   .shim{background:linear-gradient(90deg,var(--ink-muted) 35%,var(--ink) 50%,var(--ink-muted) 65%);
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
     animation:sweep 1.4s linear infinite}
   @keyframes sweep{from{background-position:130% 0}to{background-position:-130% 0}}
-  .shim.off{animation:none;background:none;-webkit-text-fill-color:currentColor;color:var(--ink-faint)}
 
   /* ── AgentWorkingLine ───────────────────────────────────────────────── */
-  .working{display:flex;align-items:center;gap:10px;padding:2px 0}
-  .working .lbl{font-size:13px;font-weight:500;flex:1;min-width:0}
-  .working .clk{font-size:12px;color:var(--ink-faint)}
+  .working{display:flex;align-items:center;gap:8px;height:21px}
+  .working .lbl{font-size:13px;font-weight:500;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .working .clk{font-size:11px;color:var(--ink-faint);flex:none}
 
   /* ── AgentTrace ─────────────────────────────────────────────────────── */
-  .traceHead{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer}
-  .traceHead .sparkle{font-size:12px;color:var(--ink-muted)}
-  .traceHead .done{font-size:13px;font-weight:500;color:var(--ink-faint)}
-  .traceHead .chev{font-size:11px;color:var(--ink-muted);transition:transform .3s var(--ease)}
+  .trace{width:100%}
+  .traceHead{display:flex;align-items:center;gap:6px;height:21px;cursor:pointer}
+  .traceHead .sparkle{font-size:11px;color:var(--ink-muted);width:12px;text-align:center}
+  .traceHead .done{font-size:12.5px;font-weight:500;color:var(--ink-faint);flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .traceHead .chev{font-size:10px;color:var(--ink-muted);transition:transform .3s var(--ease)}
   .trace.closed .chev{transform:rotate(-90deg)}
-  .traceBody{display:grid;grid-template-rows:1fr;transition:grid-template-rows .3s var(--ease),opacity .22s linear;margin-top:3px}
+  .traceBody{display:grid;grid-template-rows:1fr;opacity:1;
+    transition:grid-template-rows .3s var(--ease),opacity .2s linear}
   .trace.closed .traceBody{grid-template-rows:0fr;opacity:0}
-  .traceInner{overflow:hidden;border-left:1px solid var(--line);padding-left:4px}
-  .step{padding:5px 0;display:flex;align-items:flex-start;cursor:default;
+  .traceInner{overflow:hidden}
+  .rail{border-left:1px solid var(--line);padding-left:9px;margin:2px 0 0 5px}
+  .step{padding:4px 0;display:flex;align-items:flex-start;gap:6px;
     animation:stepIn .26s var(--ease) both}
   @keyframes stepIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-  .step .marker{width:16px;height:16px;margin-top:1px;flex:none;display:grid;place-items:center;
-    font-size:11px;color:var(--ink-muted)}
+  .step .marker{width:14px;height:16px;flex:none;display:grid;place-items:center;
+    font-size:10px;color:var(--ink-muted)}
   .step .marker i{animation:markIn .22s var(--ease)}
   @keyframes markIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
-  .step .txt{flex:1;min-width:0;margin-left:7px}
-  .step .label{font-size:12.5px;font-weight:500;line-height:1.25}
-  .step .meta{margin-top:3px;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-  .step .meta .st{font-size:9.5px;color:var(--ink-muted)}
-  .step .meta .sep{font-size:9.5px;color:var(--ink-muted)}
-  .step .meta .metric{font-size:10.5px;color:var(--ink-faint);overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap;max-width:170px}
-  .step .meta .dur{font-size:9.5px;color:var(--ink-muted)}
+  .step .txt{flex:1;min-width:0}
+  .step .label{font-size:12.5px;font-weight:500;line-height:1.3;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .step .meta{margin-top:1px;display:flex;gap:5px;align-items:baseline;min-width:0}
+  .step .meta span{font-size:9.5px;color:var(--ink-muted);white-space:nowrap}
+  .step .meta .metric{font-size:10px;color:var(--ink-faint);
+    overflow:hidden;text-overflow:ellipsis;min-width:0}
   .step.tappable{cursor:pointer}
   .detail{display:grid;grid-template-rows:0fr;transition:grid-template-rows .26s var(--ease);
-    margin:0 0 4px 24px}
+    margin-left:20px}
   .detail.open{grid-template-rows:1fr}
-  .detailInner{overflow:hidden}
-  .detailBox{background:var(--surface);border:1px solid var(--line);border-radius:8px;
-    padding:8px 10px;margin-top:2px}
-  .detailBox div{font-size:10.5px;line-height:1.55;color:var(--ink-faint);padding:1px 0}
-  .spin{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--lineStrong);
+  .detail > div{overflow:hidden}
+  .detailBox{background:var(--surface);border-radius:9px;padding:6px 8px;margin:1px 0 4px}
+  .detailBox div{font-size:10px;line-height:1.5;color:var(--ink-faint);padding:.5px 0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .spin{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--surface2);
     border-top-color:var(--ink-dim);animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 
-  /* ── approval (Luna's addition: the ApprovalPolicy prompt made visible) ── */
-  .ask{margin-top:9px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;
-    padding:11px 12px;animation:stepIn .3s var(--ease) both}
-  .ask .q{font-size:12.5px;font-weight:600;line-height:1.4}
-  .ask .why{font-size:11px;color:var(--ink-faint);margin-top:3px;line-height:1.5}
-  .ask .row{display:flex;gap:8px;margin-top:10px}
-  .ask button{font:inherit;font-size:12px;font-weight:600;border:0;border-radius:10px;
-    padding:7px 14px;cursor:pointer}
+  /* ── approval: fits its content, never the full width ───────────────── */
+  .ask{background:var(--surface);border-radius:14px;padding:9px 10px;max-width:100%;
+    align-self:flex-start;animation:stepIn .3s var(--ease) both}
+  .ask .q{font-size:12.5px;font-weight:600;line-height:1.35}
+  .ask .why{font-size:10.5px;color:var(--ink-faint);margin-top:2px;line-height:1.45}
+  .ask .row{display:flex;gap:6px;margin-top:8px}
+  .ask button{font:inherit;font-size:11.5px;font-weight:600;border:0;border-radius:9px;
+    padding:6px 12px;cursor:pointer;line-height:1}
   .ask .allow{background:var(--accent);color:var(--accentInk)}
-  .ask .skip{background:var(--surface3);color:var(--ink-dim)}
+  .ask .skip{background:var(--surface2);color:var(--ink-dim)}
 
   /* ── StreamedAnswer ─────────────────────────────────────────────────── */
-  .answer{font-size:var(--bodySize);line-height:var(--bodyHeight);margin-top:10px}
-  .answer w{display:inline-block;white-space:pre}
-  .answer w.in{animation:streamIn .42s cubic-bezier(.22,.61,.25,1) both}
+  .answer{font-size:13px;line-height:1.6;margin-top:0}
+  .trace + .answer, .working + .answer{margin-top:7px}
+  .answer w{display:inline}
+  .answer w.in{display:inline-block;animation:streamIn .42s cubic-bezier(.22,.61,.25,1) both}
   @keyframes streamIn{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur(0)}}
-  .caret{display:inline-block;width:2px;height:13px;margin-left:2px;border-radius:1px;
-    background:var(--ink);vertical-align:-2px;animation:blink 1s steps(1,end) infinite}
+  .caret{display:inline-block;width:2px;height:12px;margin-left:1px;border-radius:1px;
+    background:var(--ink);vertical-align:-1px;animation:blink 1s steps(1,end) infinite}
   @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
-  .cite{display:inline-flex;align-items:center;gap:4px;height:17px;margin:0 1px;
-    padding:0 5px 0 4px;background:var(--surface2);border:1px solid var(--line);
-    border-radius:5px;vertical-align:-3px;animation:citeIn .25s var(--ease) both}
+  .cite{display:inline-flex;align-items:center;gap:3px;height:16px;
+    padding:0 5px 0 3px;background:var(--surface);border-radius:5px;vertical-align:-3px;
+    animation:citeIn .25s var(--ease) both}
   @keyframes citeIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
-  .cite .m{width:11px;height:11px;border-radius:3px;background:var(--surface3);display:grid;
+  .cite .m{width:10px;height:10px;border-radius:3px;background:var(--surface2);display:grid;
     place-items:center;font-size:7px;font-weight:700;color:var(--ink-dim)}
-  .cite .d{font-size:10.5px;color:var(--ink-dim)}
+  .cite .d{font-size:10px;color:var(--ink-dim)}
 
-  /* FigureWarning — the one amber in Mr Nobody */
-  .figwarn{margin-top:10px;padding:9px 11px;border-radius:9px;
-    background:rgba(224,169,59,.07);border:1px solid rgba(224,169,59,.26);
-    font-size:11.5px;line-height:1.55;color:var(--warnInk)}
-  .figwarn b{color:var(--warn);font-weight:600}
+  /* the unsupported-figure note: ink only, no second colour */
+  .note{margin-top:8px;padding:7px 9px;border-radius:10px;background:var(--surface);
+    font-size:11px;line-height:1.5;color:var(--ink-faint)}
+  .note b{color:var(--ink-dim);font-weight:600}
+  .note i.fa-solid{font-size:10px;margin-right:5px;color:var(--ink-muted)}
 
-  /* ── AgentActions / follow-ups ──────────────────────────────────────── */
-  .actions{opacity:.8;margin-top:8px}
-  .actions .row{display:flex;align-items:center}
-  .actions .btn{width:26px;height:26px;display:grid;place-items:center;font-size:13px;
-    color:var(--ink-muted);cursor:pointer}
-  .actions .btn.on{color:var(--ink)}
-  .actions .src{display:flex;align-items:center;gap:6px;padding:3px 6px 3px 4px;margin-left:6px;cursor:pointer}
-  .actions .stack{position:relative;height:15px}
-  .actions .stack .m{position:absolute;top:0;width:15px;height:15px;border-radius:8px;
-    background:var(--surface3);border:1.5px solid var(--paper);display:grid;place-items:center;
-    font-size:9px;font-weight:700;color:var(--ink-dim)}
-  .actions .cnt{font-size:12px;color:var(--ink-dim)}
-  .srcList{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s var(--ease);margin-top:7px}
+  /* ── actions / follow-ups: outside the bubble, aligned to its edge ──── */
+  .actions{display:flex;align-items:center;gap:2px;margin-top:-1px}
+  .actions .btn{width:24px;height:24px;display:grid;place-items:center;font-size:12px;
+    color:var(--ink-muted);cursor:pointer;border-radius:7px}
+  .actions .btn.on{color:var(--ink);background:var(--surface)}
+  .actions .src{display:flex;align-items:center;gap:6px;margin-left:6px;cursor:pointer}
+  .actions .stack{position:relative;height:14px;flex:none}
+  .actions .stack .m{position:absolute;top:0;width:14px;height:14px;border-radius:7px;
+    background:var(--surface2);border:1.5px solid var(--paper);display:grid;place-items:center;
+    font-size:8px;font-weight:700;color:var(--ink-dim)}
+  .actions .cnt{font-size:11px;color:var(--ink-muted)}
+  .srcList{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s var(--ease);
+    width:100%}
   .srcList.open{grid-template-rows:1fr}
-  .srcList .in{overflow:hidden}
-  .srcList .box{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px}
-  .srcList .item{display:flex;align-items:center;gap:8px;padding:6px}
-  .srcList .item .t{flex:1;min-width:0;font-size:12px;color:var(--ink-dim);
+  .srcList > div{overflow:hidden}
+  .srcList .box{background:var(--surface);border-radius:11px;padding:3px;margin-top:2px}
+  .srcList .item{display:flex;align-items:center;gap:7px;padding:5px 6px}
+  .srcList .item .m{width:14px;height:14px;border-radius:4px;background:var(--surface2);
+    display:grid;place-items:center;font-size:8px;font-weight:700;color:var(--ink-dim);flex:none}
+  .srcList .item .t{flex:1;min-width:0;font-size:11.5px;color:var(--ink-dim);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .srcList .item .d{font-size:10px;color:var(--ink-muted)}
-  .follow{margin-top:13px}
-  .follow h4{margin:0 0 3px;font-size:11.5px;font-weight:500;color:var(--ink-faint)}
-  .follow .f{display:flex;align-items:center;gap:9px;padding:8px 0;
-    border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.4;cursor:pointer}
+  .srcList .item .d{font-size:9.5px;color:var(--ink-muted);flex:none}
+  .follow{width:100%;margin-top:2px}
+  .follow h4{margin:0 0 1px;font-size:10.5px;font-weight:500;color:var(--ink-faint)}
+  .follow .f{display:flex;align-items:center;gap:8px;padding:7px 0;
+    border-bottom:1px solid var(--lineSoft);font-size:12px;line-height:1.35;cursor:pointer}
   .follow .f:last-child{border-bottom:0}
-  .follow .f i{font-size:11px;color:var(--ink-muted)}
+  .follow .f i{font-size:10px;color:var(--ink-muted);width:11px;text-align:center;flex:none}
 
   /* ── composer ───────────────────────────────────────────────────────── */
-  .composer{padding:8px 16px 14px;display:flex;gap:8px;align-items:center;
-    border-top:1px solid var(--line)}
-  .field{flex:1;background:var(--surface2);border-radius:18px;padding:10px 14px;
-    font-size:13px;color:var(--ink-faint)}
-  .send{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--accentInk);
-    display:grid;place-items:center;flex:none;font-size:13px}
+  .composer{flex:none;padding:8px 12px 12px;display:flex;gap:7px;align-items:center;
+    border-top:1px solid var(--lineSoft)}
+  .field{flex:1;height:36px;display:flex;align-items:center;background:var(--bubble);
+    border-radius:18px;padding:0 13px;font-size:12.5px;color:var(--ink-faint)}
+  .send{width:36px;height:36px;border-radius:18px;background:var(--accent);color:var(--accentInk);
+    display:grid;place-items:center;flex:none;font-size:12px}
 
-  /* ── side panel: the raw event log the render is projected from ─────── */
-  .side{width:400px;color:var(--ink-dim)}
-  .side h3{margin:2px 0 8px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.02em}
-  .side p{font-size:12.5px;line-height:1.6;color:var(--ink-muted);margin:0 0 12px}
-  .log{background:#0B0B0C;border:1px solid var(--line);border-radius:14px;padding:12px;
-    height:300px;overflow-y:auto;font-size:10.5px;line-height:1.6}
-  .log div{padding:1px 0;color:var(--ink-faint);white-space:pre-wrap;word-break:break-word}
+  /* ── side panel ─────────────────────────────────────────────────────── */
+  .side{width:392px}
+  .side h3{margin:0 0 6px;font-size:14.5px;font-weight:700;letter-spacing:-.02em}
+  .side p{font-size:12px;line-height:1.6;color:var(--ink-muted);margin:0 0 12px}
+  .runs{display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap}
+  .runs button{font:inherit;font-size:12px;font-weight:600;border:0;border-radius:10px;
+    padding:8px 13px;cursor:pointer;background:var(--accent);color:var(--accentInk);line-height:1}
+  .runs button.ghost{background:var(--surface);color:var(--ink)}
+  .log{background:var(--paper);border:1px solid var(--lineSoft);border-radius:12px;padding:10px;
+    height:292px;overflow-y:auto;font-size:10px;line-height:1.55}
+  .log div{padding:.5px 0;color:var(--ink-faint);white-space:pre-wrap;word-break:break-word}
   .log b{color:var(--ink-dim);font-weight:600}
-  .runs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .runs button{font:inherit;font-size:12.5px;font-weight:600;border:0;border-radius:11px;
-    padding:9px 15px;cursor:pointer;background:var(--accent);color:var(--accentInk)}
-  .runs button.ghost{background:var(--surface3);color:var(--ink)}
-  .notes{width:100%;max-width:1120px;border-top:1px solid #17171B;padding-top:18px;margin-top:6px}
-  .notes h3{font-size:15px;margin:0 0 10px}
-  .notes ul{margin:0;padding-left:18px}
-  .notes li{font-size:12.5px;line-height:1.7;color:var(--ink-muted);margin-bottom:3px}
+  .notes{width:100%;max-width:1092px;border-top:1px solid #17171B;padding-top:16px}
+  .notes h3{font-size:14.5px;margin:0 0 8px}
+  .notes ul{margin:0 0 14px;padding-left:17px}
+  .notes li{font-size:12px;line-height:1.65;color:var(--ink-muted);margin-bottom:2px}
   .notes li b{color:var(--ink-dim)}
+  .notes .mono{color:var(--ink-faint)}
 </style>
 </head>
 <body>
@@ -212,11 +209,11 @@
 </div>
 
 <div class="side">
-  <h3>The Mr Nobody pipeline, ported value for value</h3>
-  <p>Nothing here is scripted UI. The buttons append events to a log, the log is projected by a
-     line-for-line port of <span class="mono">TaskTimeline.fromEvents</span>, and the projection is
-     rendered by a port of <span class="mono">agent_response.dart</span>. A row exists only because
-     an event created it.</p>
+  <h3>The Mr Nobody pipeline, ported</h3>
+  <p>Nothing is a scripted animation. The buttons append events to the log below, the log is
+     projected by a port of <span class="mono">TaskTimeline.fromEvents</span>, and the projection is
+     drawn by a port of <span class="mono">agent_response.dart</span>. A row exists only because an
+     event created it.</p>
   <div class="runs">
     <button onclick="runLocal()">Run a local job</button>
     <button class="ghost" onclick="runWeb()">Run one with the browser</button>
@@ -226,46 +223,29 @@
 </div>
 
 <div class="notes">
-  <h3>What was copied, exactly</h3>
+  <h3>Copied exactly</h3>
   <ul>
-    <li><b>AgentMetrics</b> — 13px body × 1.62 = a 21px line box, a 21px avatar column with a 19px
-        mark centred in it, 10px column gap, 31px indent, 20px between turns, 16px gutter,
-        <span class="mono">cubic-bezier(.23,1,.32,1)</span> on every entrance.</li>
-    <li><b>PixelLoader</b> — 3×3 grid, 4px cells, 1.5px gaps, 650ms period, per-cell delay
-        <span class="mono">(col + |row−1|) × 90ms</span>, so two wavefronts are always in flight.</li>
-    <li><b>ShimmerLabel</b> — 1.4s sweep that stops dead rather than slowing, and goes faint when
-        the work it describes is over.</li>
-    <li><b>AgentWorkingLine</b> — loader, shimmering label, elapsed counter ticking every 100ms in
-        tabular figures.</li>
-    <li><b>AgentTrace</b> — auto-expanded while running, folds to “Thought for N seconds” when
-        settled, chevron always drawn (hover never fires on a touch screen), the rail is a 1px left
-        border, rows are 16px marker + 7px + label, status line reads
-        <span class="mono">working · metric · duration</span>.</li>
-    <li><b>The seven states</b> — working, done, recovered, failed, denied, waiting, cancelled, each
-        with its own marker, straight out of <span class="mono">TimelineState</span>.</li>
-    <li><b>TaskTimeline.fromEvents</b> — current-run slicing at the last
-        <span class="mono">task.started</span>, one row per <span class="mono">step.changed</span>,
-        tool calls as evidence nested under the row, call-id pairing with a fallback to the latest
-        open attempt, <span class="mono">_settledState</span> (waiting beats denied beats
-        recovered beats failed), and <span class="mono">_metric</span> with its singulariser.</li>
-    <li><b>StreamedAnswer</b> — word by word out of 4px of blur over 420ms, hard on/off caret.</li>
-    <li><b>Sources</b> — collected only from tool calls that really read a page, drawn as
-        lettermarks. Never a favicon request.</li>
-    <li><b>FigureWarning</b> — the amber note when a number in the answer is not on the pages read.</li>
+    <li><b>PixelLoader</b> — 3×3, 4px cells, 1.5px gaps, 650ms, per-cell delay
+        <span class="mono">(col + |row−1|) × 90ms</span>.</li>
+    <li><b>ShimmerLabel</b> — a 1.4s sweep that stops dead rather than slowing.</li>
+    <li><b>AgentTrace</b> — expanded while running, folded to “Thought for N seconds” once settled,
+        chevron always drawn, the rail a hairline on the left.</li>
+    <li><b>Seven states</b> — working, done, recovered, failed, denied, waiting, cancelled, each with
+        its own marker.</li>
+    <li><b>fromEvents</b> — current-run slicing, one row per <span class="mono">step.changed</span>,
+        tool calls as evidence beneath the row, call-id pairing with a fallback to the latest open
+        attempt, and <span class="mono">_metric</span> with its singulariser.</li>
+    <li><b>StreamedAnswer</b> — word by word out of 4px of blur, hard on/off caret.</li>
   </ul>
-  <h3 style="margin-top:16px">Where it lands on Luna, and the two conflicts</h3>
+  <h3>Changed for Luna</h3>
   <ul>
-    <li><b>Free fixes.</b> “1 lines” disappears — <span class="mono">_metric</span> singularises the
-        unit. The raw JSON leak disappears — a tool call is an event, and events render as rows, never
-        as text in the bubble. “Working · 1 step” while parked disappears — waiting is a state on the
-        row, and the status line stops shimmering. The missing write step appears, because the row is
-        created by the call, not by the result.</li>
-    <li><b>Conflict 1 — amber.</b> FigureWarning is a second colour, and Luna's rule is one colour
-        outside the mascot. Say the word and it becomes ink on a plain surface.</li>
-    <li><b>Conflict 2 — approval.</b> Mr Nobody has no approval widget in this file; the pause lives
-        in <span class="mono">ApprovalPolicy</span>. The card here is mine, sized to its content with
-        Skip at full contrast, and it appears the moment the row turns
-        <span class="mono">waiting</span>.</li>
+    <li>Standard chat layout: user right in the filled bubble, Luna left with the mark in the gutter
+        and one bubble holding the trace and the answer. Actions and follow-ups sit outside the
+        bubble, on its left edge.</li>
+    <li>Paddings pulled in — bubble 9×11, trace rows 4px, detail 6×8, approval 9×10.</li>
+    <li>The approval card fits its content and Skip is legible.</li>
+    <li>The unsupported-figure note is ink on a plain surface. No amber anywhere.</li>
+    <li>Streaming slowed to 160ms a word.</li>
   </ul>
 </div>
 
@@ -276,10 +256,9 @@ const FA = {
   'arrow-up':'M8 3l5 5-1 1-3-3v8H7V6L4 9 3 8z','wand-magic-sparkles':'M3 13l7-7 2 2-7 7zM12 2v3M10.5 3.5h3',
   'chevron-down':'M3 6l5 5 5-5','check':'M3 8l3 3 7-7','ban':'M8 2a6 6 0 100 12A6 6 0 008 2zM4 4l8 8',
   'hourglass-half':'M4 2h8M4 14h8M5 2c0 4 6 4 6 12M11 2c0 4-6 4-6 12',
-  'rotate-right':'M13 8a5 5 0 11-2-4M13 2v3h-3','triangle-exclamation':'M8 2l6 11H2zM8 6v4M8 11.6v.4',
+  'rotate-right':'M13 8a5 5 0 11-2-4M13 2v3h-3','circle-exclamation':'M8 2a6 6 0 100 12A6 6 0 008 2zM8 5v4M8 10.6v.4',
   'xmark':'M4 4l8 8M12 4l-8 8','copy':'M5 5h7v9H5zM3 2h7v2','thumbs-up':'M5 7l3-5 1 1v3h4l-1 7H5zM2 7h3v6H2z',
-  'thumbs-down':'M5 9l3 5 1-1v-3h4L12 3H5zM2 3h3v6H2z','arrow-turn-down':'M5 3v6h6M8 6l3 3-3 3',
-  'stop':'M4 4h8v8H4z'
+  'thumbs-down':'M5 9l3 5 1-1v-3h4L12 3H5zM2 3h3v6H2z','arrow-turn-down':'M5 3v6h6M8 6l3 3-3 3'
 };
 addEventListener('load',()=>{
   const probe=document.createElement('i');probe.className='fa-solid fa-check';
@@ -309,8 +288,6 @@ function txt(o,k,fb){ const v=o[k]; if(v===undefined||v===null) return fb||'';
 function short(v,max){ return v.length<=max?v:v.slice(0,max-1)+'…'; }
 function host(u){ try{ return new URL(u).host.replace(/^www\./,''); }catch(e){ return ''; } }
 
-function defaultAction(tool){ return tool==='search'?'search':tool==='http'?'fetch':
-  tool==='download'?'download':tool; }
 function titleCase(t){ return t?t[0].toUpperCase()+t.slice(1).replace(/_/g,' '):t; }
 function semanticLabel(tool,action){
   switch(tool){
@@ -390,7 +367,6 @@ function applyResult(call,payload,deniedEvent,at){
 }
 
 function fromEvents(events,taskStatus,currentStep){
-  /* only the current execution cycle */
   let from=0;
   events.forEach((e,i)=>{ if(e.type==='task.started'||e.type==='user.followup') from=i; });
   const run=events.slice(from);
@@ -478,37 +454,39 @@ function fromEvents(events,taskStatus,currentStep){
    agent_response.dart — ported render.
    ══════════════════════════════════════════════════════════════════════ */
 const MARKER={done:'fa-check',denied:'fa-ban',waiting:'fa-hourglass-half',
-  recovered:'fa-rotate-right',failed:'fa-triangle-exclamation',cancelled:'fa-xmark'};
+  recovered:'fa-rotate-right',failed:'fa-circle-exclamation',cancelled:'fa-xmark'};
+const WORD_MS=160;
 
 const thread=document.getElementById('thread'), logEl=document.getElementById('log'),
       field=document.getElementById('field');
 let events=[], status='IDLE', startedAt=0, tickTimer=null, openRows=new Set(),
-    manualTrace=null, turnEl=null, srcOpen=false, vote=0, answerState=null;
+    manualTrace=null, turnEl=null, srcOpen=false, vote=0, answerState=null,
+    pendingAsk={q:'',why:''}, resumeRun=null;
 
 const now=()=>Date.now();
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const escapeHtml=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 function emit(type,detail){
   const ev={type,at:now(),detail:detail===undefined?'':detail};
   events.push(ev);
   const d=typeof ev.detail==='string'?ev.detail:JSON.stringify(ev.detail);
   const line=document.createElement('div');
-  line.innerHTML='<b>'+type+'</b> '+ (d?escapeHtml(d):'');
+  line.innerHTML='<b>'+type+'</b> '+(d?escapeHtml(d):'');
   logEl.appendChild(line); logEl.scrollTop=logEl.scrollHeight;
   render();
 }
-function escapeHtml(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
 function reset(){
   events=[]; status='IDLE'; startedAt=0; openRows=new Set(); manualTrace=null;
-  answerState=null; srcOpen=false; vote=0;
+  answerState=null; srcOpen=false; vote=0; turnEl=null;
   clearInterval(tickTimer); tickTimer=null;
-  thread.innerHTML=''; logEl.innerHTML=''; field.textContent='Tell Luna what to do…';
+  thread.innerHTML=''; logEl.innerHTML='';
 }
 
 function userTurn(text){
   const el=document.createElement('div'); el.className='userTurn';
-  el.innerHTML='<div><div class="bubble">'+escapeHtml(text)+'</div></div>';
+  el.innerHTML='<div class="msg">'+escapeHtml(text)+'</div>';
   thread.appendChild(el); thread.scrollTop=thread.scrollHeight;
 }
 
@@ -516,55 +494,56 @@ function elapsedText(ms){
   const s=ms/1000;
   return s<60? s.toFixed(1)+'s' : Math.floor(s/60)+'m '+(s%60).toFixed(1)+'s';
 }
+function lastEnd(){ let m=startedAt; for(const e of events) if(e.at>m) m=e.at; return m; }
 
 function render(){
   const t=fromEvents(events,status,'');
   if(!turnEl){
     turnEl=document.createElement('div'); turnEl.className='turn';
-    turnEl.innerHTML='<div class="col"><span class="brand"></span></div><div class="body"></div>';
+    turnEl.innerHTML='<div class="col"><span class="brand"></span></div>'+
+                     '<div class="body"><div class="card"></div></div>';
     thread.appendChild(turnEl);
   }
-  const body=turnEl.querySelector('.body');
+  const body=turnEl.querySelector('.body'), card=turnEl.querySelector('.card');
   const running=['QUEUED','RUNNING','VERIFYING'].includes(status);
 
   /* AgentWorkingLine */
-  let wl=body.querySelector('.working');
+  let wl=card.querySelector('.working');
   if(running){
     if(!wl){ wl=document.createElement('div'); wl.className='working';
       wl.innerHTML='<span class="pix">'+'<i></i>'.repeat(9)+'</span>'+
                    '<span class="lbl"><span class="shim"></span></span>'+
                    '<span class="clk mono">0.0s</span>';
-      body.prepend(wl); }
+      card.prepend(wl); }
     wl.querySelector('.shim').textContent =
       t.activities.length?t.activities[t.activities.length-1].label:'Working';
   } else if(wl){ wl.remove(); }
 
   /* AgentTrace */
-  let trace=body.querySelector('.trace');
+  let trace=card.querySelector('.trace');
   if(!trace&&t.activities.length){
     trace=document.createElement('div'); trace.className='trace';
     trace.innerHTML=
       '<div class="traceHead"><i class="fa-solid fa-wand-magic-sparkles sparkle"></i>'+
       '<span class="done"></span><i class="fa-solid fa-chevron-down chev"></i></div>'+
-      '<div class="traceBody"><div class="traceInner"></div></div>';
+      '<div class="traceBody"><div class="traceInner"><div class="rail"></div></div></div>';
     trace.querySelector('.traceHead').onclick=()=>{
       manualTrace = !(manualTrace===null?running:manualTrace); render(); };
-    body.appendChild(trace);
+    card.appendChild(trace);
   }
   if(trace){
     const expanded = manualTrace===null?running:manualTrace;
     trace.classList.toggle('closed',!expanded);
     const head=trace.querySelector('.traceHead');
     head.style.display = running?'none':'flex';
-    const secs=(lastEnd()-startedAt)/1000;
-    head.querySelector('.done').textContent='Thought for '+secs.toFixed(0)+' second'+(secs.toFixed(0)==='1'?'':'s');
-    renderRows(trace.querySelector('.traceInner'),t.activities);
+    const secs=Math.max(1,Math.round((lastEnd()-startedAt)/1000));
+    head.querySelector('.done').textContent='Thought for '+secs+' second'+(secs===1?'':'s');
+    renderRows(trace.querySelector('.rail'),t.activities);
   }
 
-  /* approval card: shown while the last row is waiting */
-  const last=t.activities[t.activities.length-1];
+  /* approval, outside the bubble, sized to its content */
   let ask=body.querySelector('.ask');
-  if(status==='WAITING'&&last){
+  if(status==='WAITING'&&t.activities.length){
     if(!ask){
       ask=document.createElement('div'); ask.className='ask';
       ask.innerHTML='<div class="q"></div><div class="why"></div>'+
@@ -577,100 +556,90 @@ function render(){
     ask.querySelector('.why').textContent=pendingAsk.why;
   } else if(ask){ ask.remove(); }
 
-  /* answer, actions, follow-ups */
-  if(answerState){ renderAnswer(body,t.sources); }
+  if(answerState) renderAnswer(card,body,t.sources);
   thread.scrollTop=thread.scrollHeight;
 }
 
-function lastEnd(){
-  let m=startedAt;
-  for(const e of events) if(e.at>m) m=e.at;
-  return m;
-}
-
-function renderRows(host,acts){
+function renderRows(rail,acts){
   acts.forEach((a,i)=>{
-    let row=host.children[i*2];
+    let row=rail.children[i*2];
     if(!row){
       row=document.createElement('div'); row.className='step';
       row.innerHTML='<div class="marker"></div><div class="txt"><div class="label"></div>'+
-        '<div class="meta"><span class="st mono"></span></div></div>';
+        '<div class="meta"></div></div>';
       const det=document.createElement('div'); det.className='detail';
-      det.innerHTML='<div class="detailInner"><div class="detailBox"></div></div>';
-      host.appendChild(row); host.appendChild(det);
+      det.innerHTML='<div><div class="detailBox"></div></div>';
+      rail.appendChild(row); rail.appendChild(det);
       row.onclick=()=>{ if(openRows.has(i)) openRows.delete(i); else openRows.add(i); render(); };
     }
-    const det=host.children[i*2+1];
+    const det=rail.children[i*2+1];
     row.classList.toggle('tappable',a.detail.length>0);
     const marker=row.querySelector('.marker');
-    const wantKey=a.state;
-    if(marker.dataset.key!==wantKey){
-      marker.dataset.key=wantKey;
+    if(marker.dataset.key!==a.state){
+      marker.dataset.key=a.state;
       marker.innerHTML = a.state===S.working ? '<span class="spin"></span>'
         : '<i class="fa-solid '+MARKER[a.state]+'"></i>';
     }
     row.querySelector('.label').textContent=a.label;
-    const meta=row.querySelector('.meta');
-    const dur=a.endedAt&&a.startedAt?durationText(a.endedAt-a.startedAt):'';
-    meta.innerHTML='<span class="st mono">'+a.state+'</span>'+
-      (a.metric?'<span class="sep mono">·</span><span class="metric">'+escapeHtml(a.metric)+'</span>':'')+
-      (dur&&a.state!==S.working?'<span class="sep mono">·</span><span class="dur mono">'+dur+'</span>':'');
-    const open = a.state===S.working || openRows.has(i);
-    det.classList.toggle('open',open&&a.detail.length>0);
+    const dur=(a.endedAt&&a.startedAt&&a.state!==S.working)?durationText(a.endedAt-a.startedAt):'';
+    row.querySelector('.meta').innerHTML='<span class="mono">'+a.state+'</span>'+
+      (a.metric?'<span class="mono">·</span><span class="metric">'+escapeHtml(a.metric)+'</span>':'')+
+      (dur?'<span class="mono">·</span><span class="mono">'+dur+'</span>':'');
+    det.classList.toggle('open',(a.state===S.working||openRows.has(i))&&a.detail.length>0);
     det.querySelector('.detailBox').innerHTML=
-      a.detail.map(d=>'<div class="mono">'+escapeHtml(d)+'</div>').join('');
+      a.detail.map(d=>'<div class="mono" title="'+escapeHtml(d)+'">'+escapeHtml(d)+'</div>').join('');
   });
-  while(host.children.length>acts.length*2) host.lastChild.remove();
+  while(rail.children.length>acts.length*2) rail.lastChild.remove();
 }
 
-/* StreamedAnswer + tail */
-function renderAnswer(body,sources){
-  let ans=body.querySelector('.answer');
-  if(!ans){ ans=document.createElement('div'); ans.className='answer'; body.appendChild(ans); }
+function renderAnswer(card,body,sources){
+  let ans=card.querySelector('.answer');
+  if(!ans){ ans=document.createElement('div'); ans.className='answer'; card.appendChild(ans); }
   const shown=answerState.tokens.slice(0,answerState.visible);
   ans.innerHTML = shown.map((tk,i)=>{
     const animate = answerState.caret && i>=shown.length-3;
-    if(tk.cite) return '<span class="cite'+(animate?'':' noanim')+'"><span class="m">'+
-      tk.cite.domain[0].toUpperCase()+'</span><span class="d mono">'+tk.cite.domain+'</span></span> ';
+    if(tk.cite) return '<span class="cite"><span class="m">'+tk.cite.domain[0].toUpperCase()+
+      '</span><span class="d mono">'+tk.cite.domain+'</span></span> ';
     return '<w class="'+(animate?'in':'')+'">'+escapeHtml(tk.text)+' </w>';
   }).join('') + (answerState.caret?'<span class="caret"></span>':'');
 
   if(answerState.caret) return;
 
-  if(answerState.figures&&answerState.figures.length&&!body.querySelector('.figwarn')){
-    const w=document.createElement('div'); w.className='figwarn';
+  if(answerState.figures&&answerState.figures.length&&!card.querySelector('.note')){
+    const n=document.createElement('div'); n.className='note';
     const one=answerState.figures.length===1;
-    w.innerHTML='<b>&#9888; '+(one?'One figure isn\'t on the pages I read: ':'These figures aren\'t on the pages I read: ')+
+    n.innerHTML='<i class="fa-solid fa-circle-exclamation"></i><b>'+
+      (one?'One figure isn\'t on the page I read: ':'These figures aren\'t on the pages I read: ')+
       '</b><span class="mono">'+answerState.figures.join(', ')+'</span>'+
-      (one?'. It may be worked out from the sources — worth checking.'
-          :'. They may be worked out from the sources — worth checking.');
-    body.appendChild(w);
+      (one?'. Worth checking.':'. Worth checking.');
+    card.appendChild(n);
   }
   if(!body.querySelector('.actions')){
     const a=document.createElement('div'); a.className='actions';
-    a.innerHTML='<div class="row">'+
-      '<span class="btn"><i class="fa-solid fa-copy"></i></span>'+
+    a.innerHTML='<span class="btn"><i class="fa-solid fa-copy"></i></span>'+
       '<span class="btn"><i class="fa-solid fa-rotate-right"></i></span>'+
       '<span class="btn up"><i class="fa-solid fa-thumbs-up"></i></span>'+
       '<span class="btn down"><i class="fa-solid fa-thumbs-down"></i></span>'+
-      (sources.length?'<span class="src"><span class="stack" style="width:'+(15+(sources.length-1)*11)+'px">'+
-        sources.map((s,i)=>'<span class="m" style="left:'+(i*11)+'px">'+s.domain[0].toUpperCase()+'</span>').join('')+
-        '</span><span class="cnt">'+sources.length+' source'+(sources.length===1?'':'s')+'</span></span>':'')+
-      '</div>'+
-      (sources.length?'<div class="srcList"><div class="in"><div class="box">'+
-        sources.map(s=>'<div class="item"><span class="cite" style="animation:none"><span class="m">'+
-          s.domain[0].toUpperCase()+'</span></span><span class="t">'+escapeHtml(s.title)+
-          '</span><span class="d mono">'+s.domain+'</span></div>').join('')+
-        '</div></div></div>':'');
-    a.querySelector('.up').onclick=e=>{vote=vote===1?0:1;
+      (sources.length?'<span class="src"><span class="stack" style="width:'+(14+(sources.length-1)*10)+'px">'+
+        sources.map((s,i)=>'<span class="m" style="left:'+(i*10)+'px">'+s.domain[0].toUpperCase()+'</span>').join('')+
+        '</span><span class="cnt">'+sources.length+' source'+(sources.length===1?'':'s')+'</span></span>':'');
+    a.querySelector('.up').onclick=()=>{vote=vote===1?0:1;
       a.querySelector('.up').classList.toggle('on',vote===1);
       a.querySelector('.down').classList.remove('on');};
-    a.querySelector('.down').onclick=e=>{vote=vote===-1?0:-1;
+    a.querySelector('.down').onclick=()=>{vote=vote===-1?0:-1;
       a.querySelector('.down').classList.toggle('on',vote===-1);
       a.querySelector('.up').classList.remove('on');};
-    const src=a.querySelector('.src');
-    if(src) src.onclick=()=>{srcOpen=!srcOpen;a.querySelector('.srcList').classList.toggle('open',srcOpen);};
     body.appendChild(a);
+
+    if(sources.length){
+      const list=document.createElement('div'); list.className='srcList';
+      list.innerHTML='<div><div class="box">'+sources.map(s=>
+        '<div class="item"><span class="m">'+s.domain[0].toUpperCase()+'</span>'+
+        '<span class="t">'+escapeHtml(s.title)+'</span>'+
+        '<span class="d mono">'+s.domain+'</span></div>').join('')+'</div></div>';
+      body.appendChild(list);
+      a.querySelector('.src').onclick=()=>{srcOpen=!srcOpen;list.classList.toggle('open',srcOpen);};
+    }
   }
   if(answerState.followUps&&!body.querySelector('.follow')){
     const f=document.createElement('div'); f.className='follow';
@@ -684,17 +653,15 @@ async function streamAnswer(tokens,opts){
   answerState={tokens,visible:0,caret:true,figures:(opts&&opts.figures)||[],
                followUps:(opts&&opts.followUps)||null};
   for(let i=1;i<=tokens.length;i++){
-    answerState.visible=i; render(); await wait(90);
+    answerState.visible=i; render(); await wait(WORD_MS);
   }
   answerState.caret=false; render();
 }
-function words(text){ return text.split(' ').map(w=>({text:w})); }
+const words=text=>text.split(' ').map(w=>({text:w}));
 
 /* ══════════════════════════════════════════════════════════════════════
-   Runs. Buttons only append events; everything on screen is a projection.
+   Runs. Buttons only append events; the screen is a projection of them.
    ══════════════════════════════════════════════════════════════════════ */
-let pendingAsk={q:'',why:''}, resumeRun=null;
-
 function beginTick(){
   clearInterval(tickTimer);
   tickTimer=setInterval(()=>{
@@ -706,26 +673,25 @@ function beginTick(){
 async function runLocal(){
   reset();
   userTurn('Add a line to notes.md about the build size');
-  field.textContent='Tell Luna what to do…';
-  turnEl=null; startedAt=now(); status='RUNNING'; beginTick();
+  startedAt=now(); status='RUNNING'; beginTick();
   emit('task.started');
 
   emit('step.changed',{label:'Checking previous work',kind:'memory',
     reason:'notes.md was touched in the last run'});
   emit('tool.call',{id:'c1',tool:'memory',action:'recall',subject:'notes.md'});
-  await wait(700);
+  await wait(800);
   emit('tool.result',{id:'c1',state:'done',durationMs:240,count:2,unit:'matches'});
 
-  emit('step.changed',{label:'Reading the workspace file',kind:'files.read',
-    reason:'the current contents decide where the line goes'});
-  emit('tool.call',{id:'c2',tool:'files',action:'read',subject:'Workspace/notes.md'});
-  await wait(900);
+  emit('step.changed',{label:'Reading the file',kind:'files.read',
+    reason:'the contents decide where the line goes'});
+  emit('tool.call',{id:'c2',tool:'files',action:'read',subject:'notes.md'});
+  await wait(1000);
   emit('tool.result',{id:'c2',state:'done',durationMs:180,name:'notes.md'});
 
   emit('step.changed',{label:'Writing the file',kind:'files.write',
     reason:'appending one line, no other edits'});
-  emit('tool.call',{id:'c3',tool:'files',action:'write',subject:'Workspace/notes.md'});
-  await wait(600);
+  emit('tool.call',{id:'c3',tool:'files',action:'write',subject:'notes.md'});
+  await wait(700);
   pendingAsk={q:'Append one line to notes.md?',
     why:'Luna asks before it changes anything on the device.'};
   status='WAITING';
@@ -737,14 +703,14 @@ async function runLocal(){
 async function allow(){
   status='RUNNING'; beginTick();
   emit('tool.result',{id:resumeRun==='web'?'w4':'c3',state:'done',durationMs:70,count:1,unit:'lines'});
-  await wait(500);
+  await wait(600);
   if(resumeRun==='local'){
     emit('step.changed',{label:'Checking the result',kind:'files.read',reason:''});
-    emit('tool.call',{id:'c4',tool:'files',action:'read',subject:'Workspace/notes.md'});
-    await wait(650);
+    emit('tool.call',{id:'c4',tool:'files',action:'read',subject:'notes.md'});
+    await wait(700);
     emit('tool.result',{id:'c4',state:'done',durationMs:120,count:1,unit:'files'});
     status='COMPLETED'; emit('task.finished'); clearInterval(tickTimer);
-    await streamAnswer(words('Added one line to notes.md — the release APK is 29.07 MiB unpacked, under the 50 MiB gate. Nothing else in the file changed.'),
+    await streamAnswer(words('Added one line to notes.md. The release APK is 29.07 MiB unpacked, under the 50 MiB gate. Nothing else in the file changed.'),
       {followUps:['Show me the diff','Add the build number too']});
   } else {
     status='COMPLETED'; emit('task.finished'); clearInterval(tickTimer);
@@ -762,31 +728,31 @@ async function skip(){
 async function runWeb(){
   reset();
   userTurn('Check the llama.cpp release notes and save what changed');
-  turnEl=null; startedAt=now(); status='RUNNING'; beginTick();
+  startedAt=now(); status='RUNNING'; beginTick();
   emit('task.started');
 
   emit('step.changed',{label:'Searching broadly',kind:'search',
     reason:'no cached page for this release'});
   emit('tool.call',{id:'w1',tool:'search',action:'search',subject:'llama.cpp release notes'});
-  await wait(800);
+  await wait(900);
   emit('tool.result',{id:'w1',state:'done',durationMs:610,count:6,unit:'candidates'});
 
   emit('step.changed',{label:'Reading source pages',kind:'http.fetch',
     reason:'two results looked like the primary source'});
   emit('tool.call',{id:'w2',tool:'http',action:'fetch',subject:'https://github.com/ggml-org/llama.cpp/releases',
     url:'https://github.com/ggml-org/llama.cpp/releases'});
-  await wait(700);
+  await wait(800);
   emit('tool.result',{id:'w2',state:'failed',durationMs:5000,reason:'timed out'});
   emit('tool.call',{id:'w3',tool:'browser',action:'extract',subject:'https://github.com/ggml-org/llama.cpp/releases',
     url:'https://github.com/ggml-org/llama.cpp/releases'});
-  await wait(900);
+  await wait(1000);
   emit('tool.result',{id:'w3',state:'done',durationMs:1430,url:'https://github.com/ggml-org/llama.cpp/releases',
     name:'llama.cpp releases',count:2,unit:'sources'});
 
   emit('step.changed',{label:'Saving the summary',kind:'files.write',
     reason:'writing to the folder you granted'});
-  emit('tool.call',{id:'w4',tool:'files',action:'write',subject:'Workspace/llama-notes.md'});
-  await wait(550);
+  emit('tool.call',{id:'w4',tool:'files',action:'write',subject:'llama-notes.md'});
+  await wait(650);
   pendingAsk={q:'Create llama-notes.md in Workspace?',
     why:'A new file in the folder you granted. Nothing outside it is reachable.'};
   status='WAITING';
