@@ -268,6 +268,38 @@ public final class Prefs {
         }
     }
 
+    /**
+     * Called once at startup. A download recorded as running cannot be running
+     * — the process it belonged to is gone — so it is marked paused, which is
+     * the state the Resume button knows how to act on. The .part file on disk
+     * still holds the bytes.
+     */
+    public void settleDownloadsAfterRestart() {
+        try {
+            JSONObject all = downloadState();
+            boolean changed = false;
+            java.util.Iterator<String> keys = all.keys();
+            while (keys.hasNext()) {
+                String id = keys.next();
+                JSONObject entry = all.optJSONObject(id);
+                if (entry == null) {
+                    continue;
+                }
+                String state = entry.optString("state");
+                if (state.equals("downloading") || state.equals("verifying") || state.equals("waiting")) {
+                    entry.put("state", "paused");
+                    entry.put("detail", "Stopped when Luna closed. Resume picks up where it left off.");
+                    changed = true;
+                }
+            }
+            if (changed) {
+                prefs.edit().putString(KEY_DOWNLOADS, all.toString()).apply();
+            }
+        } catch (JSONException ignored) {
+            // The .part file is the real record.
+        }
+    }
+
     public void setDownloadState(String id, String state, long completed, long total) {
         try {
             JSONObject all = downloadState();

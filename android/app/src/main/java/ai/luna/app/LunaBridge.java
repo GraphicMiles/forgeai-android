@@ -64,6 +64,8 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
     public LunaBridge(Activity activity, BinaryMessenger messenger) {
         this.activity = activity;
         this.prefs = new Prefs(activity);
+        // Whatever was mid-flight when the process died is not mid-flight now.
+        this.prefs.settleDownloadsAfterRestart();
         this.workspace = new WorkspaceStore(activity, prefs);
         this.models = new ModelStore(activity);
         this.runtime = new OnDeviceRuntime();
@@ -267,6 +269,10 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 agent.resolveApproval(String.valueOf(call.argument("id")), Boolean.TRUE.equals(call.argument("approved")));
                 result.success(null);
                 return;
+            case "resumeRun":
+                agent.resume();
+                result.success(null);
+                return;
             case "stopAgent":
                 agent.stop();
                 result.success(null);
@@ -466,6 +472,7 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         out.put("wifiOnly", prefs.wifiOnly());
         out.put("batteryGuard", prefs.batteryGuard());
         out.put("keepWarm", prefs.keepWarm());
+        out.put("canResume", agent.canResume());
         out.put("theme", prefs.theme());
         out.put("textScale", (double) prefs.textScale());
         out.put("walkthroughDone", prefs.walkthroughDone());

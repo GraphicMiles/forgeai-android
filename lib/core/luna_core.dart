@@ -75,6 +75,24 @@ class LunaCore extends ChangeNotifier {
 
   bool get waitingOnYou => pendingApproval != null || pendingQuestion != null;
 
+  /// A job that was stopped, cut short by a limit, or killed with the app can
+  /// be picked up. Everything it already did is in the transcript.
+  bool get canCarryOn {
+    if (running || messages.isEmpty) return false;
+    final Map<String, dynamic> last = messages.last;
+    if (last['role'] != 'assistant') return false;
+    final String meta = '${last['meta'] ?? ''}';
+    return meta == 'stopped' || meta == 'interrupted';
+  }
+
+  Future<void> carryOn() async {
+    if (running) return;
+    running = true;
+    thinking = true;
+    notifyListeners();
+    await _invoke('resumeRun');
+  }
+
   /// Work done in the current run, or the frozen total once it has finished.
   Duration get workElapsed {
     if (runStartedAt == null) return runElapsed;
