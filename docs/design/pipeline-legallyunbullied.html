@@ -33,134 +33,135 @@
   /* ── phone ─────────────────────────────────────────────────────────── */
   .phone{width:336px;height:696px;background:var(--paper);border-radius:32px;
     border:1px solid #191920;overflow:hidden;display:flex;flex-direction:column}
-  .top{height:46px;padding:0 14px;display:flex;align-items:center;gap:8px;flex:none;
+  .top{height:42px;padding:0 12px;display:flex;align-items:center;gap:8px;flex:none;
     border-bottom:1px solid var(--lineSoft)}
   .brand{width:20px;height:20px;border-radius:50%;background:var(--mascot);position:relative;flex:none}
   .brand::after{content:"";position:absolute;width:6px;height:6px;border-radius:50%;
     background:var(--paper);right:2px;top:5px}
-  .title{font-size:16px;font-weight:750;letter-spacing:-.02em}
-  .thread{flex:1;overflow-y:auto;padding:12px 14px 14px;display:flex;flex-direction:column;gap:14px}
+  .title{font-size:15px;font-weight:750;letter-spacing:-.02em}
+  .thread{flex:1;overflow-y:auto;padding:10px 12px 12px;display:flex;flex-direction:column;gap:11px}
   .thread::-webkit-scrollbar{display:none}
 
   /* ── standard two-sided chat ────────────────────────────────────────── */
   .userTurn{display:flex;justify-content:flex-end}
-  .userTurn .msg{max-width:78%;background:var(--accent);color:var(--accentInk);
-    padding:8px 11px;border-radius:16px 16px 5px 16px;font-size:13px;font-weight:500;line-height:1.45}
-  .turn{display:flex;align-items:flex-start;gap:6px}
-  .turn .col{width:18px;height:18px;flex:none;margin-top:1px}
-  .turn .col .brand{width:18px;height:18px}
-  .turn .col .brand::after{width:5px;height:5px;right:2px;top:4px}
-  .turn .body{flex:1;min-width:0;max-width:calc(100% - 24px);
-    display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+  .userTurn .msg{max-width:80%;background:var(--accent);color:var(--accentInk);
+    padding:7px 10px;border-radius:14px 14px 4px 14px;font-size:12.5px;font-weight:500;line-height:1.4}
+  /* no avatar gutter: the mark leads the trace header, so the answer starts
+     at the same x as everything else in the thread */
+  .turn{display:flex}
+  .turn .body{flex:1;min-width:0;max-width:100%;
+    display:flex;flex-direction:column;align-items:flex-start;gap:6px}
   /* the agent side has no bubble: the mark in the gutter is the attribution */
   .card{background:transparent;border-radius:0;padding:0;align-self:stretch;max-width:100%}
 
   /* ── BeUIThinkingState ──────────────────────────────────────────────── */
   .think{display:flex;flex-direction:column;width:100%}
-  .thinkHead{display:flex;align-items:center;gap:8px;padding:3px 0;margin:0;
+  .thinkHead{display:flex;align-items:center;gap:6px;padding:1px 0;margin:0;
     background:transparent;border:0;cursor:pointer;width:fit-content;
     font:inherit;color:inherit}
-  .thinkHead .ico{width:16px;height:16px;display:grid;place-items:center;font-size:12px;
-    color:var(--ink-muted)}
-  .thinkHead .lbl{font-size:13px;font-weight:500;white-space:nowrap}
+  .thinkHead .ico{width:14px;height:14px;display:grid;place-items:center;flex:none}
+  .thinkHead .ico .brand{width:14px;height:14px}
+  .thinkHead .ico .brand::after{width:4px;height:4px;right:2px;top:3px}
+  .thinkHead .lbl{font-size:12.5px;font-weight:600;white-space:nowrap}
   .thinkHead .lbl.working{
     background:linear-gradient(90deg,var(--ink-faint) 35%,var(--ink) 50%,var(--ink-faint) 65%);
     background-size:200% 100%;-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;animation:shimmer-text 1.4s linear infinite}
   .thinkHead .lbl.settled{color:var(--ink-muted);animation:fade-in 350ms ease-out both}
-  .thinkHead .chev{font-size:10px;color:var(--ink-faint);transition:transform 300ms}
+  .thinkHead .chev{font-size:9px;color:var(--ink-faint);transition:transform 300ms}
   .thinkHead .chev.open{transform:rotate(180deg)}
   .traceWrap{display:grid;grid-template-rows:0fr;opacity:0;
     transition:grid-template-rows 400ms var(--ease),opacity 400ms}
   .traceWrap.open{grid-template-rows:1fr;opacity:1}
   .traceWrap > div{overflow:hidden}
-  .traceContent{position:relative;margin:4px 0 0 5px;padding-left:16px}
-  .vline{position:absolute;left:3px;width:1px;background:var(--line);top:-8px;height:0;
+  .traceContent{position:relative;margin:2px 0 0 6px;padding-left:11px}
+  .vline{position:absolute;left:0;width:1px;background:var(--line);top:-6px;height:0;
     transition:height 500ms var(--ease)}
-  .rows{display:flex;flex-direction:column;gap:4px;padding:4px 0}
-  .row{display:flex;align-items:center;gap:8px;min-height:26px;width:100%;padding:2px 0}
-  .row .mark{flex:none;width:14px;display:grid;place-items:center;font-size:11px;color:var(--ink-faint)}
-  .row .spin{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--line);
+  .rows{display:flex;flex-direction:column;gap:0;padding:2px 0}
+  .row{display:flex;align-items:center;gap:7px;min-height:21px;width:100%;padding:1px 0}
+  .row .mark{flex:none;width:12px;display:grid;place-items:center;font-size:10px;color:var(--ink-faint)}
+  .row .spin{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);
     border-top-color:var(--ink-muted);animation:spin 700ms linear infinite}
   .row .p{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    font-size:12.5px;font-weight:500;color:var(--ink)}
-  .row.reason .p{white-space:normal;line-height:1.5;font-weight:400;color:var(--ink-muted)}
-  .row .s{flex:none;font-size:11.5px;color:var(--ink-faint)}
+    font-size:12px;font-weight:500;color:var(--ink)}
+  .row.reason{align-items:flex-start}
+  .row.reason .p{white-space:normal;line-height:1.45;font-weight:400;color:var(--ink-muted)}
+  .row .s{flex:none;font-size:10.5px;color:var(--ink-faint)}
   .row .counts{flex:none;font-size:11px;color:var(--ink-faint)}
   .row .counts b{color:var(--ink-dim);font-weight:600}
-  .row .dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--surface2);
+  .row .dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--surface2);
     display:grid;place-items:center;font-size:7px;font-weight:700;color:var(--ink-dim)}
-  .queryRow{display:flex;align-items:center;gap:8px;height:22px;padding:0}
-  .queryRow i{font-size:11px;color:var(--ink-faint)}
-  .queryRow span{font-size:12.5px;color:var(--ink-muted);overflow:hidden;
+  .queryRow{display:flex;align-items:center;gap:7px;height:19px;padding:0}
+  .queryRow i{font-size:10px;color:var(--ink-faint);width:12px;text-align:center}
+  .queryRow span{font-size:11.5px;color:var(--ink-muted);overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
-  .more{font-size:12px;color:var(--ink-faint);animation:fade-in 300ms ease-out both}
+  .more{font-size:11px;color:var(--ink-faint);animation:fade-in 300ms ease-out both}
 
   /* ── approval, sized to its content ─────────────────────────────────── */
-  .ask{background:var(--surface);border-radius:14px;padding:9px 10px;align-self:flex-start;
+  .ask{background:var(--surface);border-radius:12px;padding:8px 9px;align-self:flex-start;
     max-width:100%;animation:fade-up 300ms var(--ease) both}
-  .ask .q{font-size:12.5px;font-weight:600;line-height:1.35}
-  .ask .why{font-size:10.5px;color:var(--ink-faint);margin-top:2px;line-height:1.45}
-  .ask .r{display:flex;gap:6px;margin-top:8px}
-  .ask button{font:inherit;font-size:11.5px;font-weight:600;border:0;border-radius:9px;
-    padding:6px 12px;cursor:pointer;line-height:1}
+  .ask .q{font-size:12px;font-weight:600;line-height:1.3}
+  .ask .why{font-size:10px;color:var(--ink-faint);margin-top:2px;line-height:1.4}
+  .ask .r{display:flex;gap:5px;margin-top:7px}
+  .ask button{font:inherit;font-size:11px;font-weight:600;border:0;border-radius:8px;
+    padding:5px 10px;cursor:pointer;line-height:1}
   .ask .allow{background:var(--accent);color:var(--accentInk)}
   .ask .skip{background:var(--surface2);color:var(--ink-dim)}
 
   /* ── BeUIStreamingText ──────────────────────────────────────────────── */
   .stream{width:100%}
-  .stream p{font-size:13px;line-height:1.55;color:var(--ink);margin:9px 0 0}
+  .stream p{font-size:12.5px;line-height:1.5;color:var(--ink);margin:6px 0 0}
   .stream p span.w{display:inline;opacity:0;filter:blur(10px);transform:translateY(4px);
     animation:stream-in 500ms cubic-bezier(.22,.61,.25,1) forwards}
-  .chip{display:inline-flex;align-items:center;gap:4px;height:17px;padding:0 6px;margin:0 2px;
+  .chip{display:inline-flex;align-items:center;gap:4px;height:15px;padding:0 5px;margin:0 2px;
     background:var(--surface);border-radius:5px;font-size:10px;color:var(--ink-muted);
     vertical-align:middle;transform:translateY(-1px);
     animation:pop-in 250ms var(--ease) both;text-decoration:none}
-  .actions{display:flex;align-items:center;gap:2px;margin-top:8px;opacity:0;
+  .actions{display:flex;align-items:center;gap:1px;margin-top:5px;opacity:0;
     pointer-events:none;transition:opacity 400ms}
   .actions.on{opacity:1;pointer-events:auto}
-  .actions{margin-left:-5px}
-  .actions button{width:24px;height:24px;display:grid;place-items:center;border-radius:7px;
-    border:0;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:12px;
+  .actions{margin-left:-4px}
+  .actions button{width:21px;height:21px;display:grid;place-items:center;border-radius:6px;
+    border:0;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:11px;
     transition:background-color 100ms,color 100ms}
   .actions button.on{color:var(--ink);background:var(--surface)}
-  .srcBtn{display:flex;align-items:center;gap:6px;margin-left:6px;padding:2px 4px;border-radius:6px;
+  .srcBtn{display:flex;align-items:center;gap:5px;margin-left:4px;padding:1px 3px;border-radius:6px;
     border:0;background:transparent;cursor:pointer;transition:background-color 150ms}
   .srcBtn:hover{background:var(--surface)}
   .srcBtn .stack{display:flex}
-  .srcBtn .stack span{width:14px;height:14px;border-radius:50%;background:var(--surface2);
+  .srcBtn .stack span{width:13px;height:13px;border-radius:50%;background:var(--surface2);
     border:1.5px solid var(--paper);display:grid;place-items:center;font-size:8px;font-weight:700;
     color:var(--ink-dim)}
   .srcBtn .stack span+span{margin-left:-4px}
-  .srcBtn .cnt{font-size:12px;color:var(--ink-muted)}
+  .srcBtn .cnt{font-size:11px;color:var(--ink-muted)}
   .srcDrop{display:grid;grid-template-rows:0fr;opacity:0;
     transition:grid-template-rows 300ms var(--ease),opacity 300ms}
   .srcDrop.open{grid-template-rows:1fr;opacity:1}
   .srcDrop > div{overflow:hidden}
-  .srcDrop .box{display:flex;flex-direction:column;margin-top:6px;padding:4px;
-    background:var(--surface);border-radius:10px}
-  .srcDrop a{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;
-    font-size:12px;color:var(--ink-muted);text-decoration:none;transition:background-color 150ms}
+  .srcDrop .box{display:flex;flex-direction:column;margin-top:5px;padding:3px;
+    background:var(--surface);border-radius:9px}
+  .srcDrop a{display:flex;align-items:center;gap:7px;padding:4px 5px;border-radius:6px;
+    font-size:11.5px;color:var(--ink-muted);text-decoration:none;transition:background-color 150ms}
   .srcDrop a:hover{background:var(--surface2);color:var(--ink)}
-  .srcDrop a .m{width:16px;height:16px;border-radius:4px;background:var(--surface2);flex:none;
+  .srcDrop a .m{width:14px;height:14px;border-radius:4px;background:var(--surface2);flex:none;
     display:grid;place-items:center;font-size:8px;font-weight:700;color:var(--ink-dim)}
   .srcDrop a .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .srcDrop a .d{font-size:10px;color:var(--ink-faint)}
-  .ups{margin-top:10px;opacity:0;pointer-events:none;transition:opacity 400ms;width:100%}
+  .ups{margin-top:7px;opacity:0;pointer-events:none;transition:opacity 400ms;width:100%}
   .ups.on{opacity:1;pointer-events:auto}
-  .ups h4{font-size:12px;font-weight:500;color:var(--ink-muted);margin:0 0 2px}
-  .ups button{display:flex;align-items:center;gap:8px;padding:7px 0;margin:0;width:100%;
+  .ups h4{font-size:10.5px;font-weight:500;color:var(--ink-muted);margin:0 0 1px}
+  .ups button{display:flex;align-items:center;gap:7px;padding:5px 0;margin:0;width:100%;
     border:0;border-bottom:1px solid var(--lineSoft);background:transparent;text-align:left;
-    font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+    font:inherit;font-size:12px;color:var(--ink);cursor:pointer}
   .ups button:last-child{border-bottom:0}
-  .ups button i{font-size:10px;color:var(--ink-faint);flex:none;width:11px;text-align:center}
+  .ups button i{font-size:9px;color:var(--ink-faint);flex:none;width:10px;text-align:center}
 
   /* ── composer ───────────────────────────────────────────────────────── */
-  .composer{flex:none;padding:8px 12px 12px;display:flex;gap:7px;align-items:center;
+  .composer{flex:none;padding:7px 10px 10px;display:flex;gap:6px;align-items:center;
     border-top:1px solid var(--lineSoft)}
-  .field{flex:1;height:36px;display:flex;align-items:center;background:var(--bubble);
-    border-radius:18px;padding:0 13px;font-size:12.5px;color:var(--ink-faint)}
-  .send{width:36px;height:36px;border-radius:18px;background:var(--accent);color:var(--accentInk);
+  .field{flex:1;height:33px;display:flex;align-items:center;background:var(--bubble);
+    border-radius:17px;padding:0 12px;font-size:12px;color:var(--ink-faint)}
+  .send{width:33px;height:33px;border-radius:17px;background:var(--accent);color:var(--accentInk);
     display:grid;place-items:center;flex:none;font-size:12px}
 
   /* ── side panel ─────────────────────────────────────────────────────── */
@@ -368,7 +369,7 @@ class ThinkingState{
 
     const el=document.createElement('div'); el.className='think';
     const head=document.createElement('button'); head.type='button'; head.className='thinkHead';
-    head.innerHTML='<span class="ico"><i class="fa-solid fa-sparkles"></i></span>'+
+    head.innerHTML='<span class="ico"><span class="brand"></span></span>'+
       '<span class="lbl '+(working?'working':'settled')+'"></span>'+
       '<span class="chev'+(expanded?' open':'')+'"><i class="fa-solid fa-chevron-down"></i></span>';
     const label=head.querySelector('.lbl');
@@ -594,8 +595,7 @@ function run(variant,withApproval){
   thread.appendChild(u);
 
   const turn=document.createElement('div'); turn.className='turn';
-  turn.innerHTML='<div class="col"><span class="brand"></span></div>'+
-                 '<div class="body"><div class="card"><div class="think-slot"></div>'+
+  turn.innerHTML='<div class="body"><div class="card"><div class="think-slot"></div>'+
                  '<div class="stream-slot"></div></div></div>';
   thread.appendChild(turn); scrollThread();
 

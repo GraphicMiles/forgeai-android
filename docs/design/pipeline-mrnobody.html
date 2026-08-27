@@ -30,19 +30,17 @@
   .brand::after{content:"";position:absolute;width:6px;height:6px;border-radius:50%;
     background:var(--paper);right:2px;top:5px}
   .title{font-size:16px;font-weight:750;letter-spacing:-.02em}
-  .thread{flex:1;overflow-y:auto;padding:12px 14px 14px;display:flex;flex-direction:column;gap:14px}
+  .thread{flex:1;overflow-y:auto;padding:10px 12px 12px;display:flex;flex-direction:column;gap:11px}
   .thread::-webkit-scrollbar{display:none}
 
   /* ── turns: a standard two-sided chat ───────────────────────────────── */
   .userTurn{display:flex;justify-content:flex-end}
-  .userTurn .msg{max-width:78%;background:var(--accent);color:var(--accentInk);
-    padding:8px 11px;border-radius:16px 16px 5px 16px;font-size:13px;font-weight:500;line-height:1.45}
-  .turn{display:flex;align-items:flex-start;gap:6px}
-  .turn .col{width:18px;height:18px;flex:none;margin-top:1px}
-  .turn .col .brand{width:18px;height:18px}
-  .turn .col .brand::after{width:5px;height:5px;right:2px;top:4px}
-  .turn .body{flex:1;min-width:0;max-width:calc(100% - 24px);
-    display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+  .userTurn .msg{max-width:80%;background:var(--accent);color:var(--accentInk);
+    padding:7px 10px;border-radius:14px 14px 4px 14px;font-size:12.5px;font-weight:500;line-height:1.4}
+  /* no avatar gutter: the mark leads the working line and the trace header */
+  .turn{display:flex}
+  .turn .body{flex:1;min-width:0;max-width:100%;
+    display:flex;flex-direction:column;align-items:flex-start;gap:6px}
   /* the agent side has no bubble: the mark in the gutter is the attribution */
   .card{background:transparent;border-radius:0;padding:0;align-self:stretch;max-width:100%}
 
@@ -63,16 +61,18 @@
   @keyframes sweep{from{background-position:130% 0}to{background-position:-130% 0}}
 
   /* ── AgentWorkingLine ───────────────────────────────────────────────── */
-  .working{display:flex;align-items:center;gap:8px;height:21px}
-  .working .lbl{font-size:13px;font-weight:500;flex:1;min-width:0;
+  .working{display:flex;align-items:center;gap:7px;height:19px}
+  .working .lbl{font-size:12.5px;font-weight:500;flex:1;min-width:0;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .working .clk{font-size:11px;color:var(--ink-faint);flex:none}
 
   /* ── AgentTrace ─────────────────────────────────────────────────────── */
   .trace{width:100%}
-  .traceHead{display:flex;align-items:center;gap:6px;height:21px;cursor:pointer}
-  .traceHead .sparkle{font-size:11px;color:var(--ink-muted);width:12px;text-align:center}
-  .traceHead .done{font-size:12.5px;font-weight:500;color:var(--ink-faint);flex:1;min-width:0;
+  .traceHead{display:flex;align-items:center;gap:6px;height:19px;cursor:pointer}
+  .traceHead .sparkle{width:14px;height:14px;flex:none;display:grid;place-items:center}
+  .traceHead .sparkle .brand{width:14px;height:14px}
+  .traceHead .sparkle .brand::after{width:4px;height:4px;right:2px;top:3px}
+  .traceHead .done{font-size:12.5px;font-weight:600;font-weight:500;color:var(--ink-faint);flex:1;min-width:0;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .traceHead .chev{font-size:10px;color:var(--ink-muted);transition:transform .3s var(--ease)}
   .trace.closed .chev{transform:rotate(-90deg)}
@@ -80,16 +80,16 @@
     transition:grid-template-rows .3s var(--ease),opacity .2s linear}
   .trace.closed .traceBody{grid-template-rows:0fr;opacity:0}
   .traceInner{overflow:hidden}
-  .rail{border-left:1px solid var(--line);padding-left:9px;margin:2px 0 0 5px}
-  .step{padding:4px 0;display:flex;align-items:flex-start;gap:6px;
+  .rail{border-left:1px solid var(--line);padding-left:10px;margin:2px 0 0 6px}
+  .step{padding:2px 0;display:flex;align-items:flex-start;gap:6px;
     animation:stepIn .26s var(--ease) both}
   @keyframes stepIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-  .step .marker{width:14px;height:16px;flex:none;display:grid;place-items:center;
+  .step .marker{width:12px;height:15px;flex:none;display:grid;place-items:center;
     font-size:10px;color:var(--ink-muted)}
   .step .marker i{animation:markIn .22s var(--ease)}
   @keyframes markIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
   .step .txt{flex:1;min-width:0}
-  .step .label{font-size:12.5px;font-weight:500;line-height:1.3;
+  .step .label{font-size:12px;font-weight:500;line-height:1.3;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .step .meta{margin-top:1px;display:flex;gap:5px;align-items:baseline;min-width:0}
   .step .meta span{font-size:9.5px;color:var(--ink-muted);white-space:nowrap}
@@ -97,7 +97,7 @@
     overflow:hidden;text-overflow:ellipsis;min-width:0}
   .step.tappable{cursor:pointer}
   .detail{display:grid;grid-template-rows:0fr;transition:grid-template-rows .26s var(--ease);
-    margin-left:20px}
+    margin-left:18px}
   .detail.open{grid-template-rows:1fr}
   .detail > div{overflow:hidden}
   .detailBox{background:var(--surface);border-radius:9px;padding:6px 8px;margin:1px 0 4px}
@@ -119,8 +119,8 @@
   .ask .skip{background:var(--surface2);color:var(--ink-dim)}
 
   /* ── StreamedAnswer ─────────────────────────────────────────────────── */
-  .answer{font-size:13px;line-height:1.6;margin-top:0}
-  .trace + .answer, .working + .answer{margin-top:7px}
+  .answer{font-size:12.5px;line-height:1.5;margin-top:0}
+  .trace + .answer, .working + .answer{margin-top:6px}
   .answer w{display:inline}
   .answer w.in{display:inline-block;animation:streamIn .42s cubic-bezier(.22,.61,.25,1) both}
   @keyframes streamIn{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur(0)}}
@@ -142,8 +142,8 @@
   .note i.fa-solid{font-size:10px;margin-right:5px;color:var(--ink-muted)}
 
   /* ── actions / follow-ups: outside the bubble, aligned to its edge ──── */
-  .actions{display:flex;align-items:center;gap:2px;margin-top:-1px}
-  .actions .btn{width:24px;height:24px;display:grid;place-items:center;font-size:12px;
+  .actions{display:flex;align-items:center;gap:1px;margin:-1px 0 0 -4px}
+  .actions .btn{width:21px;height:21px;display:grid;place-items:center;font-size:11px;
     color:var(--ink-muted);cursor:pointer;border-radius:7px}
   .actions .btn.on{color:var(--ink);background:var(--surface)}
   .actions .src{display:flex;align-items:center;gap:6px;margin-left:6px;cursor:pointer}
@@ -165,17 +165,17 @@
   .srcList .item .d{font-size:9.5px;color:var(--ink-muted);flex:none}
   .follow{width:100%;margin-top:2px}
   .follow h4{margin:0 0 1px;font-size:10.5px;font-weight:500;color:var(--ink-faint)}
-  .follow .f{display:flex;align-items:center;gap:8px;padding:7px 0;
+  .follow .f{display:flex;align-items:center;gap:7px;padding:5px 0;
     border-bottom:1px solid var(--lineSoft);font-size:12px;line-height:1.35;cursor:pointer}
   .follow .f:last-child{border-bottom:0}
   .follow .f i{font-size:10px;color:var(--ink-muted);width:11px;text-align:center;flex:none}
 
   /* ── composer ───────────────────────────────────────────────────────── */
-  .composer{flex:none;padding:8px 12px 12px;display:flex;gap:7px;align-items:center;
+  .composer{flex:none;padding:7px 10px 10px;display:flex;gap:6px;align-items:center;
     border-top:1px solid var(--lineSoft)}
-  .field{flex:1;height:36px;display:flex;align-items:center;background:var(--bubble);
-    border-radius:18px;padding:0 13px;font-size:12.5px;color:var(--ink-faint)}
-  .send{width:36px;height:36px;border-radius:18px;background:var(--accent);color:var(--accentInk);
+  .field{flex:1;height:33px;display:flex;align-items:center;background:var(--bubble);
+    border-radius:17px;padding:0 12px;font-size:12px;color:var(--ink-faint)}
+  .send{width:33px;height:33px;border-radius:17px;background:var(--accent);color:var(--accentInk);
     display:grid;place-items:center;flex:none;font-size:12px}
 
   /* ── side panel ─────────────────────────────────────────────────────── */
@@ -501,8 +501,7 @@ function render(){
   const t=fromEvents(events,status,'');
   if(!turnEl){
     turnEl=document.createElement('div'); turnEl.className='turn';
-    turnEl.innerHTML='<div class="col"><span class="brand"></span></div>'+
-                     '<div class="body"><div class="card"></div></div>';
+    turnEl.innerHTML='<div class="body"><div class="card"></div></div>';
     thread.appendChild(turnEl);
   }
   const body=turnEl.querySelector('.body'), card=turnEl.querySelector('.card');
@@ -525,7 +524,7 @@ function render(){
   if(!trace&&t.activities.length){
     trace=document.createElement('div'); trace.className='trace';
     trace.innerHTML=
-      '<div class="traceHead"><i class="fa-solid fa-wand-magic-sparkles sparkle"></i>'+
+      '<div class="traceHead"><span class="sparkle"><span class="brand"></span></span>'+
       '<span class="done"></span><i class="fa-solid fa-chevron-down chev"></i></div>'+
       '<div class="traceBody"><div class="traceInner"><div class="rail"></div></div></div>';
     trace.querySelector('.traceHead').onclick=()=>{
