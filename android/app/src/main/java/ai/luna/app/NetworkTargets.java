@@ -43,6 +43,37 @@ public final class NetworkTargets {
         return null;
     }
 
+    /**
+     * The same check, plus what the name actually resolves to. A public
+     * hostname pointed at 192.168.x.x is the oldest trick there is, and the
+     * cheap string check above cannot see it. Only used for the page the model
+     * asked for, not for every sub-resource, because it costs a DNS lookup.
+     */
+    public static String checkResolved(String url) {
+        String verdict = check(url);
+        if (verdict != null) {
+            return verdict;
+        }
+        try {
+            String host = new URI(normalise(url)).getHost();
+            if (host == null) {
+                return "that address has no host";
+            }
+            for (java.net.InetAddress address : java.net.InetAddress.getAllByName(host)) {
+                if (address.isLoopbackAddress() || address.isSiteLocalAddress()
+                    || address.isLinkLocalAddress() || address.isAnyLocalAddress()
+                    || address.isMulticastAddress()) {
+                    return "that address is on this device or this network";
+                }
+            }
+        } catch (java.net.UnknownHostException unknown) {
+            return "that address does not resolve";
+        } catch (Exception ignored) {
+            // A resolver failure is not proof of anything; the string checks stand.
+        }
+        return null;
+    }
+
     public static String normalise(String url) {
         String trimmed = url.trim();
         if (!trimmed.toLowerCase(Locale.US).startsWith("http://")
@@ -52,11 +83,21 @@ public final class NetworkTargets {
         return trimmed;
     }
 
-    /** Loopback, link-local and the three private IPv4 ranges. */
+    /** Loopback, link-local, unique-local and the three private IPv4 ranges. */
     static boolean isPrivateAddress(String host) {
         if (host.equals("0.0.0.0") || host.startsWith("127.") || host.equals("::1")
             || host.startsWith("[::1")) {
             return true;
+        }
+        String bare = host.startsWith("[") ? host.substring(1, Math.max(1, host.length() - 1)) : host;
+        if (bare.contains(":")) {
+            // IPv6 literal: fc00::/7 is unique-local, fe80::/10 is link-local.
+            String lower = bare.toLowerCase(Locale.US);
+            return lower.startsWith("fc") || lower.startsWith("fd")
+                || lower.startsWith("fe8") || lower.startsWith("fe9")
+                || lower.startsWith("fea") || lower.startsWith("feb")
+                || lower.equals("::") || lower.startsWith("::ffff:127.")
+                || lower.startsWith("::ffff:10.") || lower.startsWith("::ffff:192.168.");
         }
         String[] parts = host.split("\\.");
         if (parts.length != 4) {

@@ -148,7 +148,12 @@ class LunaCore extends ChangeNotifier {
     return null;
   }
 
+  /// A model being served by Ollama on your own machine.
+  String get activeOllamaModel =>
+      activeModelId.startsWith('ollama:') ? activeModelId.substring(7) : '';
+
   String get activeModelName {
+    if (activeOllamaModel.isNotEmpty) return '$activeOllamaModel on your computer';
     final Map<String, dynamic>? local = activeCatalogModel;
     if (local != null) return local['name'] as String;
     final Map<String, dynamic>? own = activeImportedModel;
@@ -265,6 +270,13 @@ class LunaCore extends ChangeNotifier {
         thinking = false;
         _openGate();
         pendingApproval = event;
+        break;
+      case 'failover':
+        steps.add(<String, String>{
+          'tool': 'failover',
+          'path': '',
+          'state': 'done',
+        });
         break;
       case 'speed':
         tokensPerSecond = ((event['tokensPerSecond'] as num?) ?? 0).toDouble();

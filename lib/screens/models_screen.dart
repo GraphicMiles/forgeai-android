@@ -26,6 +26,18 @@ class _ModelsScreenState extends State<ModelsScreen> {
   late final TextEditingController _endpoint =
       TextEditingController(text: widget.core.endpoint);
 
+  /// The address is editable on two screens. Without this the other screen
+  /// keeps showing the old one until the app restarts.
+  String _endpointSeen = '';
+
+  void _syncEndpoint() {
+    if (_endpointSeen == widget.core.endpoint) return;
+    _endpointSeen = widget.core.endpoint;
+    if (_endpoint.text != widget.core.endpoint) {
+      _endpoint.text = widget.core.endpoint;
+    }
+  }
+
   @override
   void dispose() {
     _endpoint.dispose();
@@ -35,6 +47,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
   @override
   Widget build(BuildContext context) {
     final LunaCore core = widget.core;
+    _syncEndpoint();
     return Column(
       children: <Widget>[
         const ScreenTop(title: 'Model Zoo'),
@@ -261,7 +274,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
   }
 
   Widget _checksumNote(LunaCore core) {
-    final List<String> parts = core.lastChecksum!.split(':');
+    final List<String> parts = (core.lastChecksum ?? '').split(':');
     final bool ok = parts.length > 1 && parts[1] == 'ok';
     final String digest = parts.length > 2 ? parts[2] : '';
     final String shortened =
@@ -508,22 +521,21 @@ class _ModelsScreenState extends State<ModelsScreen> {
                     icon: FontAwesomeIcons.server,
                     title: '${model['name']}',
                     subtitle: formatBytes(model['size'] as num?),
-                    trailing: PillButton(
-                      label: 'Use',
-                      small: true,
-                      onTap: () async {
-                        Navigator.of(sheetContext).pop();
-                        await core.addCloudProvider(
-                          label: '${model['name']} (my computer)',
-                          baseUrl: '${core.endpoint}/v1',
-                          apiKey: 'ollama',
-                          model: '${model['name']}',
-                        );
-                        if (core.cloudProviders.isNotEmpty) {
-                          await core.useModel('cloud:${core.cloudProviders.last['id']}');
-                        }
-                      },
-                    ),
+                    trailing: core.activeModelId == 'ollama:${model['name']}'
+                        ? Text('Active',
+                            style: LunaTheme.text(
+                                size: 12, weight: 600, color: LunaTheme.ink))
+                        : PillButton(
+                            label: 'Use',
+                            small: true,
+                            onTap: () async {
+                              Navigator.of(sheetContext).pop();
+                              // No key, no phantom provider entry: the address
+                              // in the field above is the whole configuration.
+                              await core.useModel('ollama:${model['name']}');
+                              if (mounted) setState(() {});
+                            },
+                          ),
                   ))
               .toList(),
         );
@@ -771,6 +783,10 @@ class _ModelsScreenState extends State<ModelsScreen> {
         ),
       ),
     );
+    label.dispose();
+    baseUrl.dispose();
+    apiKey.dispose();
+    model.dispose();
   }
 
   /// Nothing that cannot be undone happens without one of these.

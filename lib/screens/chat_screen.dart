@@ -41,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
     'github_file': 'Fetched from GitHub',
     'ask_user': 'Asked you',
     'load_model': 'Loaded the model',
+    'failover': 'Fell back to the cloud',
   };
 
   /// What the same tool is called while it is still happening.
@@ -58,6 +59,7 @@ class _ChatScreenState extends State<ChatScreen> {
     'github_file': 'Fetching from GitHub',
     'ask_user': 'Waiting on you',
     'load_model': 'Loading the model',
+    'failover': 'Falling back to the cloud',
   };
 
   final TextEditingController _answer = TextEditingController();
@@ -237,6 +239,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       },
     );
+    search.dispose();
   }
 
   @override
