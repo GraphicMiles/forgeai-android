@@ -8,39 +8,56 @@ import java.util.Set;
 /**
  * Who is allowed to do what, without asking.
  *
- * Read-only tools always run. Mutating tools stop for approval unless the user
- * has turned on unattended mode. The model never sees this decision — it is
- * made here, after the call is parsed and before anything happens.
+ * Reading is free. Anything that changes a file, or reaches off the device, is
+ * held back. Held tools obey a rule you set per tool — ask, always, or never —
+ * and the global "ask me first" switch decides what an unset rule means. The
+ * model never sees this decision: it is made here, after the call is parsed and
+ * before anything happens.
  */
 public final class ToolPolicy {
 
     public static final List<String> READ_ONLY = Arrays.asList(
-        "list_files", "read_file", "search_code", "ask_user", "respond"
+        "list_files", "read_file", "search_code", "respond"
     );
 
     public static final List<String> MUTATING = Arrays.asList(
-        "write_file", "create_file", "create_folder", "delete_file", "rename_file"
+        "write_file", "create_file", "create_folder", "delete_file", "rename_file",
+        "open_page", "read_page", "github_file", "ask_user"
     );
 
     private static final Set<String> READ_ONLY_SET = new HashSet<>(READ_ONLY);
+    private static final Set<String> MUTATING_SET = new HashSet<>(MUTATING);
 
     private ToolPolicy() {
     }
 
     public static boolean isKnown(String tool) {
-        return READ_ONLY_SET.contains(tool) || MUTATING.contains(tool);
+        return READ_ONLY_SET.contains(tool) || MUTATING_SET.contains(tool);
     }
 
     public static boolean isMutating(String tool) {
         return !READ_ONLY_SET.contains(tool);
     }
 
-    /** True when the call has to be shown to the user before it runs. */
-    public static boolean needsApproval(String tool, boolean unattended) {
+    /** What a held tool should do this time. */
+    public enum Decision { RUN, ASK, REFUSE }
+
+    public static Decision decide(String tool, Prefs prefs) {
         if (!isMutating(tool)) {
-            return false;
+            return Decision.RUN;
         }
-        return !unattended;
+        String rule = prefs.toolRule(tool);
+        if (Prefs.RULE_NEVER.equals(rule)) {
+            return Decision.REFUSE;
+        }
+        if (Prefs.RULE_ALWAYS.equals(rule)) {
+            return Decision.RUN;
+        }
+        // ask_user is the one held tool that has to reach the person by design.
+        if ("ask_user".equals(tool)) {
+            return Decision.RUN;
+        }
+        return prefs.unattended() ? Decision.RUN : Decision.ASK;
     }
 
     /** One plain sentence describing what is about to happen. */
@@ -59,6 +76,12 @@ public final class ToolPolicy {
                 return "Delete " + safePath + "?";
             case "rename_file":
                 return "Rename " + safePath + "?";
+            case "open_page":
+                return "Open " + safePath + " in a hidden browser?";
+            case "read_page":
+                return "Read the page that is open?";
+            case "github_file":
+                return "Fetch " + safePath + " from GitHub?";
             default:
                 return "Run " + tool + "?";
         }
@@ -71,6 +94,12 @@ public final class ToolPolicy {
                 return "A backup is kept, but the file leaves the folder.";
             case "write_file":
                 return "The current contents are backed up first.";
+            case "open_page":
+                return "A page load off this device. Cookies are thrown away when the job ends.";
+            case "read_page":
+                return "The page text goes into the model's context.";
+            case "github_file":
+                return "Your GitHub token is sent to github.com to fetch this file.";
             default:
                 return path == null ? "" : path;
         }

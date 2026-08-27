@@ -8,24 +8,62 @@ import 'package:flutter/widgets.dart';
 class LunaTheme {
   const LunaTheme._();
 
-  // Ink
-  static const Color ink = Color(0xFF0B0B0C);
-  static const Color ink2 = Color(0xFF3D3D42);
-  static const Color ink3 = Color(0xFF76767E);
-  static const Color ink4 = Color(0xFFA3A3AB);
+  // Ink. These are variables, not constants, because dark mode swaps them —
+  // the language stays identical, only the two ends of the scale trade places.
+  static Color ink = const Color(0xFF0B0B0C);
+  static Color ink2 = const Color(0xFF3D3D42);
+  static Color ink3 = const Color(0xFF76767E);
+  static Color ink4 = const Color(0xFFA3A3AB);
 
   // Surfaces
-  static const Color line = Color(0xFFEDEDF0);
-  static const Color fill = Color(0xFFF4F4F6);
-  static const Color fill2 = Color(0xFFEAEAEE);
-  static const Color paper = Color(0xFFFFFFFF);
+  static Color line = const Color(0xFFEDEDF0);
+  static Color fill = const Color(0xFFF4F4F6);
+  static Color fill2 = const Color(0xFFEAEAEE);
+  static Color paper = const Color(0xFFFFFFFF);
 
-  // Inside the one filled-black surface per screen
-  static const Color onInk = Color(0xFFFFFFFF);
-  static const Color onInkDim = Color(0xFF9A9AA2);
-  static const Color onInkFaint = Color(0xFF8F8F98);
-  static const Color inkCell = Color(0xFF1A1A1E);
-  static const Color inkButton = Color(0xFF232327);
+  // Inside the one filled surface per screen
+  static Color onInk = const Color(0xFFFFFFFF);
+  static Color onInkDim = const Color(0xFF9A9AA2);
+  static Color onInkFaint = const Color(0xFF8F8F98);
+  static Color inkCell = const Color(0xFF1A1A1E);
+  static Color inkButton = const Color(0xFF232327);
+
+  static bool isDark = false;
+
+  /// Swap the palette. Everything else in the app reads these fields, so one
+  /// call here is the whole of dark mode.
+  static void apply({required bool dark}) {
+    isDark = dark;
+    if (dark) {
+      ink = const Color(0xFFF7F7F9);
+      ink2 = const Color(0xFFC7C7CE);
+      ink3 = const Color(0xFF8E8E97);
+      ink4 = const Color(0xFF64646C);
+      line = const Color(0xFF232327);
+      fill = const Color(0xFF19191D);
+      fill2 = const Color(0xFF232327);
+      paper = const Color(0xFF0B0B0C);
+      onInk = const Color(0xFF0B0B0C);
+      onInkDim = const Color(0xFF3D3D42);
+      onInkFaint = const Color(0xFF4A4A51);
+      inkCell = const Color(0xFFE6E6EA);
+      inkButton = const Color(0xFFD5D5DB);
+    } else {
+      ink = const Color(0xFF0B0B0C);
+      ink2 = const Color(0xFF3D3D42);
+      ink3 = const Color(0xFF76767E);
+      ink4 = const Color(0xFFA3A3AB);
+      line = const Color(0xFFEDEDF0);
+      fill = const Color(0xFFF4F4F6);
+      fill2 = const Color(0xFFEAEAEE);
+      paper = const Color(0xFFFFFFFF);
+      onInk = const Color(0xFFFFFFFF);
+      onInkDim = const Color(0xFF9A9AA2);
+      onInkFaint = const Color(0xFF8F8F98);
+      inkCell = const Color(0xFF1A1A1E);
+      inkButton = const Color(0xFF232327);
+    }
+  }
 
   // The mascot, and nothing else.
   static const Color mascot = Color(0xFF7C5CFF);
@@ -50,14 +88,14 @@ class LunaTheme {
   static TextStyle displayStyle({
     required double size,
     required double weight,
-    Color color = ink,
+    Color? color,
     double letterSpacing = -0.03,
     double height = 1.15,
   }) {
     return TextStyle(
       fontFamily: display,
       fontSize: size,
-      color: color,
+      color: color ?? ink,
       height: height,
       letterSpacing: letterSpacing * size,
       fontVariations: <FontVariation>[FontVariation('wght', weight)],
@@ -68,14 +106,14 @@ class LunaTheme {
   static TextStyle text({
     required double size,
     double weight = 400,
-    Color color = ink,
+    Color? color,
     double letterSpacing = -0.012,
     double height = 1.4,
   }) {
     return TextStyle(
       fontFamily: sans,
       fontSize: size,
-      color: color,
+      color: color ?? ink,
       height: height,
       letterSpacing: letterSpacing * size,
       fontVariations: <FontVariation>[FontVariation('wght', weight)],
@@ -85,13 +123,13 @@ class LunaTheme {
 
   static TextStyle monoStyle({
     double size = 12.5,
-    Color color = ink2,
+    Color? color,
     double weight = 400,
   }) {
     return TextStyle(
       fontFamily: mono,
       fontSize: size,
-      color: color,
+      color: color ?? ink2,
       height: 1.4,
       fontVariations: <FontVariation>[FontVariation('wght', weight)],
       fontWeight: _nearest(weight),

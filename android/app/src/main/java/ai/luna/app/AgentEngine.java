@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class AgentEngine {
 
-    private static final int MAX_ITERATIONS = 6;
     private static final int MAX_HISTORY_CHARS = 6000;
 
     /** How the engine talks to Flutter. */
@@ -45,29 +44,201 @@ public final class AgentEngine {
     private final OnDeviceRuntime runtime;
     private final Events events;
 
+    private final CredentialVault vault;
+    private final ErrorLog errors;
+    private final HeadlessBrowser browser;
+
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean stopRequested = new AtomicBoolean(false);
     private final BlockingQueue<Boolean> approvals = new ArrayBlockingQueue<>(1);
+    private final BlockingQueue<String> answers = new ArrayBlockingQueue<>(1);
 
     private final List<JSONObject> transcript = new ArrayList<>();
     private volatile String pendingApprovalId = "";
+    private volatile String pendingQuestionId = "";
+    private volatile String chatId = "";
 
     public AgentEngine(Context context, Prefs prefs, WorkspaceStore workspace, ModelStore models,
-                       OnDeviceRuntime runtime, Events events) {
+                       OnDeviceRuntime runtime, CredentialVault vault, ErrorLog errors,
+                       HeadlessBrowser browser, Events events) {
         this.context = context.getApplicationContext();
         this.prefs = prefs;
         this.workspace = workspace;
         this.models = models;
         this.runtime = runtime;
+        this.vault = vault;
+        this.errors = errors;
+        this.browser = browser;
         this.events = events;
+        this.chatId = prefs.activeChatId();
+        if (this.chatId.isEmpty()) {
+            this.chatId = "chat-" + System.currentTimeMillis();
+            prefs.setActiveChatId(this.chatId);
+        }
         loadTranscript();
     }
 
     // --- transcript ----------------------------------------------------------
 
     private File transcriptFile() {
-        return new File(context.getFilesDir(), "chat.json");
+        File chats = new File(context.getFilesDir(), "chats");
+        if (!chats.exists()) {
+            chats.mkdirs();
+        }
+        File file = new File(chats, chatId + ".json");
+        File legacy = new File(context.getFilesDir(), "chat.json");
+        if (!file.exists() && legacy.exists()) {
+            // One chat existed before this build. Keep it rather than lose it.
+            legacy.renameTo(file);
+        }
+        return file;
+    }
+
+    // --- more than one chat ---------------------------------------------------
+
+    public String activeChatId() {
+        return chatId;
+    }
+
+    /** The list the chat picker draws: id, first line, when it was last touched. */
+    public JSONArray chatIndex() {
+        JSONArray out = new JSONArray();
+        File chats = new File(context.getFilesDir(), "chats");
+        File[] files = chats.listFiles();
+        if (files == null) {
+            return out;
+        }
+        java.util.Arrays.sort(files, new java.util.Comparator<File>() {
+            @Override
+            public int compare(File left, File right) {
+                return Long.compare(right.lastModified(), left.lastModified());
+            }
+        });
+        for (File file : files) {
+            String name = file.getName();
+            if (!name.endsWith(".json")) {
+                continue;
+            }
+            try {
+                JSONObject entry = new JSONObject();
+                entry.put("id", name.substring(0, name.length() - 5));
+                entry.put("at", file.lastModified());
+                entry.put("title", titleOf(file));
+                entry.put("active", name.substring(0, name.length() - 5).equals(chatId));
+                out.put(entry);
+            } catch (JSONException ignored) {
+                // Skip a chat that will not describe itself.
+            }
+        }
+        return out;
+    }
+
+    /** Chats whose text contains the words, so an old job can be found again. */
+    public JSONArray searchChats(String needle) {
+        JSONArray out = new JSONArray();
+        if (needle == null || needle.trim().isEmpty()) {
+            return chatIndex();
+        }
+        String lower = needle.toLowerCase(java.util.Locale.US);
+        JSONArray all = chatIndex();
+        for (int index = 0; index < all.length(); index++) {
+            JSONObject entry = all.optJSONObject(index);
+            if (entry == null) {
+                continue;
+            }
+            File file = new File(new File(context.getFilesDir(), "chats"), entry.optString("id") + ".json");
+            String body = readWhole(file).toLowerCase(java.util.Locale.US);
+            if (body.contains(lower)) {
+                out.put(entry);
+            }
+        }
+        return out;
+    }
+
+    public void newChat() {
+        if (running.get()) {
+            return;
+        }
+        chatId = "chat-" + System.currentTimeMillis();
+        prefs.setActiveChatId(chatId);
+        transcript.clear();
+    }
+
+    public void switchChat(String id) {
+        if (running.get() || id == null || id.isEmpty()) {
+            return;
+        }
+        chatId = id;
+        prefs.setActiveChatId(chatId);
+        transcript.clear();
+        loadTranscript();
+    }
+
+    public void deleteChat(String id) {
+        File file = new File(new File(context.getFilesDir(), "chats"), id + ".json");
+        if (file.exists()) {
+            file.delete();
+        }
+        if (id.equals(chatId)) {
+            newChat();
+        }
+    }
+
+    /**
+     * The whole job as a file: what was asked, every step, what changed, and the
+     * answer. Written as Markdown because it is meant to be read by a person.
+     */
+    public String exportChat() {
+        StringBuilder out = new StringBuilder();
+        out.append("# Luna — ").append(titleOf(transcriptFile())).append("\n\n");
+        out.append("Exported ").append(new java.util.Date().toString()).append("\n\n");
+        for (JSONObject message : transcript) {
+            String role = message.optString("role");
+            String content = message.optString("content");
+            if (role.equals("user")) {
+                out.append("## You\n\n").append(content).append("\n\n");
+            } else if (role.equals("assistant")) {
+                out.append("## Luna\n\n").append(content).append("\n\n");
+            } else if (role.equals("observation")) {
+                out.append("- step: ").append(content.replace("\n", " ")).append('\n');
+            }
+        }
+        out.append("\nNothing in this file left the device unless a cloud model was used.\n");
+        return out.toString();
+    }
+
+    private String titleOf(File file) {
+        try {
+            JSONArray array = new JSONArray(readWhole(file));
+            for (int index = 0; index < array.length(); index++) {
+                JSONObject message = array.optJSONObject(index);
+                if (message != null && message.optString("role").equals("user")) {
+                    String text = message.optString("content").trim().replace("\n", " ");
+                    return text.length() > 60 ? text.substring(0, 60) + "…" : text;
+                }
+            }
+        } catch (Exception ignored) {
+            // An unreadable chat still deserves a row in the list.
+        }
+        return "Empty chat";
+    }
+
+    private String readWhole(File file) {
+        if (!file.exists()) {
+            return "";
+        }
+        FileInputStream input = null;
+        try {
+            input = new FileInputStream(file);
+            byte[] buffer = new byte[(int) file.length()];
+            int read = input.read(buffer);
+            return read <= 0 ? "" : new String(buffer, 0, read, StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            return "";
+        } finally {
+            WorkspaceStore.closeQuietly(input);
+        }
     }
 
     private void loadTranscript() {
@@ -146,6 +317,15 @@ public final class AgentEngine {
         stopRequested.set(true);
         runtime.cancel();
         approvals.offer(Boolean.FALSE);
+        answers.offer("");
+    }
+
+    /** The answer to an ask_user question. An empty answer counts as "skip". */
+    public void answerQuestion(String id, String text) {
+        if (!id.equals(pendingQuestionId)) {
+            return;
+        }
+        answers.offer(text == null ? "" : text);
     }
 
     public void resolveApproval(String id, boolean approved) {
@@ -159,6 +339,9 @@ public final class AgentEngine {
         running.set(true);
         stopRequested.set(false);
         long started = System.currentTimeMillis();
+        RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
+        guards.begin();
+        Tools.Env env = new Tools.Env(workspace, browser, vault, errors);
         emit("run_started", new JSONObject());
 
         try {
@@ -174,13 +357,18 @@ public final class AgentEngine {
             }
 
             String answer = "";
-            for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+            while (true) {
                 if (stopRequested.get()) {
                     finishWithMessage("Stopped.");
                     return;
                 }
+                if (guards.elapsedMillis() > (long) prefs.budgetSeconds() * 1000L) {
+                    answer = "I hit the time limit for one job (" + prefs.budgetSeconds()
+                        + " seconds) and stopped. " + guards.describe() + ".";
+                    break;
+                }
 
-                String raw = ask(local, cloud, iteration);
+                String raw = ask(local, cloud, guards);
                 if (raw == null) {
                     return;
                 }
@@ -208,10 +396,50 @@ public final class AgentEngine {
                     continue;
                 }
 
-                String path = args.optString("path", "");
-                if (ToolPolicy.needsApproval(tool, prefs.unattended())) {
+                if (tool.equals("ask_user")) {
+                    String question = args.optString("question", args.optString("text", ""));
+                    String reply = askUser(question);
+                    if (stopRequested.get()) {
+                        finishWithMessage("Stopped.");
+                        return;
+                    }
+                    appendObservation(tool, reply.isEmpty()
+                        ? "The user did not answer. Carry on with what you already know, or say what you need."
+                        : "The user answered: " + reply);
+                    continue;
+                }
+
+                String path = args.optString("path", args.optString("url", ""));
+                boolean mutating = ToolPolicy.isMutating(tool);
+
+                RunGuards.Verdict verdict = guards.check(tool, args, mutating);
+                if (verdict.replay != null) {
+                    // Read it once, remember it. The same read twice is a loop.
+                    emitStep(tool, path, "replayed");
+                    appendObservation(tool, verdict.replay);
+                    continue;
+                }
+                if (!verdict.allowed) {
+                    emitStep(tool, path, "blocked");
+                    appendObservation(tool, verdict.reason);
+                    if (verdict.reason.contains("limit")) {
+                        answer = verdict.reason;
+                        break;
+                    }
+                    continue;
+                }
+
+                ToolPolicy.Decision decision = ToolPolicy.decide(tool, prefs);
+                if (decision == ToolPolicy.Decision.REFUSE) {
+                    emitStep(tool, path, "denied");
+                    appendObservation(tool, "Your rules say never for " + tool
+                        + ". It was not run. Do something else, or say what you would have needed.");
+                    continue;
+                }
+                if (decision == ToolPolicy.Decision.ASK) {
                     boolean approved = requestApproval(tool, path, args.optString("content", ""));
                     if (!approved) {
+                        emitStep(tool, path, "denied");
                         appendObservation(tool, "The user declined this action. Do not retry it; "
                             + "explain what you would have done instead.");
                         continue;
@@ -219,7 +447,8 @@ public final class AgentEngine {
                 }
 
                 emitStep(tool, path, "running");
-                String observation = Tools.run(workspace, tool, args);
+                String observation = Tools.run(env, tool, args);
+                guards.record(tool, args, observation);
                 emitStep(tool, path, "done");
                 appendObservation(tool, observation);
             }
@@ -239,15 +468,22 @@ public final class AgentEngine {
             }
             emit("run_done", done);
         } catch (Exception error) {
+            errors.record("agent", error);
             finishWithMessage("Something went wrong in the loop: " + error);
         } finally {
             running.set(false);
             pendingApprovalId = "";
+            pendingQuestionId = "";
+            // Cookies and page history belong to the job, not to the app.
+            browser.close();
+            if (!prefs.keepWarm()) {
+                runtime.unload();
+            }
         }
     }
 
     /** One model call. Returns raw text, or null when the turn already ended. */
-    private String ask(ModelStore.Entry local, JSONObject cloud, int iteration) {
+    private String ask(ModelStore.Entry local, JSONObject cloud, RunGuards guards) {
         emit("thinking", new JSONObject());
         if (local != null) {
             final StringBuilder streamed = new StringBuilder();
@@ -285,20 +521,35 @@ public final class AgentEngine {
             return result.text;
         }
 
+        RunGuards.Verdict allowed = guards.checkCloudCall();
+        if (!allowed.allowed) {
+            finishWithMessage(allowed.reason);
+            return null;
+        }
+        guards.recordCloudCall();
+
+        // The key is read for this one call and never goes into the prompt.
+        String key = vault.read("cloud:" + cloud.optString("id"));
         CloudProvider.Config config = new CloudProvider.Config(
-            cloud.optString("baseUrl"), cloud.optString("apiKey"), cloud.optString("model"));
-        CloudProvider.Reply reply = CloudProvider.chat(config, cloudMessages(), 1024);
+            cloud.optString("baseUrl"), key, cloud.optString("model"));
+        CloudProvider.Reply reply = CloudProvider.chatStreaming(config, cloudMessages(), 1024,
+            new CloudProvider.TokenSink() {
+                @Override
+                public void onToken(String text) {
+                    JSONObject event = new JSONObject();
+                    try {
+                        event.put("text", text);
+                    } catch (JSONException ignored) {
+                        return;
+                    }
+                    emit("token", event);
+                }
+            });
         if (reply.error != null) {
+            errors.record("cloud", reply.error);
             finishWithMessage(reply.error);
             return null;
         }
-        JSONObject event = new JSONObject();
-        try {
-            event.put("text", reply.text);
-        } catch (JSONException ignored) {
-            // Fall through: the answer still gets appended below.
-        }
-        emit("token", event);
         return reply.text;
     }
 
@@ -358,6 +609,38 @@ public final class AgentEngine {
         }
     }
 
+    /**
+     * A real question. The job stops here until the person answers, the same way
+     * an approval does — a question nobody sees is worse than not asking.
+     */
+    private String askUser(String question) {
+        if (question == null || question.trim().isEmpty()) {
+            return "";
+        }
+        String id = Long.toString(System.nanoTime());
+        pendingQuestionId = id;
+        answers.clear();
+
+        JSONObject event = new JSONObject();
+        try {
+            event.put("id", id);
+            event.put("question", question.trim());
+        } catch (JSONException ignored) {
+            return "";
+        }
+        emit("ask", event);
+
+        try {
+            String answer = answers.poll(10, TimeUnit.MINUTES);
+            pendingQuestionId = "";
+            return answer == null ? "" : answer.trim();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            pendingQuestionId = "";
+            return "";
+        }
+    }
+
     // --- prompt --------------------------------------------------------------
 
     private String systemPrompt(String modelPersona) {
@@ -373,7 +656,15 @@ public final class AgentEngine {
         out.append("{\"tool\":\"write_file\",\"args\":{\"path\":\"notes.md\",\"content\":\"...\"}}\n");
         out.append("{\"tool\":\"create_file\",\"args\":{\"path\":\"a.txt\"}}\n");
         out.append("{\"tool\":\"create_folder\",\"args\":{\"path\":\"notes\"}}\n");
-        out.append("{\"tool\":\"delete_file\",\"args\":{\"path\":\"old.txt\"}}\n\n");
+        out.append("{\"tool\":\"delete_file\",\"args\":{\"path\":\"old.txt\"}}\n");
+        out.append("{\"tool\":\"rename_file\",\"args\":{\"path\":\"a.txt\",\"newName\":\"b.txt\"}}\n");
+        out.append("{\"tool\":\"open_page\",\"args\":{\"url\":\"example.com/page\"}}\n");
+        out.append("{\"tool\":\"read_page\",\"args\":{}}\n");
+        out.append("{\"tool\":\"github_file\",\"args\":{\"repo\":\"owner/name\",\"path\":\"README.md\"}}\n");
+        out.append("{\"tool\":\"ask_user\",\"args\":{\"question\":\"Which folder did you mean?\"}}\n\n");
+        out.append("open_page then read_page is how you read the web; the browser has no window and \n");
+        out.append("forgets everything when the job ends. ask_user stops and waits for a real answer, so \n");
+        out.append("use it when a guess would be expensive.\n\n");
         out.append("Rules: read before you write. One tool per reply. Paths are relative to the granted ");
         out.append("folder. When the work is done, reply in plain sentences — no JSON — and say what you ");
         out.append("changed. Never claim you did something a tool result does not show.\n");

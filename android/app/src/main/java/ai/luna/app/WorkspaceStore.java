@@ -63,6 +63,10 @@ public final class WorkspaceStore {
         return intent;
     }
 
+    public static final String STATE_NONE = "none";
+    public static final String STATE_GRANTED = "granted";
+    public static final String STATE_REVOKED = "revoked";
+
     public String persistGrant(Uri uri) {
         int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
         try {
@@ -71,11 +75,124 @@ public final class WorkspaceStore {
             // Some providers hand out a one-shot grant; the session still works.
         }
         prefs.setWorkspaceUri(uri.toString());
+        prefs.rememberGrant(uri.toString(), rootName());
         return uri.toString();
+    }
+
+    /** Switch back to a folder that was granted before, without picking again. */
+    public boolean useGrant(String uri) {
+        if (uri == null || uri.isEmpty()) {
+            return false;
+        }
+        prefs.setWorkspaceUri(uri);
+        return rootState().equals(STATE_GRANTED);
     }
 
     public boolean hasRoot() {
         return !prefs.workspaceUri().isEmpty();
+    }
+
+    /**
+     * Told apart deliberately. A folder whose permission was withdrawn in system
+     * settings reads back as empty, which looks exactly like a folder with
+     * nothing in it — and that lie has cost people an afternoon before now.
+     */
+    public String rootState() {
+        String uri = prefs.workspaceUri();
+        if (uri.isEmpty()) {
+            return STATE_NONE;
+        }
+        boolean held = false;
+        try {
+            for (android.content.UriPermission permission
+                    : context.getContentResolver().getPersistedUriPermissions()) {
+                if (permission.getUri().toString().equals(uri) && permission.isReadPermission()) {
+                    held = true;
+                    break;
+                }
+            }
+        } catch (Exception error) {
+            held = false;
+        }
+        if (!held) {
+            return STATE_REVOKED;
+        }
+        DocumentFile root = root();
+        if (root == null || !root.exists() || !root.canRead()) {
+            return STATE_REVOKED;
+        }
+        return STATE_GRANTED;
+    }
+
+    /**
+     * Copy a file the user shared in, or picked from elsewhere on the phone,
+     * into the granted folder. Luna cannot read outside the folder, so a shared
+     * file has to land inside it before she can open it.
+     */
+    public String bringIn(Uri source, String suggestedName) throws IOException {
+        DocumentFile root = root();
+        if (root == null) {
+            throw new IOException("No folder has been granted yet.");
+        }
+        String name = suggestedName == null || suggestedName.isEmpty()
+            ? "shared-" + System.currentTimeMillis() : suggestedName;
+        if (isProtected(name)) {
+            throw new IOException("That file is the kind Luna is not allowed to hold.");
+        }
+        DocumentFile existing = root.findFile(name);
+        if (existing != null) {
+            int dot = name.lastIndexOf('.');
+            String stem = dot > 0 ? name.substring(0, dot) : name;
+            String extension = dot > 0 ? name.substring(dot) : "";
+            name = stem + "-" + System.currentTimeMillis() + extension;
+        }
+        DocumentFile target = root.createFile(mimeFor(name), name);
+        if (target == null) {
+            throw new IOException("Could not create " + name + " in the folder.");
+        }
+        InputStream input = null;
+        OutputStream output = null;
+        try {
+            input = context.getContentResolver().openInputStream(source);
+            output = context.getContentResolver().openOutputStream(target.getUri());
+            if (input == null || output == null) {
+                throw new IOException("Could not read what was shared.");
+            }
+            byte[] chunk = new byte[64 * 1024];
+            long copied = 0L;
+            int read;
+            while ((read = input.read(chunk)) > 0) {
+                copied += read;
+                if (copied > MAX_BYTES) {
+                    throw new IOException("That file is larger than the 2 MB limit.");
+                }
+                output.write(chunk, 0, read);
+            }
+            output.flush();
+        } finally {
+            closeQuietly(input);
+            closeQuietly(output);
+        }
+        return name;
+    }
+
+    /** The display name a content provider gives a shared file. */
+    public String nameOf(Uri uri) {
+        try {
+            DocumentFile file = DocumentFile.fromSingleUri(context, uri);
+            String name = file == null ? null : file.getName();
+            if (name != null && !name.isEmpty()) {
+                return name;
+            }
+        } catch (Exception ignored) {
+            // Fall through to the path guess below.
+        }
+        String path = uri.getLastPathSegment();
+        if (path == null) {
+            return "";
+        }
+        int slash = path.lastIndexOf('/');
+        return slash >= 0 ? path.substring(slash + 1) : path;
     }
 
     /** The folder name the user granted, for the context pill. */

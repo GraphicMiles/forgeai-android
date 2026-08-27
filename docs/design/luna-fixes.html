@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luna — the fixes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  /* ==========================================================================
+     LUNA — four screens · refinement pass
+     Same concept. Tighter rhythm, smoother display face, honest icons.
+     ========================================================================== */
+  :root{
+    --ink:#0b0b0c; --ink-2:#3d3d42; --ink-3:#76767e; --ink-4:#a3a3ab;
+    --line:#ededf0; --fill:#f4f4f6; --fill-2:#eaeaee; --paper:#fff;
+    --display:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  body{background:#e8e8ea;color:var(--ink);font-family:var(--font);
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1600px;margin:0 auto;padding:44px 24px 90px}
+
+  h1{font-family:var(--display);font-size:40px;font-weight:800;letter-spacing:-.035em;line-height:1.05}
+  .lede{font-size:16.5px;color:#4a4a50;max-width:680px;margin-top:12px;line-height:1.6}
+  h2{font-size:12px;font-weight:600;color:var(--ink-3);letter-spacing:.06em;margin:48px 0 16px}
+
+  /* ---------- changelog ---------- */
+  .changes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}
+  .ch{background:#fff;border-radius:20px;padding:17px 19px}
+  .ch h3{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.02em;margin-bottom:10px}
+  .ch p{font-size:13px;color:var(--ink-2);line-height:1.55;margin-bottom:6px;display:flex;gap:9px}
+  .ch p i{color:var(--ink);font-size:10.5px;margin-top:5px;flex:0 0 auto}
+  .ch code{font-family:var(--mono);font-size:11.5px;background:var(--fill);border-radius:6px;padding:1px 5px}
+
+  /* ---------- phones ---------- */
+  .strip{display:flex;gap:26px;overflow-x:auto;padding:4px 4px 16px;align-items:flex-start}
+  .slot{flex:0 0 322px}
+  .cap{margin-top:14px;font-size:13px;color:#4a4a50;line-height:1.55}
+  .cap b{display:block;font-family:var(--display);color:var(--ink);font-size:14.5px;font-weight:700;
+    letter-spacing:-.02em;margin-bottom:3px}
+
+  .phone{width:322px;height:698px;background:var(--paper);border-radius:44px;overflow:hidden;position:relative}
+  .scr{position:absolute;inset:0;display:flex;flex-direction:column}
+  .sbar{display:flex;justify-content:space-between;align-items:center;padding:15px 26px 2px;
+    font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+  .sbar .r i{margin-left:6px;font-size:11px}
+  .pad{padding:0 20px}
+  .grow{flex:1;min-height:0;overflow:hidden}
+
+  /* ---------- top ---------- */
+  .top{display:flex;align-items:center;gap:9px;padding:8px 20px 10px}
+  .top .title{flex:1;font-family:var(--display);font-size:27px;font-weight:800;letter-spacing:-.038em;
+    line-height:1.1}
+  .top .title.sm{font-size:16.5px;font-weight:700;letter-spacing:-.028em}
+  .ib{width:34px;height:34px;border-radius:50%;background:var(--fill);display:grid;place-items:center;
+    font-size:13px;color:var(--ink-2);flex:0 0 auto}
+
+  .ctx{display:inline-flex;align-items:center;gap:7px;background:var(--fill);border-radius:999px;
+    padding:6px 13px;font-size:12px;color:var(--ink-2);font-weight:500}
+  .ctx i{font-size:10.5px;color:var(--ink-4)}
+  .ctx .sep{width:3px;height:3px;border-radius:50%;background:var(--ink-4)}
+
+  /* ---------- labels & rhythm ---------- */
+  .lbl{font-size:12.5px;font-weight:600;color:var(--ink-3);padding:14px 20px 7px;letter-spacing:-.005em}
+  .lbl.tight{padding-top:10px}
+
+  .group{background:var(--fill);border-radius:22px;padding:2px 14px;margin:0 20px}
+  .group .row{border-bottom:1px solid rgba(0,0,0,.05)}
+  .group .row:last-child{border-bottom:0}
+
+  .row{display:flex;align-items:center;gap:12px;padding:10px 0}
+  .row .tile{width:34px;height:34px;border-radius:12px;background:var(--paper);display:grid;
+    place-items:center;font-size:13.5px;color:var(--ink-2);flex:0 0 auto}
+  .group.plain .row .tile{background:var(--fill)}
+  .row .tx{flex:1;min-width:0}
+  .row .tx b{display:block;font-size:14.5px;font-weight:600;letter-spacing:-.018em;line-height:1.3}
+  .row .tx span{display:block;font-size:12px;color:var(--ink-3);line-height:1.35;margin-top:1px}
+  .row .end{font-size:12.5px;color:var(--ink-3);white-space:nowrap;display:flex;align-items:center;gap:8px}
+  .row .end i{font-size:12px;color:var(--ink-4)}
+  .row.off .tx b{color:var(--ink-4)}
+  .row.off .tile{color:var(--ink-4)}
+
+  .list{margin:0 20px}
+  .list .row{border-bottom:1px solid var(--line)}
+  .list .row:last-child{border-bottom:0}
+  .list .row .tile{background:var(--fill)}
+
+  /* ---------- buttons ---------- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--ink);
+    color:#fff;border-radius:999px;padding:10px 18px;font-size:13.5px;font-weight:600;letter-spacing:-.015em}
+  .btn.soft{background:var(--fill);color:var(--ink)}
+  .btn.sm{padding:6px 14px;font-size:12.5px}
+
+  /* ---------- composer sits close to the nav ---------- */
+  .comp{display:flex;align-items:center;gap:9px;margin:8px 20px 6px;background:var(--fill);
+    border-radius:999px;padding:5px 5px 5px 15px}
+  .comp .ph{flex:1;font-size:13.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden}
+  .comp .att{color:var(--ink-3);font-size:13.5px}
+  .comp .go{width:34px;height:34px;border-radius:50%;background:var(--ink);color:#fff;display:grid;
+    place-items:center;font-size:12.5px;flex:0 0 auto}
+
+  .tabs{display:flex;padding:0 12px 10px;gap:4px}
+  .tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0;
+    border-radius:15px;color:var(--ink-4);font-size:10.5px;font-weight:500;text-decoration:none}
+  .tabs a i{font-size:16.5px}
+  .tabs a.on{color:var(--ink);font-weight:600}
+
+  /* ---------- chat ---------- */
+  .thread{padding:2px 20px;display:flex;flex-direction:column;gap:11px}
+  .you{align-self:flex-end;max-width:84%;background:var(--ink);color:#fff;border-radius:20px 20px 7px 20px;
+    padding:10px 14px;font-size:14px;line-height:1.4;letter-spacing:-.01em}
+  .luna{display:flex;gap:10px;align-items:flex-start}
+  .luna .tx{font-size:14.5px;line-height:1.5;letter-spacing:-.012em}
+  .luna .tx em{font-style:normal;font-family:var(--mono);font-size:12.5px;background:var(--fill);
+    border-radius:6px;padding:1px 5px}
+  .steps{background:var(--fill);border-radius:20px;padding:3px 15px;margin:10px 20px 0 52px}
+  .step{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+  .step:last-child{border-bottom:0}
+  .step .dot{width:19px;height:19px;border-radius:50%;background:var(--ink);color:#fff;display:grid;
+    place-items:center;font-size:8.5px;flex:0 0 auto}
+  .step .dot.now{background:var(--paper);color:var(--ink-3)}
+  .step .nm{flex:1;font-size:13px;font-weight:550;letter-spacing:-.012em}
+  .step .rs{font-size:12px;color:var(--ink-3)}
+  .step.pending .nm{color:var(--ink-3);font-weight:500}
+
+  .approve{background:var(--ink);border-radius:24px;padding:16px 16px 13px;margin:12px 20px 0}
+  .approve .k{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#9a9aa2}
+  .approve .k i{font-size:11px}
+  .approve .h{font-family:var(--display);font-size:19px;font-weight:700;color:#fff;letter-spacing:-.03em;
+    margin-top:5px;line-height:1.22}
+  .approve .d{font-size:12.5px;color:#8f8f98;margin-top:4px;line-height:1.4}
+  .approve .b{display:flex;gap:8px;margin-top:13px}
+  .approve .b span{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;
+    padding:10px;font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+  .approve .y{background:#fff;color:var(--ink)}
+  .approve .n{background:#232327;color:#d9d9de}
+
+  .running{display:flex;align-items:center;gap:8px;margin:10px 20px 0;background:var(--fill);
+    border-radius:999px;padding:8px 15px;font-size:12.5px;color:var(--ink-2);font-weight:500}
+  .running .st{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--ink);font-weight:600}
+
+  /* ---------- segmented ---------- */
+  .seg{display:flex;background:var(--fill);border-radius:999px;padding:3px;margin:0 20px}
+  .seg span{flex:1;text-align:center;font-size:12.5px;padding:7px;border-radius:999px;color:var(--ink-3);
+    font-weight:500;letter-spacing:-.012em}
+  .seg span.on{background:var(--paper);color:var(--ink);font-weight:600}
+
+  /* ---------- hero ---------- */
+  .hero{background:var(--ink);border-radius:24px;padding:16px;margin:0 20px}
+  .hero .r1{display:flex;align-items:center;gap:12px}
+  .hero .r1 .nm{flex:1}
+  .hero .r1 .nm b{display:block;font-family:var(--display);color:#fff;font-size:17px;font-weight:700;
+    letter-spacing:-.03em}
+  .hero .r1 .nm span{font-size:12.5px;color:#9a9aa2}
+  .hero .pill{background:#fff;color:var(--ink);border-radius:999px;padding:5px 11px;font-size:11.5px;
+    font-weight:700;letter-spacing:-.01em}
+  .hero .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:13px}
+  .hero .cell{background:#1a1a1e;border-radius:15px;padding:10px 11px}
+  .hero .cell b{display:block;font-family:var(--display);font-size:15px;font-weight:700;color:#fff;
+    letter-spacing:-.03em}
+  .hero .cell span{font-size:11px;color:#8f8f98}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 20px}
+  .stat{background:var(--fill);border-radius:18px;padding:12px 15px;display:flex;align-items:center;gap:11px}
+  .stat i{font-size:14px;color:var(--ink-3)}
+  .stat b{display:block;font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.035em;
+    line-height:1.15}
+  .stat span{font-size:11.5px;color:var(--ink-3)}
+
+  /* ---------- misc ---------- */
+  .bar{height:5px;border-radius:999px;background:var(--fill-2);margin-top:7px;overflow:hidden}
+  .bar b{display:block;height:5px;border-radius:999px;background:var(--ink)}
+  .chip{display:inline-block;font-size:12px;border-radius:999px;padding:5px 12px;background:var(--fill);
+    color:var(--ink-2);margin:0 5px 6px 0;font-weight:500;letter-spacing:-.01em}
+  .chip.k{background:var(--ink);color:#fff;font-weight:550}
+  .sw{width:44px;height:26px;border-radius:999px;background:var(--ink);position:relative;flex:0 0 auto}
+  .sw b{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .sw.off{background:var(--fill-2)}
+  .sw.off b{left:3px;right:auto;background:var(--paper)}
+  .note{display:flex;gap:10px;background:var(--fill);border-radius:18px;padding:12px 14px;margin:9px 20px 0;
+    font-size:12.5px;color:var(--ink-2);line-height:1.45}
+  .note i{font-size:12px;color:var(--ink);margin-top:2px;flex:0 0 auto}
+  .note b{font-weight:600;color:var(--ink)}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  .crumb{display:flex;align-items:center;gap:9px;margin:0 20px;background:var(--fill);border-radius:999px;
+    padding:7px 13px;font-size:12.5px;color:var(--ink-2)}
+  .crumb .n{margin-left:auto;color:var(--ink-3);font-size:12px}
+
+  .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .rule{background:#fff;border-radius:20px;padding:18px 20px}
+  .rule h3{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.022em;margin-bottom:9px}
+  .rule p{font-size:13px;color:var(--ink-2);line-height:1.55;margin-bottom:7px}
+  .rule p i{color:var(--ink);margin-right:7px;font-size:11px}
+  @media(max-width:1080px){.changes,.rules{grid-template-columns:1fr 1fr}}
+  @media(max-width:700px){.changes,.rules{grid-template-columns:1fr}}
+</style><style>
+  /* ==========================================================================
+     Additions for the fix pass. Same language: soft radii, no shadows,
+     one filled-black surface per screen, colour only on the mascot.
+     ========================================================================== */
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--paper);
+    border-radius:28px 28px 0 0;padding:9px 0 14px;z-index:3}
+  .scrim{position:absolute;inset:0;background:rgba(11,11,12,.32);z-index:2}
+  .grab{width:38px;height:4px;border-radius:999px;background:var(--fill-2);margin:0 auto 8px}
+  .shead{display:flex;align-items:center;gap:9px;padding:0 20px 10px}
+  .shead b{flex:1;font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.03em}
+
+  .field{margin:0 20px 10px}
+  .field .fl{font-size:12.5px;font-weight:600;color:var(--ink-3);margin-bottom:6px}
+  .field .fi{background:var(--fill);border-radius:15px;padding:11px 14px;font-size:13.5px;color:var(--ink)}
+  .field .fi.ph{color:var(--ink-4)}
+  .field .fi.lock{display:flex;align-items:center;gap:9px;color:var(--ink-2)}
+  .field .fi.lock i{font-size:11px;color:var(--ink-4);margin-left:auto}
+  .field .fh{font-size:11.5px;color:var(--ink-3);margin-top:6px;line-height:1.45}
+
+  /* A button is as wide as what it says, unless it is the only thing to do. */
+  .act{display:flex;gap:8px;margin:2px 20px 0}
+  .act.end{justify-content:flex-end}
+
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:3px 9px;
+    background:var(--fill-2);color:var(--ink-2);text-transform:uppercase}
+  .badge.on{background:var(--ink);color:#fff}
+
+  .dl{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .dl .ctl{width:28px;height:28px;border-radius:50%;background:var(--paper);display:grid;place-items:center;
+    font-size:10.5px;color:var(--ink);flex:0 0 auto}
+  .dl .ctl.k{background:var(--ink);color:#fff}
+  .dl .meta{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+
+  .stats.three{grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .stats.three .stat{display:block;padding:11px 12px}
+  .stats.three .stat span{display:block;font-size:11px;margin-bottom:2px}
+  .stats.three .stat b{font-size:14px;letter-spacing:-.02em;white-space:nowrap}
+
+  .mark{width:32px;height:32px;flex:0 0 auto}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:24px}
+  .cmp .side{background:#fff;border-radius:20px;padding:18px 20px}
+  .cmp .side h3{font-family:var(--display);font-size:14.5px;font-weight:700;letter-spacing:-.02em;
+    margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .cmp .side h3 i{font-size:11px}
+  .cmp .demo{background:var(--fill);border-radius:18px;padding:14px}
+  .cmp .wide{display:block;text-align:center}
+  .cmp .side p{font-size:12.5px;color:var(--ink-2);margin-top:11px;line-height:1.5}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>Luna — the fixes</h1>
+<p class="lede">Six things you flagged, drawn. Same concept, same rhythm, no new colour: downloads you can
+pause and come back to, a cloud tab that knows who it is talking to, a paperclip that does something, a
+Save button the width of the word Save, and Models renamed to Model Zoo.</p>
+
+<div class="changes">
+  <div class="ch">
+    <h3>Downloads survive</h3>
+    <p><i class="fa-solid fa-pause"></i><span>Pause and resume on every download row, and inside the sheet.</span></p>
+    <p><i class="fa-solid fa-signal"></i><span>Bad network parks the download at <b>Waiting for signal</b> instead of failing it.</span></p>
+    <p><i class="fa-solid fa-rotate-right"></i><span>Closing Luna does not lose progress: the <code>.part</code> file and byte offset are on disk, and it picks up with a <code>Range</code> request.</span></p>
+  </div>
+  <div class="ch">
+    <h3>Model Zoo</h3>
+    <p><i class="fa-solid fa-cube"></i><span>The tab and the title now read <b>Model Zoo</b>.</span></p>
+    <p><i class="fa-solid fa-file-import"></i><span><b>Import a .gguf</b> row at the top of On device, for a model already on the phone.</span></p>
+    <p><i class="fa-solid fa-memory"></i><span>Stat tiles stop clipping: <code>880 MB / 3.5 GB</code>.</span></p>
+  </div>
+  <div class="ch">
+    <h3>Cloud, properly</h3>
+    <p><i class="fa-solid fa-list-ul"></i><span>Pick the provider first; the address fills itself in and locks.</span></p>
+    <p><i class="fa-solid fa-arrows-rotate"></i><span><b>Check models</b> asks the provider what it actually serves, so no stale ids.</span></p>
+    <p><i class="fa-solid fa-clock-rotate-left"></i><span>The list says when it was last refreshed, and flags a saved model that has disappeared.</span></p>
+  </div>
+</div>
+
+<h2>THE SCREENS</h2>
+
+<div class="strip">
+
+<!-- ==================== 1 · MODEL ZOO / ON DEVICE ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+
+  <div class="top"><span class="title">Model Zoo</span></div>
+
+  <div class="seg"><span class="on">On device</span><span>My computer</span><span>Cloud</span></div>
+
+  <div class="grow">
+    <div class="lbl">Running now</div>
+    <div class="hero">
+      <div class="r1">
+        <svg width="36" height="36" viewBox="0 0 100 100" style="flex:0 0 auto">
+          <path d="M52 5c25 0 43 20 43 45 0 27-20 45-46 45C24 95 5 74 5 49 5 23 26 5 52 5z" fill="#7c5cff"/>
+          <rect x="36" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(-11 40 49)"/>
+          <rect x="56" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(11 60 49)"/></svg>
+        <span class="nm"><b>Qwen2.5 0.5B</b><span>On this device · 469 MB</span></span>
+        <span class="pill">Active</span>
+      </div>
+      <div class="grid">
+        <div class="cell"><b>469 MB</b><span>Size</span></div>
+        <div class="cell"><b>0.5B</b><span>Params</span></div>
+        <div class="cell"><b>11.4 t/s</b><span>Speed</span></div>
+      </div>
+    </div>
+
+    <div class="lbl">Your own files</div>
+    <div class="group">
+      <div class="row">
+        <span class="tile"><i class="fa-solid fa-file-import"></i></span>
+        <span class="tx"><b>Import a .gguf</b><span>From this phone, an SD card or Drive</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span>
+      </div>
+      <div class="row">
+        <span class="tile"><i class="fa-solid fa-cube"></i></span>
+        <span class="tx"><b>llama-3.2-3b-q4.gguf</b><span>Imported · 1.9 GB · not verified</span></span>
+        <span class="end"><span class="btn soft sm">Use</span></span>
+      </div>
+    </div>
+
+    <div class="lbl">Downloading</div>
+    <div class="group">
+      <div class="row" style="align-items:flex-start">
+        <span class="tile" style="margin-top:2px"><i class="fa-solid fa-down-long"></i></span>
+        <span class="tx">
+          <b>Qwen2.5-Coder 1.5B</b>
+          <div class="bar" style="margin-top:8px"><b style="width:46%"></b></div>
+          <div class="dl">
+            <span class="ctl k"><i class="fa-solid fa-play"></i></span>
+            <span class="ctl"><i class="fa-solid fa-xmark"></i></span>
+            <span class="meta">Paused · 514 MB of 1.12 GB · resumes where it stopped</span>
+          </div>
+        </span>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <span class="tile" style="margin-top:2px"><i class="fa-solid fa-down-long"></i></span>
+        <span class="tx">
+          <b>SmolLM2 360M</b>
+          <div class="bar" style="margin-top:8px"><b style="width:78%"></b></div>
+          <div class="dl">
+            <span class="ctl k"><i class="fa-solid fa-pause"></i></span>
+            <span class="ctl"><i class="fa-solid fa-xmark"></i></span>
+            <span class="meta">175 MB of 224 MB · 1.2 MB/s</span>
+          </div>
+        </span>
+      </div>
+    </div>
+
+    <div class="stats three" style="margin-top:14px">
+      <div class="stat"><span>Memory free</span><b>880 MB / 3.5 GB</b></div>
+      <div class="stat"><span>Storage free</span><b>57.8 GB</b></div>
+      <div class="stat"><span>Threads</span><b>6</b></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a><i class="fa-regular fa-comment"></i>Chat</a>
+    <a><i class="fa-regular fa-folder"></i>Files</a>
+    <a class="on"><i class="fa-solid fa-cube"></i>Model Zoo</a>
+    <a><i class="fa-solid fa-gear"></i>Settings</a>
+  </div>
+</div></div>
+<div class="cap"><b>Model Zoo · On device</b>Renamed. Import sits above the catalogue, downloads carry their own
+controls, and the memory tile no longer clips.</div></div>
+
+<!-- ==================== 2 · DOWNLOAD SHEET ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+  <div class="top"><span class="title">Model Zoo</span></div>
+  <div class="seg"><span class="on">On device</span><span>My computer</span><span>Cloud</span></div>
+  <div class="grow"></div>
+  <div class="scrim"></div>
+
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><b>Qwen2.5-Coder 1.5B</b><span class="ib"><i class="fa-solid fa-xmark"></i></span></div>
+
+    <div style="margin:0 20px">
+      <div class="bar"><b style="width:46%"></b></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px">
+        <b style="font-family:var(--display);font-size:19px;letter-spacing:-.03em">46%</b>
+        <span style="font-size:12.5px;color:var(--ink-3)">514 MB of 1.12 GB</span>
+        <span class="badge" style="margin-left:auto">Paused</span>
+      </div>
+    </div>
+
+    <div class="act" style="margin-top:14px">
+      <span class="btn"><i class="fa-solid fa-play"></i>Resume</span>
+      <span class="btn soft"><i class="fa-solid fa-xmark"></i>Cancel</span>
+    </div>
+
+    <div class="lbl">What happens next</div>
+    <div class="group">
+      <div class="row">
+        <span class="tile"><i class="fa-solid fa-power-off"></i></span>
+        <span class="tx"><b>Closing Luna is safe</b><span>The part file stays; it restarts at byte 539,024,384</span></span>
+      </div>
+      <div class="row">
+        <span class="tile"><i class="fa-solid fa-signal"></i></span>
+        <span class="tx"><b>Bad signal waits</b><span>It parks instead of failing, and retries when you are back</span></span>
+      </div>
+      <div class="row">
+        <span class="tile"><i class="fa-solid fa-shield-halved"></i></span>
+        <span class="tx"><b>Checked on arrival</b><span>SHA-256 must match or the file is deleted</span></span>
+      </div>
+    </div>
+  </div>
+</div></div>
+<div class="cap"><b>One download, opened</b>Resume is the filled button because it is the thing you came for.
+The sheet says plainly what survives a close and a dead network.</div></div>
+
+<!-- ==================== 3 · CLOUD, PROVIDER PICKER ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+  <div class="top"><span class="title">Model Zoo</span></div>
+  <div class="seg"><span>On device</span><span>My computer</span><span class="on">Cloud</span></div>
+
+  <div class="grow">
+    <div class="lbl">Connected</div>
+    <div class="group">
+      <div class="row">
+        <span class="tile"><i class="fa-solid fa-cloud"></i></span>
+        <span class="tx"><b>Work key · OpenAI</b><span>gpt-4o-mini · checked 2 days ago</span></span>
+        <span class="end"><span class="btn sm">Use</span></span>
+      </div>
+      <div class="row off">
+        <span class="tile"><i class="fa-solid fa-triangle-exclamation"></i></span>
+        <span class="tx"><b>Old key · Groq</b><span>mixtral-8x7b no longer offered — pick another</span></span>
+        <span class="end"><span class="btn soft sm">Fix</span></span>
+      </div>
+    </div>
+
+    <div class="lbl">Add a provider</div>
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-circle-nodes"></i></span>
+        <span class="tx"><b>OpenAI</b><span>api.openai.com</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-a"></i></span>
+        <span class="tx"><b>Anthropic</b><span>api.anthropic.com</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-bolt"></i></span>
+        <span class="tx"><b>Groq</b><span>api.groq.com</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-shuffle"></i></span>
+        <span class="tx"><b>OpenRouter</b><span>openrouter.ai</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-sliders"></i></span>
+        <span class="tx"><b>Other</b><span>Any OpenAI-compatible address</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+    </div>
+
+    <div class="note"><i class="fa-solid fa-circle-exclamation"></i><span>A cloud model sends your prompt and
+      the file contents it reads to that provider. On-device models never do.</span></div>
+  </div>
+
+  <div class="tabs">
+    <a><i class="fa-regular fa-comment"></i>Chat</a>
+    <a><i class="fa-regular fa-folder"></i>Files</a>
+    <a class="on"><i class="fa-solid fa-cube"></i>Model Zoo</a>
+    <a><i class="fa-solid fa-gear"></i>Settings</a>
+  </div>
+</div></div>
+<div class="cap"><b>Cloud · choose who</b>Provider before credentials. A saved model that the provider has
+retired is greyed and offers Fix, rather than failing mid-job.</div></div>
+
+<!-- ==================== 4 · CLOUD KEY SHEET ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+  <div class="top"><span class="title">Model Zoo</span></div>
+  <div class="seg"><span>On device</span><span>My computer</span><span class="on">Cloud</span></div>
+  <div class="grow"></div>
+  <div class="scrim"></div>
+
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><b>Groq</b><span class="ib"><i class="fa-solid fa-xmark"></i></span></div>
+
+    <div class="field">
+      <div class="fl">Address</div>
+      <div class="fi lock mono">https://api.groq.com/openai/v1<i class="fa-solid fa-lock"></i></div>
+      <div class="fh">Set by the provider. Choose Other if you host your own.</div>
+    </div>
+
+    <div class="field">
+      <div class="fl">Key</div>
+      <div class="fi mono">gsk_••••••••••••••••••••3f8a</div>
+      <div class="fh">Kept in the device keystore. It never appears in a file.</div>
+    </div>
+
+    <div class="field">
+      <div class="fl">Model</div>
+      <div class="fi ph">Not chosen yet</div>
+    </div>
+
+    <div class="act">
+      <span class="btn"><i class="fa-solid fa-arrows-rotate"></i>Check models</span>
+      <span class="btn soft">Save</span>
+    </div>
+  </div>
+</div></div>
+<div class="cap"><b>Cloud · the key</b>Address is filled and locked, so there is nothing to mistype. The model
+field stays empty until the provider has been asked.</div></div>
+
+<!-- ==================== 5 · LIVE MODEL LIST ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+  <div class="top"><span class="title">Model Zoo</span></div>
+  <div class="seg"><span>On device</span><span>My computer</span><span class="on">Cloud</span></div>
+  <div class="grow"></div>
+  <div class="scrim"></div>
+
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><b>Groq offers 9</b><span class="ib"><i class="fa-solid fa-arrows-rotate"></i></span><span class="ib"><i class="fa-solid fa-xmark"></i></span></div>
+
+    <div style="padding:0 20px 8px;font-size:12px;color:var(--ink-3)">
+      <i class="fa-solid fa-clock-rotate-left" style="font-size:11px;margin-right:7px"></i>Refreshed just now
+    </div>
+
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-microchip"></i></span>
+        <span class="tx"><b>llama-3.3-70b-versatile</b><span>128k context</span></span>
+        <span class="end"><span class="badge on">Chosen</span></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-microchip"></i></span>
+        <span class="tx"><b>llama-3.1-8b-instant</b><span>128k context</span></span>
+        <span class="end"><span class="btn soft sm">Pick</span></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-microchip"></i></span>
+        <span class="tx"><b>qwen-2.5-32b</b><span>32k context</span></span>
+        <span class="end"><span class="btn soft sm">Pick</span></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-microchip"></i></span>
+        <span class="tx"><b>deepseek-r1-distill-70b</b><span>64k context</span></span>
+        <span class="end"><span class="btn soft sm">Pick</span></span></div>
+    </div>
+
+    <div class="note"><i class="fa-solid fa-list-ul"></i><span>This is what the provider says it serves today.
+      Luna re-checks when you open the key, and marks a saved model that stops appearing.</span></div>
+
+    <div class="act end" style="margin-top:12px"><span class="btn">Save</span></div>
+  </div>
+</div></div>
+<div class="cap"><b>Cloud · what is actually there</b>The stale-URL fix. You pick from the provider's own list
+instead of typing an id and hoping.</div></div>
+
+<!-- ==================== 6 · CHAT, ATTACH ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+
+  <div class="top">
+    <svg width="32" height="32" viewBox="0 0 100 100" style="flex:0 0 auto">
+      <path d="M52 5c25 0 43 20 43 45 0 27-20 45-46 45C24 95 5 74 5 49 5 23 26 5 52 5z" fill="#7c5cff"/>
+      <rect x="36" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(-11 40 49)"/>
+      <rect x="56" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(11 60 49)"/></svg>
+    <span class="title sm">New chat</span>
+    <span class="ib"><i class="fa-solid fa-pen-to-square"></i></span>
+  </div>
+
+  <div class="pad" style="padding-bottom:10px">
+    <span class="ctx"><i class="fa-solid fa-microchip"></i>Qwen2.5 0.5B<span class="sep"></span>
+      <i class="fa-solid fa-folder-open"></i>Toddler</span>
+  </div>
+
+  <div class="grow"></div>
+  <div class="scrim"></div>
+
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><b>Attach</b><span class="ib"><i class="fa-solid fa-xmark"></i></span></div>
+
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-folder-open"></i></span>
+        <span class="tx"><b>A file in the folder</b><span>Browse Toddler and hand Luna the path</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-mobile-screen"></i></span>
+        <span class="tx"><b>A file from the phone</b><span>Copied into the folder first, so she can read it</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-image"></i></span>
+        <span class="tx"><b>A photo</b><span>Attached as a path — most models cannot see images</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="row"><span class="tile"><i class="fa-solid fa-folder-tree"></i></span>
+        <span class="tx"><b>The whole folder</b><span>Luna lists it and decides what to open</span></span>
+        <span class="end"><i class="fa-solid fa-chevron-right"></i></span></div>
+    </div>
+
+    <div class="lbl">Attached</div>
+    <div class="group">
+      <div class="row"><span class="tile"><i class="fa-solid fa-file-lines"></i></span>
+        <span class="tx"><b>routine.md</b><span>Toddler/routine.md · 3 KB</span></span>
+        <span class="end"><i class="fa-solid fa-xmark"></i></span></div>
+    </div>
+
+    <div class="comp" style="margin-top:14px">
+      <span class="att"><i class="fa-solid fa-paperclip"></i></span>
+      <span class="ph">Tell Luna what to do…</span>
+      <span class="go"><i class="fa-solid fa-arrow-up"></i></span>
+    </div>
+  </div>
+</div></div>
+<div class="cap"><b>Chat · the paperclip works</b>Four honest sources, and an attached file shows as a row you can
+remove. Nothing pretends a text model can see a photo.</div></div>
+
+<!-- ==================== 7 · GITHUB TOKEN SHEET ==================== -->
+<div class="slot"><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span class="r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+  <div class="top"><span class="title">Settings</span></div>
+  <div class="seg"><span>Agent</span><span class="on">Connections</span><span>Data</span></div>
+  <div class="grow"></div>
+  <div class="scrim"></div>
+
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><b>GitHub token</b><span class="ib"><i class="fa-solid fa-xmark"></i></span></div>
+
+    <div class="field">
+      <div class="fl">Token</div>
+      <div class="fi mono ph">ghp_…</div>
+      <div class="fh">Stored encrypted by the device keystore. It never appears in a file.</div>
+    </div>
+
+    <div class="act end">
+      <span class="btn soft">Cancel</span>
+      <span class="btn"><i class="fa-solid fa-check"></i>Save</span>
+    </div>
+  </div>
+</div></div>
+<div class="cap"><b>Settings · a button the size of its word</b>Save is as wide as Save. Full-width is reserved
+for the one action a screen exists for, like Resume on a paused download.</div></div>
+
+</div>
+
+<h2>SAVE BUTTON — BEFORE AND AFTER</h2>
+<div class="cmp">
+  <div class="side">
+    <h3><i class="fa-solid fa-xmark"></i>Was</h3>
+    <div class="demo"><span class="btn wide"><i class="fa-solid fa-check"></i>Save</span></div>
+    <p>Stretched to the sheet. It reads as the only thing on the screen and makes a two-word confirmation feel
+      like a commitment.</p>
+  </div>
+  <div class="side">
+    <h3><i class="fa-solid fa-check"></i>Is</h3>
+    <div class="demo" style="display:flex;justify-content:flex-end;gap:8px">
+      <span class="btn soft">Cancel</span><span class="btn"><i class="fa-solid fa-check"></i>Save</span></div>
+    <p>Sized to its label and pushed right, with the way out beside it. Full-width stays for Resume, Allow and
+      Choose folder — the actions a screen exists for.</p>
+  </div>
+</div>
+
+<h2>WHAT THIS COMMITS TO IN CODE</h2>
+<div class="rules">
+  <div class="rule">
+    <h3>Downloads</h3>
+    <p><i class="fa-solid fa-database"></i>Progress lives on disk, not in memory: <code>.part</code> plus the
+      byte offset, so a kill or a reboot loses nothing.</p>
+    <p><i class="fa-solid fa-play"></i>Pause is a real state, not a cancel. Resume sends
+      <code>Range: bytes=N-</code>.</p>
+    <p><i class="fa-solid fa-tower-broadcast"></i>A foreground service keeps it going while you use other apps,
+      with a notification you can pause from.</p>
+  </div>
+  <div class="rule">
+    <h3>Imported models</h3>
+    <p><i class="fa-solid fa-file-import"></i>SAF pick limited to <code>.gguf</code>, copied into the models
+      directory so it survives a permission change.</p>
+    <p><i class="fa-solid fa-circle-info"></i>Header read for the real parameter count and context length.</p>
+    <p><i class="fa-solid fa-shield-halved"></i>No hash to check against, so the row says
+      <b>not verified</b> rather than implying it was.</p>
+  </div>
+  <div class="rule">
+    <h3>Cloud</h3>
+    <p><i class="fa-solid fa-list-ul"></i>Provider first, address locked, key second, model last.</p>
+    <p><i class="fa-solid fa-arrows-rotate"></i><code>GET /v1/models</code> on demand, cached with the time it
+      was fetched.</p>
+    <p><i class="fa-solid fa-triangle-exclamation"></i>A saved model missing from the list is flagged in the
+      row, before a job depends on it.</p>
+  </div>
+</div>
+
+</div></body>
+</html>

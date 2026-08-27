@@ -35,8 +35,15 @@ class _ChatScreenState extends State<ChatScreen> {
     'create_folder': 'Created a folder',
     'delete_file': 'Deleted a file',
     'rename_file': 'Renamed a file',
+    'open_page': 'Opened a page',
+    'read_page': 'Read the page',
+    'github_file': 'Fetched from GitHub',
+    'ask_user': 'Asked you',
     'load_model': 'Loaded the model',
   };
+
+  final TextEditingController _answer = TextEditingController();
+  String _attached = '';
 
   @override
   void initState() {
@@ -49,6 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _clock?.cancel();
+    _answer.dispose();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -63,11 +71,152 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _send() async {
-    final String text = _input.text.trim();
+    String text = _input.text.trim();
     if (text.isEmpty || widget.core.running) return;
+    if (_attached.isNotEmpty) {
+      // An attachment is a path, not an upload: it goes in as a plain instruction.
+      text = '$text\n\n(The file $_attached is in the folder. Read it first.)';
+      setState(() => _attached = '');
+    }
     _input.clear();
     await widget.core.send(text);
     _pinToBottom();
+  }
+
+  /// The paperclip does real work: pick a file in the folder, or bring one in.
+  Future<void> _attach() async {
+    final LunaCore core = widget.core;
+    if (!core.workspaceGranted) {
+      await core.pickFolder();
+      return;
+    }
+    final List<Map<String, dynamic>> entries = await core.listFolder('');
+    if (!mounted) return;
+    await showLunaSheet<void>(
+      context: context,
+      title: 'Attach',
+      builder: (BuildContext sheetContext) {
+        return Column(
+          children: <Widget>[
+            Group(children: <Widget>[
+              for (final Map<String, dynamic> entry in entries)
+                if (entry['type'] != 'folder' && entry['locked'] != true)
+                  LunaRow(
+                    icon: FontAwesomeIcons.fileLines,
+                    title: '${entry['name']}',
+                    subtitle: formatBytes(entry['size'] as num?),
+                    onTap: () {
+                      setState(() => _attached = '${entry['name']}');
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+              LunaRow(
+                icon: FontAwesomeIcons.mobileScreen,
+                title: 'A file from the phone',
+                subtitle: 'Copied into the folder first, so she can read it',
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  final String? name = await core.bringInFile();
+                  if (name != null && name.isNotEmpty && mounted) {
+                    setState(() => _attached = name);
+                  }
+                },
+              ),
+            ]),
+            const Note(icon: FontAwesomeIcons.circleInfo, children: <InlineSpan>[
+              TextSpan(
+                  text: 'An attachment is a path, not an upload. Luna opens it with read_file '
+                      'when she needs it.'),
+            ]),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openChats() async {
+    final LunaCore core = widget.core;
+    await core.loadChats();
+    if (!mounted) return;
+    final TextEditingController search = TextEditingController();
+    List<Map<String, dynamic>> shown = core.chats;
+    await showLunaSheet<void>(
+      context: context,
+      title: 'Chats',
+      builder: (BuildContext sheetContext) {
+        return StatefulBuilder(
+          builder: (BuildContext inner, StateSetter refresh) {
+            return Column(
+              children: <Widget>[
+                LunaField(
+                  label: 'Search',
+                  controller: search,
+                  hint: 'A word from an old job',
+                  onChanged: (String value) async {
+                    final List<Map<String, dynamic>> found = await core.searchChats(value);
+                    refresh(() => shown = found);
+                  },
+                ),
+                Group(children: <Widget>[
+                  for (final Map<String, dynamic> chat in shown)
+                    LunaRow(
+                      icon: chat['active'] == true
+                          ? FontAwesomeIcons.solidComment
+                          : FontAwesomeIcons.comment,
+                      title: '${chat['title']}',
+                      subtitle: formatClock(chat['at'] as int?),
+                      trailing: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () async {
+                          await core.deleteChat('${chat['id']}');
+                          refresh(() => shown = core.chats);
+                        },
+                        child: const Glyph(FontAwesomeIcons.trash, size: 12),
+                      ),
+                      onTap: () async {
+                        await core.switchChat('${chat['id']}');
+                        if (inner.mounted) Navigator.of(sheetContext).pop();
+                      },
+                    ),
+                ]),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Row(children: <Widget>[
+                    PillButton(
+                      label: 'New chat',
+                      icon: FontAwesomeIcons.penToSquare,
+                      small: true,
+                      onTap: () async {
+                        await core.startNewChat();
+                        if (inner.mounted) Navigator.of(sheetContext).pop();
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    PillButton(
+                      label: 'Export this one',
+                      icon: FontAwesomeIcons.fileArrowDown,
+                      small: true,
+                      soft: true,
+                      onTap: () async {
+                        final String markdown = await core.exportChat();
+                        final String name = 'luna-job-${DateTime.now().millisecondsSinceEpoch}.md';
+                        await core.writeFile(name, markdown);
+                        if (inner.mounted) Navigator.of(sheetContext).pop();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Saved $name in the folder')),
+                          );
+                        }
+                      },
+                    ),
+                  ]),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -83,9 +232,14 @@ class _ChatScreenState extends State<ChatScreen> {
           leading: const Mark(size: 32),
           actions: <Widget>[
             IconButtonSoft(
+              icon: FontAwesomeIcons.clockRotateLeft,
+              label: 'Chats',
+              onTap: core.running ? null : _openChats,
+            ),
+            IconButtonSoft(
               icon: FontAwesomeIcons.penToSquare,
               label: 'New chat',
-              onTap: core.running ? null : () => core.newChat(),
+              onTap: core.running ? null : () => core.startNewChat(),
             ),
           ],
         ),
@@ -116,6 +270,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ..._thread(core),
               if (core.steps.isNotEmpty) _steps(core),
               if (core.pendingApproval != null) _approval(core),
+              if (core.pendingQuestion != null) _question(core),
               if (core.running) _running(core),
             ],
           ),
@@ -132,11 +287,11 @@ class _ChatScreenState extends State<ChatScreen> {
         : 'No folder';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Glyph(FontAwesomeIcons.microchip, size: 10.5, color: LunaTheme.ink4),
+          Glyph(FontAwesomeIcons.microchip, size: 10.5, color: LunaTheme.ink4),
           const SizedBox(width: 7),
           Flexible(
             child: Text(model,
@@ -148,10 +303,10 @@ class _ChatScreenState extends State<ChatScreen> {
           Container(
             width: 3,
             height: 3,
-            decoration: const BoxDecoration(color: LunaTheme.ink4, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: LunaTheme.ink4, shape: BoxShape.circle),
           ),
           const SizedBox(width: 7),
-          const Glyph(FontAwesomeIcons.folderOpen, size: 10.5, color: LunaTheme.ink4),
+          Glyph(FontAwesomeIcons.folderOpen, size: 10.5, color: LunaTheme.ink4),
           const SizedBox(width: 7),
           Flexible(
             child: Text(folder,
@@ -167,7 +322,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _pill(FaIconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
@@ -227,7 +382,7 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Container(
             constraints: const BoxConstraints(maxWidth: 280),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: LunaTheme.ink,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(20),
@@ -258,7 +413,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final List<Widget> rows = <Widget>[];
     for (int index = 0; index < core.steps.length; index++) {
       final Map<String, String> step = core.steps[index];
-      final bool done = step['state'] == 'done';
+      final String state = step['state'] ?? '';
+      final bool done = state == 'done' || state == 'replayed';
+      final bool refused = state == 'denied' || state == 'blocked';
       final String tool = step['tool'] ?? '';
       rows.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -273,7 +430,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 shape: BoxShape.circle,
               ),
               child: Glyph(
-                done ? FontAwesomeIcons.check : FontAwesomeIcons.hourglassHalf,
+                refused
+                    ? FontAwesomeIcons.xmark
+                    : done
+                        ? FontAwesomeIcons.check
+                        : FontAwesomeIcons.hourglassHalf,
                 size: 8.5,
                 color: done ? LunaTheme.onInk : LunaTheme.ink3,
               ),
@@ -291,7 +452,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
-            if ((step['path'] ?? '').isNotEmpty)
+            if (state == 'replayed')
+              Text('already read',
+                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3))
+            else if (state == 'blocked')
+              Text('over the limit',
+                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3))
+            else if (state == 'denied')
+              Text('not allowed',
+                  style: LunaTheme.text(size: 12, color: LunaTheme.ink3))
+            else if ((step['path'] ?? '').isNotEmpty)
               Text(step['path']!.split('/').last,
                   style: LunaTheme.text(size: 12, color: LunaTheme.ink3)),
           ],
@@ -304,7 +474,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(52, 10, 20, 0),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 3),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rStep),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rStep),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
     );
   }
@@ -316,13 +486,13 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 13),
-      decoration: const BoxDecoration(color: LunaTheme.ink, borderRadius: LunaTheme.rCard),
+      decoration: BoxDecoration(color: LunaTheme.ink, borderRadius: LunaTheme.rCard),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Glyph(FontAwesomeIcons.hand, size: 11, color: LunaTheme.onInkDim),
+              Glyph(FontAwesomeIcons.hand, size: 11, color: LunaTheme.onInkDim),
               const SizedBox(width: 7),
               Text('Needs your approval',
                   style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.onInkDim)),
@@ -374,6 +544,84 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Luna asking you something. The job is stopped until this is answered.
+  Widget _question(LunaCore core) {
+    final Map<String, dynamic> question = core.pendingQuestion!;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 13),
+      decoration: BoxDecoration(color: LunaTheme.ink, borderRadius: LunaTheme.rCard),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Glyph(FontAwesomeIcons.circleQuestion, size: 11, color: LunaTheme.onInkDim),
+              const SizedBox(width: 7),
+              Text('Luna needs to know',
+                  style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.onInkDim)),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text('${question['question']}', style: LunaTheme.decision),
+          const SizedBox(height: 11),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
+            decoration: BoxDecoration(
+                color: LunaTheme.inkButton, borderRadius: LunaTheme.rPill),
+            child: TextField(
+              controller: _answer,
+              cursorColor: LunaTheme.onInk,
+              style: LunaTheme.text(size: 13.5, color: LunaTheme.onInk),
+              textInputAction: TextInputAction.send,
+              onSubmitted: (String value) {
+                core.answerQuestion('${question['id']}', value);
+                _answer.clear();
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Your answer',
+                hintStyle: LunaTheme.text(size: 13.5, color: LunaTheme.onInkFaint),
+                contentPadding: const EdgeInsets.symmetric(vertical: 9),
+              ),
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _approvalButton(
+                  label: 'Skip',
+                  icon: FontAwesomeIcons.xmark,
+                  background: LunaTheme.inkButton,
+                  foreground: const Color(0xFFD9D9DE),
+                  onTap: () {
+                    core.answerQuestion('${question['id']}', '');
+                    _answer.clear();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _approvalButton(
+                  label: 'Answer',
+                  icon: FontAwesomeIcons.check,
+                  background: LunaTheme.onInk,
+                  foreground: LunaTheme.ink,
+                  onTap: () {
+                    core.answerQuestion('${question['id']}', _answer.text);
+                    _answer.clear();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _approvalButton({
     required String label,
     required FaIconData icon,
@@ -404,10 +652,10 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
       child: Row(
         children: <Widget>[
-          const SizedBox(
+          SizedBox(
             width: 11,
             height: 11,
             child: CircularProgressIndicator(strokeWidth: 1.6, color: LunaTheme.ink3),
@@ -427,7 +675,7 @@ class _ChatScreenState extends State<ChatScreen> {
             onTap: core.stop,
             child: Row(
               children: <Widget>[
-                const Glyph(FontAwesomeIcons.stop, size: 10.5, color: LunaTheme.ink),
+                Glyph(FontAwesomeIcons.stop, size: 10.5, color: LunaTheme.ink),
                 const SizedBox(width: 6),
                 Text('Stop', style: LunaTheme.text(size: 12.5, weight: 600)),
               ],
@@ -439,17 +687,55 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _composer(LunaCore core) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (_attached.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+            child: Row(
+              children: <Widget>[
+                Glyph(FontAwesomeIcons.paperclip, size: 11, color: LunaTheme.ink3),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(_attached,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LunaTheme.text(size: 12, weight: 500, color: LunaTheme.ink2)),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _attached = ''),
+                  child: Glyph(FontAwesomeIcons.xmark, size: 11, color: LunaTheme.ink3),
+                ),
+              ],
+            ),
+          ),
+        _composerBar(core),
+      ],
+    );
+  }
+
+  Widget _composerBar(LunaCore core) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
       child: Container(
         padding: const EdgeInsets.fromLTRB(15, 5, 5, 5),
-        decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
+        decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.only(bottom: 9),
-              child: Glyph(FontAwesomeIcons.paperclip, size: 13.5, color: LunaTheme.ink3),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: core.running ? null : _attach,
+                child: Semantics(
+                  button: true,
+                  label: 'Attach a file',
+                  child: Glyph(FontAwesomeIcons.paperclip, size: 13.5, color: LunaTheme.ink3),
+                ),
+              ),
             ),
             const SizedBox(width: 9),
             Expanded(
@@ -482,7 +768,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: 34,
                 height: 34,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(color: LunaTheme.ink, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: LunaTheme.ink, shape: BoxShape.circle),
                 child: Glyph(
                   core.running ? FontAwesomeIcons.stop : FontAwesomeIcons.arrowUp,
                   size: 12.5,
