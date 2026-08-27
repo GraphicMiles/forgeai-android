@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luna — pipeline B: the ticker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  :root{
+    --paper:#0B0B0C; --fill:#17171B; --fill2:#232327; --line:#232327;
+    --ink:#F7F7F9; --ink2:#C7C7CE; --ink3:#8E8E97; --ink4:#5E5E66;
+    --card:#F7F7F9; --onCard:#0B0B0C; --mascot:#7C5CFF;
+    --ease:cubic-bezier(.23,1,.32,1);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#000;color:var(--ink);
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;gap:34px;justify-content:center;align-items:flex-start;padding:34px 20px 60px;flex-wrap:wrap}
+  .phone{width:340px;background:var(--paper);border-radius:34px;border:1px solid #1c1c20;
+    overflow:hidden;display:flex;flex-direction:column;height:700px}
+  .top{padding:16px 18px 8px;display:flex;align-items:center;gap:10px}
+  .mark{width:22px;height:22px;border-radius:50%;background:var(--mascot);position:relative;flex:none}
+  .mark::after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:var(--paper);right:2px;top:5px}
+  .title{font-size:19px;font-weight:800;letter-spacing:-.03em}
+  .thread{flex:1;overflow-y:auto;padding:6px 18px 10px;display:flex;flex-direction:column;gap:11px}
+  .thread::-webkit-scrollbar{display:none}
+  .user{align-self:flex-end;background:var(--card);color:var(--onCard);
+    padding:9px 14px;border-radius:20px 20px 7px 20px;font-size:13.5px;max-width:74%}
+  .answer{display:flex;gap:10px;align-items:flex-start}
+  .answer .mark{margin-top:2px}
+  .answer .body{font-size:14px;line-height:1.55;flex:1}
+
+  /* --- the ticker ------------------------------------------------------ */
+  .ticker{margin-left:32px;background:var(--fill);border-radius:16px;padding:11px 14px 12px;cursor:pointer}
+  .beads{display:flex;gap:5px;margin-bottom:9px}
+  .bead{height:3px;flex:1;border-radius:2px;background:var(--fill2);overflow:hidden;position:relative}
+  .bead b{position:absolute;inset:0;background:var(--ink);transform:scaleX(0);transform-origin:left;
+    transition:transform .5s var(--ease)}
+  .bead.on b{transform:scaleX(1)}
+  .bead.live b{transform:scaleX(1);background:linear-gradient(90deg,var(--ink4),var(--ink),var(--ink4));
+    background-size:220% 100%;animation:slide 1.2s linear infinite}
+  @keyframes slide{from{background-position:120% 0}to{background-position:-120% 0}}
+  /* one line of text that rolls over instead of being replaced */
+  .roll{height:17px;overflow:hidden;position:relative}
+  .roll span{display:block;font-size:12.5px;font-weight:600;line-height:17px;position:absolute;inset:0;
+    filter:blur(6px);opacity:0;transform:translateY(70%);
+    animation:rollIn .42s var(--ease) forwards}
+  .roll span.out{animation:rollOut .34s var(--ease) forwards}
+  @keyframes rollIn{to{filter:blur(0);opacity:1;transform:none}}
+  @keyframes rollOut{from{filter:blur(0);opacity:1;transform:none}
+    to{filter:blur(6px);opacity:0;transform:translateY(-70%)}}
+  .meta{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11.5px;color:var(--ink3)}
+  .meta .t{font-family:ui-monospace,Menlo,monospace}
+  .meta .more{margin-left:auto;display:flex;align-items:center;gap:6px}
+
+  /* the log, closed by default: the ticker is the interface, this is the receipt */
+  .log{display:grid;grid-template-rows:0fr;transition:grid-template-rows .4s var(--ease)}
+  .ticker.open .log{grid-template-rows:1fr}
+  .logInner{overflow:hidden}
+  .logInner div{display:flex;gap:9px;align-items:center;padding:6px 0;font-size:12.5px;color:var(--ink2)}
+  .logInner div:first-child{padding-top:10px}
+  .logInner i{font-size:9px;color:var(--ink3);width:14px;text-align:center}
+  .logInner .e{margin-left:auto;color:var(--ink4);font-size:11px}
+
+  /* --- approval lives at the bottom, over the composer ------------------ */
+  .gate{position:absolute;left:10px;right:10px;bottom:76px;background:var(--card);color:var(--onCard);
+    border-radius:22px;padding:13px 15px 12px;animation:up .36s var(--ease) both}
+  @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .gate.gone{animation:down .28s var(--ease) forwards}
+  @keyframes down{to{opacity:0;transform:translateY(10px)}}
+  .gate .q{font-size:15px;font-weight:750;letter-spacing:-.02em}
+  .gate .c{font-size:12px;color:#5d5d66;margin-top:3px}
+  .gate .acts{display:flex;gap:8px;margin-top:11px}
+  .btn{border:0;border-radius:999px;padding:9px 16px;font:650 13px/1 inherit;cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px}
+  .allow{background:#0B0B0C;color:#fff}.skip{background:#E4E4E8;color:#0B0B0C}
+  .stack{position:relative;flex:1;display:flex;flex-direction:column;min-height:0}
+
+  .w{display:inline-block;filter:blur(9px);opacity:0;animation:wordIn .5s cubic-bezier(.22,.61,.25,1) forwards}
+  @keyframes wordIn{to{filter:blur(0);opacity:1}}
+  .composer{padding:10px 18px 14px;display:flex;gap:9px;align-items:center}
+  .field{flex:1;background:var(--fill);border-radius:999px;padding:11px 15px;color:var(--ink3);font-size:13.5px}
+  .send{width:38px;height:38px;border-radius:50%;background:var(--card);color:var(--onCard);display:grid;place-items:center}
+  .tabs{display:flex;border-top:1px solid var(--line);padding:7px 10px 9px}
+  .tab{flex:1;text-align:center;font-size:10.5px;color:var(--ink4)}
+  .tab.on{color:var(--ink);font-weight:650}
+  .tab i{display:block;font-size:14px;margin-bottom:4px}
+
+  .side{width:330px;color:var(--ink2);font-size:13.5px;line-height:1.6}
+  .side h1{color:var(--ink);font-size:21px;letter-spacing:-.03em;margin:0 0 4px}
+  .side h2{color:var(--ink);font-size:13px;margin:22px 0 6px;font-weight:700}
+  .side ul{margin:0;padding-left:17px}.side li{margin-bottom:7px}
+  .run{display:flex;gap:8px;margin:16px 0 4px;flex-wrap:wrap}
+  .run button{background:var(--fill);color:var(--ink);border:0;border-radius:999px;padding:9px 15px;
+    font:600 12.5px/1 inherit;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+  code{background:var(--fill);padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="top"><span class="mark"></span><span class="title">This job</span></div>
+  <div class="stack">
+    <div class="thread" id="thread"></div>
+    <div id="gateSlot"></div>
+  </div>
+  <div class="composer">
+    <div class="field" id="field">Tell Luna what to do…</div>
+    <div class="send"><i class="fa-solid fa-arrow-up"></i></div>
+  </div>
+  <div class="tabs">
+    <div class="tab on"><i class="fa-solid fa-comment"></i>Chat</div>
+    <div class="tab"><i class="fa-solid fa-folder"></i>Files</div>
+    <div class="tab"><i class="fa-solid fa-cube"></i>Models</div>
+    <div class="tab"><i class="fa-solid fa-gear"></i>Settings</div>
+  </div>
+</div>
+
+<div class="side">
+  <h1>B — The ticker</h1>
+  <p>One line, always in the same place, saying the one thing happening now. The
+     list of everything that happened is a receipt you can open, not the main event.</p>
+
+  <div class="run">
+    <button onclick="play()"><i class="fa-solid fa-play"></i>Run a job</button>
+    <button onclick="reset()"><i class="fa-solid fa-arrow-rotate-left"></i>Reset</button>
+  </div>
+
+  <h2>The animation idea</h2>
+  <ul>
+    <li><b>Text rolls, it does not swap.</b> The old activity blurs up and out,
+        the new one rises in from below — 420ms, so you register the change
+        without reading it twice.</li>
+    <li><b>Progress is a row of hairlines.</b> One bead per step, filling left to
+        right. The live bead has the highlight running through it; a finished one
+        is solid. The strip is the only thing that grows.</li>
+    <li><b>Approval comes from the composer</b>, not the middle of the thread —
+        it rises 14px over the input, because that is where your thumb already is.</li>
+    <li><b>Nothing collapses at the end</b>: the ticker just stops and becomes
+        <i>4 steps · 11.5s</i>, tappable for the receipt.</li>
+  </ul>
+
+  <h2>What it fixes from your screenshot</h2>
+  <ul>
+    <li>The thread stays a conversation. No <code>{"tool":…}</code>, no tall card
+        pushing the answer off screen.</li>
+    <li>The approval never covers the trace, and both buttons read at full contrast.</li>
+    <li>Waiting on you has its own colour of language — the beads freeze.</li>
+  </ul>
+</div>
+
+<script>
+const FA={'arrow-up':'M8 3l5 5-1 1-3-3v8H7V6L4 9 3 8z','comment':'M2 3h12v8H6l-3 3v-3H2z',
+ 'folder':'M2 4h5l1 1h6v7H2z','cube':'M8 2l6 3v6l-6 3-6-3V5z','gear':'M8 5a3 3 0 100 6 3 3 0 000-6z',
+ 'play':'M4 3l9 5-9 5z','arrow-rotate-left':'M3 8a5 5 0 105-5V1L4 4l4 3V5a3 3 0 11-3 3z',
+ 'check':'M3 8l3 3 7-7-1-1-6 6-2-2z','xmark':'M4 4l8 8M12 4l-8 8','stop':'M4 4h8v8H4z',
+ 'chevron-down':'M3 6l5 5 5-5','list-ul':'M3 4h1M3 8h1M3 12h1M6 4h7M6 8h7M6 12h7'};
+addEventListener('load',()=>{
+  const p=document.createElement('i');p.className='fa-solid fa-play';p.style.cssText='position:absolute;left:-9999px';
+  document.body.appendChild(p);const ok=getComputedStyle(p).fontFamily.includes('Awesome');p.remove();if(ok)return;
+  const draw=()=>document.querySelectorAll('i[class*="fa-"]').forEach(el=>{
+    const m=[...el.classList].find(c=>c.startsWith('fa-')&&c!=='fa-solid');const d=FA[m?m.slice(3):''];
+    if(!d||el.dataset.drawn)return;el.dataset.drawn=1;
+    el.innerHTML=`<svg viewBox="0 0 16 16" width="1em" height="1em" style="vertical-align:-.12em"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;});
+  draw();new MutationObserver(draw).observe(document.body,{childList:true,subtree:true});});
+
+const thread=document.getElementById('thread'),gateSlot=document.getElementById('gateSlot'),
+      field=document.getElementById('field');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+let t0=0,timer=null,gate=0,gateAt=0,tick=null,beads=null,log=null;
+const workMs=()=>Date.now()-t0-gate-(gateAt?Date.now()-gateAt:0);
+function reset(){thread.innerHTML='';gateSlot.innerHTML='';clearInterval(timer);field.textContent='Tell Luna what to do…';}
+
+function ticker(n){
+  const el=document.createElement('div');el.className='ticker';
+  el.innerHTML=`<div class="beads">${'<div class="bead"><b></b></div>'.repeat(n)}</div>
+    <div class="roll"></div>
+    <div class="meta"><span class="t">0.0s</span><span class="more"><span class="n">receipt</span>
+      <i class="fa-solid fa-chevron-down"></i></span></div>
+    <div class="log"><div class="logInner"></div></div>`;
+  el.onclick=()=>el.classList.toggle('open');
+  thread.appendChild(el);beads=[...el.querySelectorAll('.bead')];log=el.querySelector('.logInner');
+  clearInterval(timer);
+  timer=setInterval(()=>el.querySelector('.t').textContent=(workMs()/1000).toFixed(1)+'s',100);
+  return el;
+}
+function say(el,text){
+  const roll=el.querySelector('.roll');
+  const old=roll.querySelector('span:not(.out)');
+  if(old){old.classList.add('out');setTimeout(()=>old.remove(),340);}
+  const s=document.createElement('span');s.textContent=text;roll.appendChild(s);
+}
+function beadLive(i){beads.forEach((b,x)=>{b.classList.toggle('live',x===i);});}
+function beadDone(i,label,end){beads[i].classList.remove('live');beads[i].classList.add('on');
+  const row=document.createElement('div');
+  row.innerHTML=`<i class="fa-solid fa-check"></i><span>${label}</span><span class="e">${end||''}</span>`;
+  log.appendChild(row);}
+
+async function play(){
+  reset();t0=Date.now();gate=0;gateAt=0;
+  thread.innerHTML='<div class="user">Add today\u2019s notes to notes.md</div>';
+  field.textContent='Add to the job…';
+  tick=ticker(4); say(tick,'Thinking'); beadLive(0); await wait(850);
+
+  say(tick,'Listing the folder'); await wait(750); beadDone(0,'Listed the folder','12 items');
+  beadLive(1); say(tick,'Reading notes.md'); await wait(850); beadDone(1,'Read notes.md','1.2 kB');
+
+  beadLive(2); beads[2].classList.remove('live');
+  say(tick,'Waiting on you'); gateAt=Date.now();
+  const g=document.createElement('div');g.className='gate';
+  g.innerHTML=`<div class="q">Overwrite notes.md with 1 line?</div>
+    <div class="c">The current contents are backed up first.</div>
+    <div class="acts"><button class="btn allow"><i class="fa-solid fa-check"></i>Allow</button>
+      <button class="btn skip"><i class="fa-solid fa-xmark"></i>Skip</button></div>`;
+  gateSlot.appendChild(g);
+  await new Promise(r=>g.querySelectorAll('button').forEach(b=>b.onclick=()=>r()));
+  gate+=Date.now()-gateAt;gateAt=0;g.classList.add('gone');setTimeout(()=>g.remove(),280);
+
+  beadLive(2); say(tick,'Writing notes.md'); await wait(700); beadDone(2,'Wrote notes.md','1 line');
+  beadLive(3); say(tick,'Writing the answer'); await wait(500); beadDone(3,'Answered','');
+
+  clearInterval(timer);
+  say(tick,'4 steps · '+(workMs()/1000).toFixed(1)+'s');
+  tick.querySelector('.beads').style.opacity=.5;
+  field.textContent='Tell Luna what to do…';
+
+  const a=document.createElement('div');a.className='answer';
+  a.innerHTML='<span class="mark"></span><span class="body"></span>';thread.appendChild(a);
+  const body=a.querySelector('.body');
+  'Added one line to notes.md. The old copy is in the backups folder if you want it back.'
+    .split(' ').forEach((w,i)=>{const s=document.createElement('span');s.className='w';
+      s.style.animationDelay=(i*100)+'ms';s.textContent=w+' ';body.appendChild(s);});
+  thread.scrollTop=1e6;
+}
+</script>
+</body>
+</html>
