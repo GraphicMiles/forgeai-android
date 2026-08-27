@@ -120,9 +120,21 @@ class LunaCore extends ChangeNotifier {
     return null;
   }
 
+  /// A model you imported is as active as any other. The pill said "Pick a
+  /// model" while one was selected, which is how this got missed.
+  Map<String, dynamic>? get activeImportedModel {
+    if (!activeModelId.startsWith('imported:')) return null;
+    for (final Map<String, dynamic> model in importedModels) {
+      if (model['id'] == activeModelId) return model;
+    }
+    return null;
+  }
+
   String get activeModelName {
     final Map<String, dynamic>? local = activeCatalogModel;
     if (local != null) return local['name'] as String;
+    final Map<String, dynamic>? own = activeImportedModel;
+    if (own != null) return '${own['name']}';
     final Map<String, dynamic>? cloud = activeCloudProvider;
     if (cloud != null) return cloud['label'] as String;
     return '';
@@ -273,6 +285,10 @@ class LunaCore extends ChangeNotifier {
         unawaited(refresh());
         break;
       case 'run_done':
+        // Nothing is left spinning. A step that never resolved says so.
+        for (final Map<String, String> step in steps) {
+          if (step['state'] == 'running') step['state'] = 'unfinished';
+        }
         _closeGate();
         runElapsed = workElapsed;
         running = false;
