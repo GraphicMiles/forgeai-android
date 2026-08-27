@@ -11,3 +11,8 @@ android/app/.cxx/
 *.iml
 .idea/
 .DS_Store
+
+# The upload key and its passwords never go in the repository.
+android/key.properties
+*.jks
+*.keystore
