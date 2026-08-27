@@ -53,44 +53,7 @@ jobs:
       - name: Check the unpacked size budget
         run: |
           set -euo pipefail
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          test -f "$APK"
-
-          unzip -l "$APK" > /tmp/listing.txt
-          UNPACKED=$(awk '/^ *[0-9]+ /{total += $1} END {print total+0}' /tmp/listing.txt)
-          COMPRESSED=$(stat -c%s "$APK")
-          LIMIT=$(( APK_UNPACKED_LIMIT_MIB * 1024 * 1024 ))
-
-          MIB() { awk -v b="$1" 'BEGIN {printf "%.2f", b / 1048576}'; }
-
-          {
-            echo "## APK"
-            echo ""
-            echo "| Measure | Size |"
-            echo "| --- | --- |"
-            echo "| Download (compressed) | $(MIB "$COMPRESSED") MiB |"
-            echo "| Installed (unpacked) | $(MIB "$UNPACKED") MiB |"
-            echo "| Budget | ${APK_UNPACKED_LIMIT_MIB}.00 MiB |"
-            echo ""
-            echo "### Ten largest entries"
-            echo ""
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          awk '/^ *[0-9]+ /{printf "%12d  %s\n", $1, $4}' /tmp/listing.txt > /tmp/entries.txt
-          sort -rn /tmp/entries.txt > /tmp/sorted.txt
-          head -n 20 /tmp/sorted.txt > /tmp/top.txt
-          cat /tmp/top.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-
-          echo "Twenty largest entries:"
-          cat /tmp/top.txt
-
-          if [ "$UNPACKED" -gt "$LIMIT" ]; then
-            echo "Unpacked APK is $(MIB "$UNPACKED") MiB, over the ${APK_UNPACKED_LIMIT_MIB} MiB budget." >&2
-            exit 1
-          fi
-          echo "Unpacked APK is $(MIB "$UNPACKED") MiB, within the ${APK_UNPACKED_LIMIT_MIB} MiB budget."
+          python3 scripts/apk-size.py build/app/outputs/flutter-apk/app-release.apk "$APK_UNPACKED_LIMIT_MIB" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
