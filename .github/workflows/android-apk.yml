@@ -105,18 +105,33 @@ jobs:
 
       # The size contract: unzip the APK and measure what actually lands on the
       # device. Fails the build rather than shipping something oversized.
+      # The size contract: unzip the APK and measure what actually lands on the
+      # device. Fails the build rather than shipping something oversized.
       - name: Enforce unpacked APK size budget
         shell: bash
         run: |
           set -euo pipefail
           APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
           LIMIT_MIB="${APK_UNPACKED_LIMIT_MIB}"
-
-          COMPRESSED_BYTES=$(stat -c%s "$APK_PATH")
-          UNPACKED_BYTES=$(unzip -l "$APK_PATH" | tail -1 | awk '{print $1}')
           LIMIT_BYTES=$(( LIMIT_MIB * 1024 * 1024 ))
 
+          # Materialise the listing once; piping unzip straight into head closes
+          # the pipe early and trips pipefail.
+          unzip -l "$APK_PATH" > /tmp/apk-listing.txt
+
+          COMPRESSED_BYTES=$(stat -c%s "$APK_PATH")
+          UNPACKED_BYTES=$(tail -1 /tmp/apk-listing.txt | awk '{print $1}')
+
+          # Entry rows only: everything between the two dashed separator lines.
+          # Names can contain spaces, so take field 1 as the size and fields 4+
+          # as the name rather than assuming a date format.
+          awk '/^---------/{sep++; next} sep==1 && $1 ~ /^[0-9]+$/ {
+                 name=$4; for (i=5; i<=NF; i++) name=name" "$i;
+                 printf "%s\t%s\n", $1, name }' \
+            /tmp/apk-listing.txt | sort -rn > /tmp/apk-entries.txt
+
           mib() { awk -v b="$1" 'BEGIN{printf "%.2f", b/1048576}'; }
+          top10() { head -10 /tmp/apk-entries.txt | awk -F'\t' '{printf "%8.2f MiB  %s\n", $1/1048576, $2}'; }
 
           {
             echo "### APK size"
@@ -125,24 +140,24 @@ jobs:
             echo "|---|---|"
             echo "| Download (compressed) | $(mib "$COMPRESSED_BYTES") MiB |"
             echo "| Installed (unpacked) | $(mib "$UNPACKED_BYTES") MiB |"
-            echo "| Budget | ${LIMIT_MIB}.00 MiB |"
+            echo "| Budget (unpacked) | ${LIMIT_MIB}.00 MiB |"
             echo ""
             echo "#### Ten largest entries"
             echo ""
             echo '```'
-            unzip -l "$APK_PATH" | sort -k1 -n -r | head -10 | awk '{printf "%8.2f MiB  %s\n", $1/1048576, $4}'
+            top10
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "compressed: $(mib "$COMPRESSED_BYTES") MiB"
           echo "unpacked:   $(mib "$UNPACKED_BYTES") MiB (budget ${LIMIT_MIB} MiB)"
-          unzip -l "$APK_PATH" | sort -k1 -n -r | head -10 | awk '{printf "%8.2f MiB  %s\n", $1/1048576, $4}'
+          top10
 
           if [ "$UNPACKED_BYTES" -gt "$LIMIT_BYTES" ]; then
             echo "::error::Unpacked APK is $(mib "$UNPACKED_BYTES") MiB, over the ${LIMIT_MIB} MiB budget."
             exit 1
           fi
-          echo "✅ within budget"
+          echo "Within budget: $(mib "$UNPACKED_BYTES") / ${LIMIT_MIB} MiB unpacked."
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
