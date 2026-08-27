@@ -79,8 +79,12 @@ jobs:
 
           awk '/^ *[0-9]+ /{printf "%12d  %s\n", $1, $4}' /tmp/listing.txt > /tmp/entries.txt
           sort -rn /tmp/entries.txt > /tmp/sorted.txt
-          head -n 10 /tmp/sorted.txt >> "$GITHUB_STEP_SUMMARY"
+          head -n 20 /tmp/sorted.txt > /tmp/top.txt
+          cat /tmp/top.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Twenty largest entries:"
+          cat /tmp/top.txt
 
           if [ "$UNPACKED" -gt "$LIMIT" ]; then
             echo "Unpacked APK is $(MIB "$UNPACKED") MiB, over the ${APK_UNPACKED_LIMIT_MIB} MiB budget." >&2
@@ -89,6 +93,7 @@ jobs:
           echo "Unpacked APK is $(MIB "$UNPACKED") MiB, within the ${APK_UNPACKED_LIMIT_MIB} MiB budget."
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: luna-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
