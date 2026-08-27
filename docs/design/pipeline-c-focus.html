@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luna — pipeline C: the focus card</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  :root{
+    --paper:#0B0B0C; --fill:#17171B; --fill2:#232327; --line:#232327;
+    --ink:#F7F7F9; --ink2:#C7C7CE; --ink3:#8E8E97; --ink4:#5E5E66;
+    --card:#F7F7F9; --onCard:#0B0B0C; --mascot:#7C5CFF;
+    --ease:cubic-bezier(.23,1,.32,1);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#000;color:var(--ink);
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;gap:34px;justify-content:center;align-items:flex-start;padding:34px 20px 60px;flex-wrap:wrap}
+  .phone{width:340px;background:var(--paper);border-radius:34px;border:1px solid #1c1c20;
+    overflow:hidden;display:flex;flex-direction:column;height:700px}
+  .top{padding:16px 18px 8px;display:flex;align-items:center;gap:10px}
+  .mark{width:22px;height:22px;border-radius:50%;background:var(--mascot);position:relative;flex:none}
+  .mark::after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:var(--paper);right:2px;top:5px}
+  .title{font-size:19px;font-weight:800;letter-spacing:-.03em}
+  .thread{flex:1;overflow-y:auto;padding:6px 18px 10px;display:flex;flex-direction:column;gap:11px}
+  .thread::-webkit-scrollbar{display:none}
+  .user{align-self:flex-end;background:var(--card);color:var(--onCard);
+    padding:9px 14px;border-radius:20px 20px 7px 20px;font-size:13.5px;max-width:74%}
+  .answer{display:flex;gap:10px;align-items:flex-start}
+  .answer .mark{margin-top:2px}
+  .answer .body{font-size:14px;line-height:1.55;flex:1}
+
+  /* --- the focus card: one activity, with the past stacked behind it ---- */
+  .focus{margin-left:32px;position:relative;padding-top:9px}
+  .past{position:relative;height:0}
+  .past .bar{position:absolute;left:0;right:0;height:34px;background:var(--fill);border-radius:14px;
+    transition:transform .45s var(--ease),opacity .45s var(--ease);opacity:0}
+  .now{position:relative;background:var(--fill);border-radius:16px;padding:12px 14px;display:flex;
+    align-items:center;gap:11px;transition:transform .4s var(--ease)}
+  .now .icon{width:26px;height:26px;border-radius:50%;background:var(--fill2);display:grid;place-items:center;
+    font-size:11px;color:var(--ink2);flex:none;transition:background .35s var(--ease),color .35s var(--ease)}
+  .now.ok .icon{background:var(--ink);color:var(--paper);animation:pop .4s var(--ease)}
+  @keyframes pop{40%{transform:scale(1.18)}100%{transform:scale(1)}}
+  .now .label{font-size:13.5px;font-weight:650;letter-spacing:-.015em}
+  .now .sub{font-size:11.5px;color:var(--ink3);margin-top:2px}
+  .now .t{margin-left:auto;font:11.5px ui-monospace,Menlo,monospace;color:var(--ink3)}
+  .swap{animation:swapIn .38s var(--ease) both}
+  @keyframes swapIn{from{opacity:0;transform:translateY(7px);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}
+  .breathe{animation:breathe 2.1s ease-in-out infinite}
+  @keyframes breathe{0%,100%{box-shadow:none;background:var(--fill)}50%{background:#1d1d22}}
+
+  /* the ring: waiting on a person looks different from working */
+  .ring{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--ink3);display:grid;place-items:center;
+    font-size:10px;color:var(--ink2);animation:ringPulse 1.9s ease-in-out infinite}
+  @keyframes ringPulse{0%,100%{border-color:var(--ink4)}50%{border-color:var(--ink2)}}
+
+  .summary{margin-left:32px;background:var(--fill);border-radius:999px;padding:8px 14px;display:inline-flex;
+    align-items:center;gap:9px;font-size:12px;color:var(--ink2);width:max-content;cursor:pointer;
+    animation:swapIn .4s var(--ease) both}
+  .summary i{font-size:9px;color:var(--ink3)}
+  .full{margin-left:32px;background:var(--fill);border-radius:16px;padding:4px 14px;display:none}
+  .full.show{display:block;animation:swapIn .35s var(--ease) both}
+  .full div{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:12.5px;color:var(--ink2)}
+  .full i{font-size:9px;color:var(--ink3);width:14px;text-align:center}
+  .full .e{margin-left:auto;color:var(--ink4);font-size:11px}
+
+  .ask{margin-left:32px;background:var(--card);color:var(--onCard);border-radius:20px;padding:13px 15px 12px;
+    animation:swapIn .38s var(--ease) both}
+  .ask .q{font-size:15px;font-weight:750;letter-spacing:-.02em}
+  .ask .c{font-size:12px;color:#5d5d66;margin-top:3px}
+  .ask .acts{display:flex;gap:8px;margin-top:11px}
+  .btn{border:0;border-radius:999px;padding:9px 16px;font:650 13px/1 inherit;cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px}
+  .allow{background:#0B0B0C;color:#fff}.skip{background:#E4E4E8;color:#0B0B0C}
+
+  .w{display:inline-block;filter:blur(9px);opacity:0;animation:wordIn .5s cubic-bezier(.22,.61,.25,1) forwards}
+  @keyframes wordIn{to{filter:blur(0);opacity:1}}
+  .composer{padding:10px 18px 14px;display:flex;gap:9px;align-items:center}
+  .field{flex:1;background:var(--fill);border-radius:999px;padding:11px 15px;color:var(--ink3);font-size:13.5px}
+  .send{width:38px;height:38px;border-radius:50%;background:var(--card);color:var(--onCard);display:grid;place-items:center}
+  .tabs{display:flex;border-top:1px solid var(--line);padding:7px 10px 9px}
+  .tab{flex:1;text-align:center;font-size:10.5px;color:var(--ink4)}
+  .tab.on{color:var(--ink);font-weight:650}
+  .tab i{display:block;font-size:14px;margin-bottom:4px}
+
+  .side{width:330px;color:var(--ink2);font-size:13.5px;line-height:1.6}
+  .side h1{color:var(--ink);font-size:21px;letter-spacing:-.03em;margin:0 0 4px}
+  .side h2{color:var(--ink);font-size:13px;margin:22px 0 6px;font-weight:700}
+  .side ul{margin:0;padding-left:17px}.side li{margin-bottom:7px}
+  .run{display:flex;gap:8px;margin:16px 0 4px;flex-wrap:wrap}
+  .run button{background:var(--fill);color:var(--ink);border:0;border-radius:999px;padding:9px 15px;
+    font:600 12.5px/1 inherit;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+  code{background:var(--fill);padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="top"><span class="mark"></span><span class="title">This job</span></div>
+  <div class="thread" id="thread"></div>
+  <div class="composer">
+    <div class="field" id="field">Tell Luna what to do…</div>
+    <div class="send"><i class="fa-solid fa-arrow-up"></i></div>
+  </div>
+  <div class="tabs">
+    <div class="tab on"><i class="fa-solid fa-comment"></i>Chat</div>
+    <div class="tab"><i class="fa-solid fa-folder"></i>Files</div>
+    <div class="tab"><i class="fa-solid fa-cube"></i>Models</div>
+    <div class="tab"><i class="fa-solid fa-gear"></i>Settings</div>
+  </div>
+</div>
+
+<div class="side">
+  <h1>C — The focus card</h1>
+  <p>One card. It never grows — it changes into the next thing. Finished steps
+     slide underneath it as thin bars, so you can see the job has depth without
+     reading a list.</p>
+
+  <div class="run">
+    <button onclick="play()"><i class="fa-solid fa-play"></i>Run a job</button>
+    <button onclick="reset()"><i class="fa-solid fa-arrow-rotate-left"></i>Reset</button>
+  </div>
+
+  <h2>The animation idea</h2>
+  <ul>
+    <li><b>The card morphs.</b> Icon, label and detail cross-fade out of a 5px
+        blur while the card keeps its position — the eye never has to re-find it.</li>
+    <li><b>Done work sinks.</b> Each finished step drops 6px behind the card and
+        loses opacity, building a stack you can feel rather than count.</li>
+    <li><b>The tick pops.</b> The icon circle fills and overshoots to 1.18 for
+        160ms. That is the only bounce in the app.</li>
+    <li><b>Waiting is a ring, not a spinner.</b> When Luna needs you the filled
+        circle becomes a hollow ring that breathes at 2.1s — slow, patient, and
+        visibly different from the 650ms working rhythm.</li>
+    <li><b>The end state is one pill:</b> <i>4 steps · 11.5s</i>. Tap it and the
+        full list unfolds.</li>
+  </ul>
+
+  <h2>What it fixes from your screenshot</h2>
+  <ul>
+    <li>Nothing accumulates. The tallest thing on screen is 60px, so the answer
+        is always visible.</li>
+    <li>A tool call is never printed as JSON — it is the label on the card.</li>
+    <li>"Working · 1 step" while nothing is happening is impossible: the card
+        says what it is doing or it says it is waiting for you.</li>
+  </ul>
+</div>
+
+<script>
+const FA={'arrow-up':'M8 3l5 5-1 1-3-3v8H7V6L4 9 3 8z','comment':'M2 3h12v8H6l-3 3v-3H2z',
+ 'folder':'M2 4h5l1 1h6v7H2z','cube':'M8 2l6 3v6l-6 3-6-3V5z','gear':'M8 5a3 3 0 100 6 3 3 0 000-6z',
+ 'play':'M4 3l9 5-9 5z','arrow-rotate-left':'M3 8a5 5 0 105-5V1L4 4l4 3V5a3 3 0 11-3 3z',
+ 'check':'M3 8l3 3 7-7-1-1-6 6-2-2z','xmark':'M4 4l8 8M12 4l-8 8','hand':'M5 3h1v5h1V2h1v6h1V3h1v9H5z',
+ 'list-ul':'M3 4h1M3 8h1M3 12h1M6 4h7M6 8h7M6 12h7','file-lines':'M4 2h5l3 3v9H4z',
+ 'magnifying-glass':'M7 3a4 4 0 104 4 4 4 0 00-4-4zm3.5 6.5L14 13','pen':'M11 2l3 3-8 8H3v-3z',
+ 'chevron-down':'M3 6l5 5 5-5','brain':'M6 3a2 2 0 00-2 2 2 2 0 000 4 2 2 0 002 2h4a2 2 0 002-2 2 2 0 000-4 2 2 0 00-2-2z'};
+addEventListener('load',()=>{
+  const p=document.createElement('i');p.className='fa-solid fa-play';p.style.cssText='position:absolute;left:-9999px';
+  document.body.appendChild(p);const ok=getComputedStyle(p).fontFamily.includes('Awesome');p.remove();if(ok)return;
+  const draw=()=>document.querySelectorAll('i[class*="fa-"]').forEach(el=>{
+    const m=[...el.classList].find(c=>c.startsWith('fa-')&&c!=='fa-solid');const d=FA[m?m.slice(3):''];
+    if(!d||el.dataset.drawn)return;el.dataset.drawn=1;
+    el.innerHTML=`<svg viewBox="0 0 16 16" width="1em" height="1em" style="vertical-align:-.12em"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;});
+  draw();new MutationObserver(draw).observe(document.body,{childList:true,subtree:true});});
+
+const thread=document.getElementById('thread'),field=document.getElementById('field');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+let t0=0,timer=null,gate=0,gateAt=0,card=null,past=null,depth=0,done=[];
+const workMs=()=>Date.now()-t0-gate-(gateAt?Date.now()-gateAt:0);
+function reset(){thread.innerHTML='';clearInterval(timer);depth=0;done=[];field.textContent='Tell Luna what to do…';}
+
+function focus(){
+  const el=document.createElement('div');el.className='focus';
+  el.innerHTML=`<div class="past"></div>
+    <div class="now"><span class="icon"><i class="fa-solid fa-brain"></i></span>
+      <span><span class="label">Thinking</span><span class="sub"></span></span>
+      <span class="t">0.0s</span></div>`;
+  thread.appendChild(el);past=el.querySelector('.past');card=el.querySelector('.now');
+  clearInterval(timer);
+  timer=setInterval(()=>card.querySelector('.t').textContent=(workMs()/1000).toFixed(1)+'s',100);
+  return el;
+}
+function morph(icon,label,sub,opts){
+  const holder=card.querySelector('span:nth-child(2)');
+  card.querySelector('.icon').outerHTML = opts&&opts.waiting
+    ? `<span class="ring swap"><i class="fa-solid fa-hand"></i></span>`
+    : `<span class="icon swap"><i class="fa-solid fa-${icon}"></i></span>`;
+  holder.classList.remove('swap');void holder.offsetWidth;holder.classList.add('swap');
+  holder.querySelector('.label').textContent=label;
+  holder.querySelector('.sub').textContent=sub||'';
+  card.classList.toggle('breathe',!!(opts&&opts.waiting));
+  card.classList.remove('ok');
+}
+function sink(label,end){
+  done.push([label,end||'']);
+  depth++;
+  const bar=document.createElement('div');bar.className='bar';past.appendChild(bar);
+  requestAnimationFrame(()=>{bar.style.transform=`translateY(${9+depth*5}px) scaleX(${1-depth*0.045})`;
+    bar.style.opacity=Math.max(.12,.5-depth*.09);});
+  card.classList.add('ok');
+  card.querySelector('.icon,.ring').outerHTML='<span class="icon"><i class="fa-solid fa-check"></i></span>';
+  card.classList.add('ok');
+}
+
+async function play(){
+  reset();t0=Date.now();gate=0;gateAt=0;
+  thread.innerHTML='<div class="user">Add today\u2019s notes to notes.md</div>';
+  field.textContent='Add to the job…';
+  const holder=focus(); await wait(850);
+
+  morph('list-ul','Listing the folder','the granted folder'); await wait(750); sink('Listed the folder','12 items');
+  await wait(220);
+  morph('file-lines','Reading notes.md','1.2 kB'); await wait(800); sink('Read notes.md','1.2 kB');
+  await wait(220);
+
+  morph(null,'Waiting on you','the clock is stopped',{waiting:true}); gateAt=Date.now();
+  const ask=document.createElement('div');ask.className='ask';
+  ask.innerHTML=`<div class="q">Overwrite notes.md with 1 line?</div>
+    <div class="c">The current contents are backed up first.</div>
+    <div class="acts"><button class="btn allow"><i class="fa-solid fa-check"></i>Allow</button>
+      <button class="btn skip"><i class="fa-solid fa-xmark"></i>Skip</button></div>`;
+  thread.appendChild(ask);thread.scrollTop=1e6;
+  await new Promise(r=>ask.querySelectorAll('button').forEach(b=>b.onclick=()=>r()));
+  gate+=Date.now()-gateAt;gateAt=0;ask.remove();
+
+  morph('pen','Writing notes.md','1 line'); await wait(720); sink('Wrote notes.md','1 line');
+  await wait(260);
+
+  clearInterval(timer);
+  const secs=(workMs()/1000).toFixed(1);
+  holder.remove();
+  const pill=document.createElement('div');pill.className='summary';
+  pill.innerHTML=`<i class="fa-solid fa-check"></i>${done.length} steps · ${secs}s
+    <i class="fa-solid fa-chevron-down"></i>`;
+  const full=document.createElement('div');full.className='full';
+  full.innerHTML=done.map(([l,e])=>`<div><i class="fa-solid fa-check"></i><span>${l}</span><span class="e">${e}</span></div>`).join('');
+  pill.onclick=()=>full.classList.toggle('show');
+  thread.appendChild(pill);thread.appendChild(full);
+  field.textContent='Tell Luna what to do…';
+
+  const a=document.createElement('div');a.className='answer';
+  a.innerHTML='<span class="mark"></span><span class="body"></span>';thread.appendChild(a);
+  const body=a.querySelector('.body');
+  'Added one line to notes.md. The old copy is in the backups folder if you want it back.'
+    .split(' ').forEach((w,i)=>{const s=document.createElement('span');s.className='w';
+      s.style.animationDelay=(i*100)+'ms';s.textContent=w+' ';body.appendChild(s);});
+  thread.scrollTop=1e6;
+}
+</script>
+</body>
+</html>
