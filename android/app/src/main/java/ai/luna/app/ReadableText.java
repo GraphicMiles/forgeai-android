@@ -13,6 +13,30 @@ public final class ReadableText {
     private ReadableText() {
     }
 
+    /** \\u0041 and friends. Pages are full of them once innerText is JSON-encoded. */
+    static String unescapeUnicode(String value) {
+        int at = value.indexOf("\\u");
+        if (at < 0) {
+            return value;
+        }
+        StringBuilder out = new StringBuilder(value.length());
+        int index = 0;
+        while (index < value.length()) {
+            if (index + 5 < value.length() && value.charAt(index) == '\\' && value.charAt(index + 1) == 'u') {
+                try {
+                    out.append((char) Integer.parseInt(value.substring(index + 2, index + 6), 16));
+                    index += 6;
+                    continue;
+                } catch (NumberFormatException notAnEscape) {
+                    // Fall through and copy the characters as they are.
+                }
+            }
+            out.append(value.charAt(index));
+            index++;
+        }
+        return out.toString();
+    }
+
     public static String clean(String raw, int limit) {
         if (raw == null || raw.isEmpty()) {
             return "";
@@ -22,8 +46,8 @@ public final class ReadableText {
             // evaluateJavascript hands back a JSON string.
             text = text.substring(1, text.length() - 1)
                 .replace("\\n", "\n").replace("\\t", " ").replace("\\\"", "\"")
-                .replace("\\u003C", "<").replace("\\u003E", ">").replace("\\u0026", "&")
                 .replace("\\\\", "\\");
+            text = unescapeUnicode(text);
         }
         StringBuilder out = new StringBuilder();
         int blankRun = 0;

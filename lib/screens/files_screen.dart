@@ -461,6 +461,7 @@ class _FilesScreenState extends State<FilesScreen> {
         ],
       ),
     );
+    controller.dispose();
   }
 
   Future<void> _createSheet({required bool folder}) async {
@@ -498,5 +499,6 @@ class _FilesScreenState extends State<FilesScreen> {
         ],
       ),
     );
+    controller.dispose();
   }
 }

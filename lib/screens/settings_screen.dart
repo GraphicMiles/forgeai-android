@@ -40,6 +40,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _endpoint =
       TextEditingController(text: widget.core.endpoint);
 
+  /// The address is editable on two screens. Without this the other screen
+  /// keeps showing the old one until the app restarts.
+  String _endpointSeen = '';
+
+  void _syncEndpoint() {
+    if (_endpointSeen == widget.core.endpoint) return;
+    _endpointSeen = widget.core.endpoint;
+    if (_endpoint.text != widget.core.endpoint) {
+      _endpoint.text = widget.core.endpoint;
+    }
+  }
+
   @override
   void dispose() {
     _endpoint.dispose();
@@ -49,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final LunaCore core = widget.core;
+    _syncEndpoint();
     return Column(
       children: <Widget>[
         const ScreenTop(title: 'Settings'),
@@ -330,6 +343,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+    token.dispose();
   }
 
   // --- data -----------------------------------------------------------------

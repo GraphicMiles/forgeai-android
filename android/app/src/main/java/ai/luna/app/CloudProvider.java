@@ -39,6 +39,11 @@ public final class CloudProvider {
         void onToken(String text);
     }
 
+    /** Asked between frames. Stop has to reach a cloud call too. */
+    public interface Cancellation {
+        boolean cancelled();
+    }
+
     public static final class Reply {
         public final String text;
         public final String error;
@@ -52,66 +57,12 @@ public final class CloudProvider {
     private CloudProvider() {
     }
 
-    /** Blocking. Call from a worker thread. */
-    public static Reply chat(Config config, List<JSONObject> messages, int maxTokens) {
-        HttpURLConnection connection = null;
-        try {
-            JSONObject body = new JSONObject();
-            body.put("model", config.model);
-            body.put("stream", false);
-            body.put("max_tokens", maxTokens);
-            JSONArray array = new JSONArray();
-            for (JSONObject message : messages) {
-                array.put(message);
-            }
-            body.put("messages", array);
-
-            connection = (HttpURLConnection) new URL(config.baseUrl + "/chat/completions").openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(20000);
-            connection.setReadTimeout(180000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json");
-            if (!config.apiKey.isEmpty()) {
-                connection.setRequestProperty("Authorization", "Bearer " + config.apiKey);
-            }
-
-            OutputStream output = connection.getOutputStream();
-            try {
-                output.write(body.toString().getBytes(StandardCharsets.UTF_8));
-                output.flush();
-            } finally {
-                WorkspaceStore.closeQuietly(output);
-            }
-
-            int code = connection.getResponseCode();
-            String payload = readAll(code >= 400 ? connection.getErrorStream() : connection.getInputStream());
-            if (code >= 400) {
-                return new Reply("", "The provider answered " + code + ": " + trim(payload, 200));
-            }
-
-            JSONObject json = new JSONObject(payload);
-            JSONArray choices = json.optJSONArray("choices");
-            if (choices == null || choices.length() == 0) {
-                return new Reply("", "The provider returned no choices.");
-            }
-            JSONObject message = choices.getJSONObject(0).optJSONObject("message");
-            String content = message == null ? "" : message.optString("content", "");
-            return new Reply(content, null);
-        } catch (Exception error) {
-            return new Reply("", "Could not reach the provider: " + error.getMessage());
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-    }
-
     /**
      * Streaming chat. Falls back to a single request when the provider will not
      * stream, so a provider that ignores the flag still answers.
      */
-    public static Reply chatStreaming(Config config, List<JSONObject> messages, int maxTokens, TokenSink sink) {
+    public static Reply chatStreaming(Config config, List<JSONObject> messages, int maxTokens,
+                                      TokenSink sink, Cancellation cancellation) {
         HttpURLConnection connection = null;
         BufferedReader reader = null;
         try {
@@ -165,6 +116,10 @@ public final class CloudProvider {
             reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
             String line;
             while ((line = reader.readLine()) != null) {
+                if (cancellation != null && cancellation.cancelled()) {
+                    // Whatever arrived is kept; the rest is abandoned.
+                    return new Reply(whole.toString(), null);
+                }
                 if (!line.startsWith("data:")) {
                     continue;
                 }

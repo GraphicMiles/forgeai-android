@@ -436,6 +436,9 @@ public final class WorkspaceStore {
     }
 
     public void createFolder(String path) throws IOException {
+        if (isProtected(path)) {
+            throw new IOException("That name is protected.");
+        }
         DocumentFile parent = parentOf(path);
         String name = lastSegment(path);
         if (parent.findFile(name) != null) {

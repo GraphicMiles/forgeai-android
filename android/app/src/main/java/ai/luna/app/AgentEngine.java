@@ -438,8 +438,19 @@ public final class AgentEngine {
                 return;
             }
             if (local != null && !loadIfNeeded(local)) {
-                finishWithMessage("That model would not load. It may be a bad download; delete it and get it again.");
-                return;
+                JSONObject standby = failoverProvider();
+                if (standby == null) {
+                    finishWithMessage("That model would not load. It may be a bad download; "
+                        + "delete it and get it again.");
+                    return;
+                }
+                // The switch in Settings says prompts may leave the device when
+                // the on-device model cannot cope. This is that moment.
+                emit("failover", new JSONObject());
+                appendObservation("failover", "The on-device model would not load, so "
+                    + standby.optString("label", "the configured provider") + " answered instead.");
+                local = null;
+                cloud = standby;
             }
 
             String answer = "";
@@ -622,7 +633,9 @@ public final class AgentEngine {
         guards.recordCloudCall();
 
         // The key is read for this one call and never goes into the prompt.
-        String key = vault.read("cloud:" + cloud.optString("id"));
+        // Ollama on your own machine has no key, and asking the keystore for
+        // one that was never stored just returns empty anyway.
+        String key = cloud.optBoolean("local") ? "" : vault.read("cloud:" + cloud.optString("id"));
         CloudProvider.Config config = new CloudProvider.Config(
             cloud.optString("baseUrl"), key, cloud.optString("model"));
         CloudProvider.Reply reply = CloudProvider.chatStreaming(config, cloudMessages(), 1024,
@@ -636,6 +649,12 @@ public final class AgentEngine {
                         return;
                     }
                     emit("token", event);
+                }
+            },
+            new CloudProvider.Cancellation() {
+                @Override
+                public boolean cancelled() {
+                    return stopRequested.get();
                 }
             });
         if (reply.error != null) {
@@ -725,12 +744,58 @@ public final class AgentEngine {
             + (entry.sizeBytes / (1024L * 1024L)) + " MB. The download did not finish — get it again.";
     }
 
+    /**
+     * The thing on the other end of a network call: a hosted provider, or the
+     * Ollama server on your own machine. Ollama speaks the same OpenAI shape at
+     * /v1, so once the address is turned into a config the loop cannot tell
+     * them apart — which is why "your computer" is now a model you can pick
+     * rather than an address that sat there doing nothing.
+     */
     private JSONObject activeCloudProvider() {
         String id = prefs.activeModelId();
+        if (id.startsWith("ollama:")) {
+            return ollamaProvider(id.substring("ollama:".length()));
+        }
         if (!id.startsWith("cloud:")) {
             return null;
         }
         return prefs.cloudProvider(id.substring("cloud:".length()));
+    }
+
+    /**
+     * Where to go when the on-device model cannot answer. Null unless the user
+     * turned failover on and there is somewhere to fail over to.
+     */
+    private JSONObject failoverProvider() {
+        if (!prefs.failoverEnabled()) {
+            return null;
+        }
+        JSONArray providers = prefs.cloudProviders(vault);
+        for (int index = 0; index < providers.length(); index++) {
+            JSONObject provider = providers.optJSONObject(index);
+            if (provider != null && !provider.optString("model").isEmpty()) {
+                return provider;
+            }
+        }
+        return null;
+    }
+
+    private JSONObject ollamaProvider(String model) {
+        String endpoint = prefs.endpoint().replaceAll("/+$", "");
+        if (endpoint.isEmpty() || model.isEmpty()) {
+            return null;
+        }
+        JSONObject out = new JSONObject();
+        try {
+            out.put("id", "ollama");
+            out.put("label", model + " on your computer");
+            out.put("baseUrl", endpoint + "/v1");
+            out.put("model", model);
+            out.put("local", true);
+        } catch (JSONException error) {
+            return null;
+        }
+        return out;
     }
 
     // --- approval ------------------------------------------------------------

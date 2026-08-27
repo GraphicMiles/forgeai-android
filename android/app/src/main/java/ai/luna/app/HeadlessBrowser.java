@@ -37,7 +37,8 @@ public final class HeadlessBrowser {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ErrorLog errors;
 
-    private WebView web;
+    // Touched from the agent worker and the main thread.
+    private volatile WebView web;
     private volatile String currentUrl = "";
     private volatile String currentTitle = "";
 
@@ -56,7 +57,7 @@ public final class HeadlessBrowser {
 
     /** What is on screen right now, in reading order. Empty when nothing is open. */
     public String open(String url, long timeoutMs) {
-        String verdict = NetworkTargets.check(url);
+        String verdict = NetworkTargets.checkResolved(url);
         if (verdict != null) {
             return "refused: " + verdict;
         }
@@ -111,6 +112,19 @@ public final class HeadlessBrowser {
 
         try {
             if (!ready.await(timeoutMs <= 0 ? DEFAULT_TIMEOUT_MS : timeoutMs, TimeUnit.MILLISECONDS)) {
+                // Otherwise the page carries on loading in the background after
+                // the tool has already reported failure.
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        WebView open = web;
+                        if (open != null) {
+                            open.stopLoading();
+                        }
+                    }
+                });
+                currentUrl = "";
+                currentTitle = "";
                 return "refused: the page took too long and was abandoned";
             }
         } catch (InterruptedException stopped) {
@@ -119,6 +133,8 @@ public final class HeadlessBrowser {
         }
         if (failure.get() != null) {
             errors.record("open_page", target + ": " + failure.get());
+            currentUrl = "";
+            currentTitle = "";
             return "refused: " + failure.get();
         }
         return "";
