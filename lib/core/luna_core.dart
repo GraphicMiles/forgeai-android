@@ -65,6 +65,36 @@ class LunaCore extends ChangeNotifier {
   String streaming = '';
   double tokensPerSecond = 0;
   DateTime? runStartedAt;
+
+  /// Time spent waiting on you is not time spent working. It is measured
+  /// separately so "Thought for 11.5s" means eleven and a half seconds of
+  /// thinking, not eleven and a half seconds of a card sitting on screen.
+  Duration runElapsed = Duration.zero;
+  DateTime? _gateSince;
+  int _gateMillis = 0;
+
+  bool get waitingOnYou => pendingApproval != null || pendingQuestion != null;
+
+  /// Work done in the current run, or the frozen total once it has finished.
+  Duration get workElapsed {
+    if (runStartedAt == null) return runElapsed;
+    if (!running) return runElapsed;
+    int millis = DateTime.now().difference(runStartedAt!).inMilliseconds - _gateMillis;
+    if (_gateSince != null) {
+      millis -= DateTime.now().difference(_gateSince!).inMilliseconds;
+    }
+    return Duration(milliseconds: millis < 0 ? 0 : millis);
+  }
+
+  void _openGate() {
+    _gateSince ??= DateTime.now();
+  }
+
+  void _closeGate() {
+    if (_gateSince == null) return;
+    _gateMillis += DateTime.now().difference(_gateSince!).inMilliseconds;
+    _gateSince = null;
+  }
   String? lastError;
 
   bool get unattended => executionMode == 'auto';
@@ -170,6 +200,9 @@ class LunaCore extends ChangeNotifier {
         steps = <Map<String, String>>[];
         pendingApproval = null;
         runStartedAt = DateTime.now();
+        runElapsed = Duration.zero;
+        _gateMillis = 0;
+        _gateSince = null;
         break;
       case 'thinking':
         thinking = true;
@@ -200,6 +233,7 @@ class LunaCore extends ChangeNotifier {
         break;
       case 'approval':
         thinking = false;
+        _openGate();
         pendingApproval = event;
         break;
       case 'speed':
@@ -207,6 +241,7 @@ class LunaCore extends ChangeNotifier {
         break;
       case 'ask':
         thinking = false;
+        _openGate();
         pendingQuestion = event;
         break;
       case 'download':
@@ -238,6 +273,8 @@ class LunaCore extends ChangeNotifier {
         unawaited(refresh());
         break;
       case 'run_done':
+        _closeGate();
+        runElapsed = workElapsed;
         running = false;
         thinking = false;
         streaming = '';
@@ -276,6 +313,7 @@ class LunaCore extends ChangeNotifier {
   Future<void> stop() => _invoke('stopAgent');
 
   Future<void> approve(String id, bool approved) async {
+    _closeGate();
     pendingApproval = null;
     thinking = true;
     notifyListeners();
@@ -285,6 +323,7 @@ class LunaCore extends ChangeNotifier {
 
   /// Answer an ask_user question. An empty answer means "carry on without me".
   Future<void> answerQuestion(String id, String text) async {
+    _closeGate();
     pendingQuestion = null;
     thinking = true;
     notifyListeners();
