@@ -106,8 +106,9 @@ class _FilesScreenState extends State<FilesScreen> {
                       final String? name = await core.bringInFile();
                       if (!mounted) return;
                       await _reload();
-                      if (name != null && name.isNotEmpty && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      if (!mounted) return;
+                      if (name != null && name.isNotEmpty) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
                           SnackBar(content: Text('Copied $name into the folder')),
                         );
                       }
