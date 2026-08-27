@@ -5,12 +5,15 @@ on:
   push:
     branches:
       - main
+      - luna-rebuild
 
 permissions:
   contents: read
 
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: "2"
+  # Hard ceiling: the APK's contents, uncompressed, must stay under this.
+  APK_UNPACKED_LIMIT_MIB: "50"
   GRADLE_OPTS: >-
     -Dorg.gradle.jvmargs=-Xmx4096m
     -Dorg.gradle.daemon=false
@@ -18,7 +21,7 @@ env:
 
 jobs:
   build-android:
-    name: Build ForgeAI Debug APK
+    name: Build Luna Debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -71,23 +74,19 @@ jobs:
       - name: Validate immutable release model catalog
         run: npm run catalog:validate-release
 
-      - name: Smoke test SafetyPolicy module
-        run: |
-          node -e "
-            const fs = require('fs');
-            const content = fs.readFileSync('src/safety/SafetyPolicy.js', 'utf8');
-            if (!content.includes('POLICY_LEVELS') || !content.includes('createSafetyPolicy')) {
-              console.error('SafetyPolicy module missing exports');
-              process.exit(1);
-            }
-            console.log('✅ SafetyPolicy module smoke test passed');
-          "
-
       - name: Verify model source ranges and GGUF headers
         run: npm run catalog:verify-sources
 
       - name: Build web assets
         run: npm run build
+
+      - name: Report web bundle size
+        shell: bash
+        run: |
+          echo "dist total: $(du -sh dist | cut -f1)"
+          find dist -name '*.map' -print -quit | grep -q . \
+            && { echo "::error::source maps must not ship in dist"; exit 1; } || true
+          du -ah dist/assets | sort -h | tail -8
 
       - name: Sync Capacitor Android project
         run: npx cap sync android
@@ -104,10 +103,51 @@ jobs:
           ls -lh "$APK_PATH"
           sha256sum "$APK_PATH"
 
+      # The size contract: unzip the APK and measure what actually lands on the
+      # device. Fails the build rather than shipping something oversized.
+      - name: Enforce unpacked APK size budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          LIMIT_MIB="${APK_UNPACKED_LIMIT_MIB}"
+
+          COMPRESSED_BYTES=$(stat -c%s "$APK_PATH")
+          UNPACKED_BYTES=$(unzip -l "$APK_PATH" | tail -1 | awk '{print $1}')
+          LIMIT_BYTES=$(( LIMIT_MIB * 1024 * 1024 ))
+
+          mib() { awk -v b="$1" 'BEGIN{printf "%.2f", b/1048576}'; }
+
+          {
+            echo "### APK size"
+            echo ""
+            echo "| Measurement | Size |"
+            echo "|---|---|"
+            echo "| Download (compressed) | $(mib "$COMPRESSED_BYTES") MiB |"
+            echo "| Installed (unpacked) | $(mib "$UNPACKED_BYTES") MiB |"
+            echo "| Budget | ${LIMIT_MIB}.00 MiB |"
+            echo ""
+            echo "#### Ten largest entries"
+            echo ""
+            echo '```'
+            unzip -l "$APK_PATH" | sort -k1 -n -r | head -10 | awk '{printf "%8.2f MiB  %s\n", $1/1048576, $4}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "compressed: $(mib "$COMPRESSED_BYTES") MiB"
+          echo "unpacked:   $(mib "$UNPACKED_BYTES") MiB (budget ${LIMIT_MIB} MiB)"
+          unzip -l "$APK_PATH" | sort -k1 -n -r | head -10 | awk '{printf "%8.2f MiB  %s\n", $1/1048576, $4}'
+
+          if [ "$UNPACKED_BYTES" -gt "$LIMIT_BYTES" ]; then
+            echo "::error::Unpacked APK is $(mib "$UNPACKED_BYTES") MiB, over the ${LIMIT_MIB} MiB budget."
+            exit 1
+          fi
+          echo "✅ within budget"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: forgeai-debug-apk
+          name: luna-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

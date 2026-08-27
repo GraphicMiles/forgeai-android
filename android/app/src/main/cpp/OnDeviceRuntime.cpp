@@ -9,7 +9,7 @@
 #include <vector>
 #include "llama.h"
 
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "ForgeAI", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Luna", __VA_ARGS__)
 
 namespace {
 std::mutex model_mutex;
@@ -107,7 +107,7 @@ std::string token_piece(const llama_vocab * vocab, llama_token token) {
 } // namespace
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_ai_forgeai_app_OnDeviceRuntime_nativeLoad(JNIEnv * env, jclass, jstring path) {
+Java_ai_luna_app_OnDeviceRuntime_nativeLoad(JNIEnv * env, jclass, jstring path) {
     const char * raw = env->GetStringUTFChars(path, nullptr);
     if (!raw) return JNI_FALSE;
     std::lock_guard<std::mutex> lock(model_mutex);
@@ -122,13 +122,13 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeLoad(JNIEnv * env, jclass, jstring pat
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_ai_forgeai_app_OnDeviceRuntime_nativeUnload(JNIEnv *, jclass) {
+Java_ai_luna_app_OnDeviceRuntime_nativeUnload(JNIEnv *, jclass) {
     std::lock_guard<std::mutex> lock(model_mutex);
     if (model) { llama_model_free(model); model = nullptr; }
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_ai_forgeai_app_OnDeviceRuntime_nativeCancel(JNIEnv * env, jclass, jstring request_id) {
+Java_ai_luna_app_OnDeviceRuntime_nativeCancel(JNIEnv * env, jclass, jstring request_id) {
     const char * raw = env->GetStringUTFChars(request_id, nullptr);
     if (!raw) return;
     {
@@ -139,7 +139,7 @@ Java_ai_forgeai_app_OnDeviceRuntime_nativeCancel(JNIEnv * env, jclass, jstring r
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_ai_forgeai_app_OnDeviceRuntime_nativeGenerate(
+Java_ai_luna_app_OnDeviceRuntime_nativeGenerate(
     JNIEnv * env,
     jclass,
     jobject runtime,
