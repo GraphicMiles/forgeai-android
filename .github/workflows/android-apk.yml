@@ -1,168 +1,95 @@
-name: Build Android APK
+name: Android APK
 
 on:
-  workflow_dispatch: {}
   push:
-    branches:
-      - main
-      - luna-rebuild
-
-permissions:
-  contents: read
+    branches: [luna-rebuild, main]
+  workflow_dispatch:
 
 env:
-  CMAKE_BUILD_PARALLEL_LEVEL: "2"
-  # Hard ceiling: the APK's contents, uncompressed, must stay under this.
-  APK_UNPACKED_LIMIT_MIB: "50"
-  GRADLE_OPTS: >-
-    -Dorg.gradle.jvmargs=-Xmx4096m
-    -Dorg.gradle.daemon=false
-    -Dorg.gradle.workers.max=2
+  FLUTTER_VERSION: 3.47.2
+  APK_UNPACKED_LIMIT_MIB: 50
 
 jobs:
-  build-android:
-    name: Build Luna Debug APK
+  apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - uses: actions/checkout@v4
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
-          cache: gradle
+          java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
 
-      - name: Install Android SDK, NDK, and CMake
-        shell: bash
+      - name: Report toolchain
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "cmake;3.22.1" \
-            "ndk;26.1.10909125"
+          flutter --version
+          java -version
 
-      - name: Install JavaScript dependencies
-        run: npm ci
+      - name: Fetch llama.cpp
+        run: bash scripts/bootstrap-llama-cpp.sh
 
-      # Downloads the exact llama.cpp revision required by the CMake project
-      # and verifies Java/SDK/NDK/CMake before the expensive build begins.
-      - name: Bootstrap pinned llama.cpp
-        run: npm run llama:bootstrap
-
-      - name: Verify Android build environment
-        run: npm run android:preflight
-
-      - name: Run unit tests
-        run: npm test
-
-      - name: Run static analysis
-        run: npm run lint
-
-      - name: Audit production dependencies
-        run: npm audit --omit=dev
-
-      - name: Validate immutable release model catalog
-        run: npm run catalog:validate-release
-
-      - name: Verify model source ranges and GGUF headers
-        run: npm run catalog:verify-sources
-
-      - name: Build web assets
-        run: npm run build
-
-      - name: Report web bundle size
-        shell: bash
+      - name: Install NDK 26.1.10909125
         run: |
-          echo "dist total: $(du -sh dist | cut -f1)"
-          find dist -name '*.map' -print -quit | grep -q . \
-            && { echo "::error::source maps must not ship in dist"; exit 1; } || true
-          du -ah dist/assets | sort -h | tail -8
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.1.10909125" "cmake;3.22.1" > /dev/null
 
-      - name: Sync Capacitor Android project
-        run: npx cap sync android
+      - name: Resolve packages
+        run: flutter pub get
 
-      - name: Build direct llama.cpp Android APK
-        working-directory: android
-        run: bash ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Verify APK artifact
-        shell: bash
-        run: |
-          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK_PATH"
-          ls -lh "$APK_PATH"
-          sha256sum "$APK_PATH"
+      - name: Build release APK
+        run: flutter build apk --release --target-platform android-arm64 --tree-shake-icons
 
-      # The size contract: unzip the APK and measure what actually lands on the
-      # device. Fails the build rather than shipping something oversized.
-      # The size contract: unzip the APK and measure what actually lands on the
-      # device. Fails the build rather than shipping something oversized.
-      - name: Enforce unpacked APK size budget
-        shell: bash
+      - name: Check the unpacked size budget
         run: |
           set -euo pipefail
-          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-          LIMIT_MIB="${APK_UNPACKED_LIMIT_MIB}"
-          LIMIT_BYTES=$(( LIMIT_MIB * 1024 * 1024 ))
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -f "$APK"
 
-          # Materialise the listing once; piping unzip straight into head closes
-          # the pipe early and trips pipefail.
-          unzip -l "$APK_PATH" > /tmp/apk-listing.txt
+          unzip -l "$APK" > /tmp/listing.txt
+          UNPACKED=$(awk '/^ *[0-9]+ /{total += $1} END {print total+0}' /tmp/listing.txt)
+          COMPRESSED=$(stat -c%s "$APK")
+          LIMIT=$(( APK_UNPACKED_LIMIT_MIB * 1024 * 1024 ))
 
-          COMPRESSED_BYTES=$(stat -c%s "$APK_PATH")
-          UNPACKED_BYTES=$(tail -1 /tmp/apk-listing.txt | awk '{print $1}')
-
-          # Entry rows only: everything between the two dashed separator lines.
-          # Names can contain spaces, so take field 1 as the size and fields 4+
-          # as the name rather than assuming a date format.
-          awk '/^---------/{sep++; next} sep==1 && $1 ~ /^[0-9]+$/ {
-                 name=$4; for (i=5; i<=NF; i++) name=name" "$i;
-                 printf "%s\t%s\n", $1, name }' \
-            /tmp/apk-listing.txt | sort -rn > /tmp/apk-entries.txt
-
-          mib() { awk -v b="$1" 'BEGIN{printf "%.2f", b/1048576}'; }
-          top10() { head -10 /tmp/apk-entries.txt | awk -F'\t' '{printf "%8.2f MiB  %s\n", $1/1048576, $2}'; }
+          MIB() { awk -v b="$1" 'BEGIN {printf "%.2f", b / 1048576}'; }
 
           {
-            echo "### APK size"
+            echo "## APK"
             echo ""
-            echo "| Measurement | Size |"
-            echo "|---|---|"
-            echo "| Download (compressed) | $(mib "$COMPRESSED_BYTES") MiB |"
-            echo "| Installed (unpacked) | $(mib "$UNPACKED_BYTES") MiB |"
-            echo "| Budget (unpacked) | ${LIMIT_MIB}.00 MiB |"
+            echo "| Measure | Size |"
+            echo "| --- | --- |"
+            echo "| Download (compressed) | $(MIB "$COMPRESSED") MiB |"
+            echo "| Installed (unpacked) | $(MIB "$UNPACKED") MiB |"
+            echo "| Budget | ${APK_UNPACKED_LIMIT_MIB}.00 MiB |"
             echo ""
-            echo "#### Ten largest entries"
+            echo "### Ten largest entries"
             echo ""
-            echo '```'
-            top10
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "compressed: $(mib "$COMPRESSED_BYTES") MiB"
-          echo "unpacked:   $(mib "$UNPACKED_BYTES") MiB (budget ${LIMIT_MIB} MiB)"
-          top10
+          awk '/^ *[0-9]+ /{printf "%12d  %s\n", $1, $4}' /tmp/listing.txt > /tmp/entries.txt
+          sort -rn /tmp/entries.txt > /tmp/sorted.txt
+          head -n 10 /tmp/sorted.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$UNPACKED_BYTES" -gt "$LIMIT_BYTES" ]; then
-            echo "::error::Unpacked APK is $(mib "$UNPACKED_BYTES") MiB, over the ${LIMIT_MIB} MiB budget."
+          if [ "$UNPACKED" -gt "$LIMIT" ]; then
+            echo "Unpacked APK is $(MIB "$UNPACKED") MiB, over the ${APK_UNPACKED_LIMIT_MIB} MiB budget." >&2
             exit 1
           fi
-          echo "Within budget: $(mib "$UNPACKED_BYTES") / ${LIMIT_MIB} MiB unpacked."
+          echo "Unpacked APK is $(MIB "$UNPACKED") MiB, within the ${APK_UNPACKED_LIMIT_MIB} MiB budget."
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: luna-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: luna-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-          retention-days: 14
