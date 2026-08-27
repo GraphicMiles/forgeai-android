@@ -37,7 +37,6 @@ android {
                 abiFilters "arm64-v8a"
                 arguments "-DGGML_NATIVE=OFF", "-DLLAMA_BUILD_APP=OFF", "-DLLAMA_BUILD_TESTS=OFF",
                           "-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_OPENSSL=OFF", "-DANDROID_STL=c++_shared",
-                          "-DBUILD_SHARED_LIBS=OFF", "-DGGML_STATIC=ON",
                           "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--gc-sections -Wl,--exclude-libs,ALL -Wl,-s"
                 // Size, not speed of compilation: the whole APK has to stay
                 // under 50 MiB unpacked.
