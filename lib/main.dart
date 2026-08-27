@@ -186,6 +186,6 @@ class _Tab {
   const _Tab(this.label, this.active, this.idle);
 
   final String label;
-  final IconData active;
-  final IconData idle;
+  final FaIconData active;
+  final FaIconData idle;
 }
