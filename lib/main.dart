@@ -288,12 +288,12 @@ class _WalkthroughState extends State<_Walkthrough> {
               },
             ),
           ),
-          LunaRow(
+          const LunaRow(
             icon: FontAwesomeIcons.hand,
             title: 'It stops before it changes anything',
             subtitle: 'Writing, renaming and deleting wait for you to say yes.',
           ),
-          LunaRow(
+          const LunaRow(
             icon: FontAwesomeIcons.cube,
             title: 'It needs a model',
             subtitle: 'Download one in the Model Zoo, point at Ollama, or add a cloud key.',

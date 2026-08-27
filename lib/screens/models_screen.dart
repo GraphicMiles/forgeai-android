@@ -360,7 +360,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
         decoration: BoxDecoration(
-            color: LunaTheme.inkCell, borderRadius: BorderRadius.all(Radius.circular(15))),
+            color: LunaTheme.inkCell, borderRadius: const BorderRadius.all(Radius.circular(15))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
