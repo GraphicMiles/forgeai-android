@@ -59,6 +59,10 @@ class LunaCore extends ChangeNotifier {
   /// A file another app just shared into the folder.
   String sharedFile = '';
 
+  /// True once this reply has been recognised as a tool call rather than
+  /// something for a person to read.
+  bool _machineReply = false;
+
   /// Tool steps for the turn in flight.
   List<Map<String, String>> steps = <Map<String, String>>[];
   bool thinking = false;
@@ -232,6 +236,10 @@ class LunaCore extends ChangeNotifier {
         running = true;
         thinking = true;
         streaming = '';
+        _machineReply = false;
+        // Last run's speed is last run's. Showing it as current is a small
+        // lie that makes every other number look negotiable.
+        tokensPerSecond = 0;
         steps = <Map<String, String>>[];
         pendingApproval = null;
         runStartedAt = DateTime.now();
@@ -242,14 +250,28 @@ class LunaCore extends ChangeNotifier {
       case 'thinking':
         thinking = true;
         streaming = '';
+        _machineReply = false;
         break;
       case 'loading_model':
         thinking = true;
         steps.add(<String, String>{'tool': 'load_model', 'path': '', 'state': 'running'});
         break;
       case 'token':
+        // The engine already holds tool-call JSON back. This is the second
+        // gate: what is machine-shaped belongs to the trace, not the thread,
+        // and no part of it is ever typed out and then withdrawn.
+        final String chunk = (event['text'] as String?) ?? '';
+        if (_machineReply) break;
+        final String ahead = (streaming + chunk).trimLeft();
+        if (streaming.trim().isEmpty &&
+            (ahead.startsWith('{') || ahead.startsWith('[') || ahead.startsWith('```'))) {
+          _machineReply = true;
+          streaming = '';
+          thinking = true;
+          break;
+        }
         thinking = false;
-        streaming += (event['text'] as String?) ?? '';
+        streaming += chunk;
         break;
       case 'step':
         final String tool = (event['tool'] as String?) ?? '';

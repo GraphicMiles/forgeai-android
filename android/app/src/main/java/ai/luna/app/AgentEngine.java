@@ -463,8 +463,8 @@ public final class AgentEngine {
                     return;
                 }
                 if (guards.elapsedMillis() > (long) prefs.budgetSeconds() * 1000L) {
-                    answer = "I hit the time limit for one job (" + prefs.budgetSeconds()
-                        + " seconds) and stopped. " + guards.describe() + ".";
+                    answer = "I ran past the " + prefs.budgetSeconds()
+                        + " seconds you allow for one job, so I stopped. " + guards.describe() + ".";
                     cutShort = true;
                     break;
                 }
@@ -538,6 +538,10 @@ public final class AgentEngine {
                     continue;
                 }
                 if (decision == ToolPolicy.Decision.ASK) {
+                    // The row has to exist while the job is parked on it. A
+                    // trace that hides the tool you are being asked about is
+                    // asking you to approve something you cannot see.
+                    emitStep(tool, path, "held");
                     boolean approved = requestApproval(tool, path, args.optString("content", ""));
                     if (!approved) {
                         emitStep(tool, path, "denied");
@@ -573,7 +577,8 @@ public final class AgentEngine {
             }
         } catch (Exception error) {
             errors.record("agent", error);
-            finishWithMessage("Something went wrong in the loop: " + error);
+            finishWithMessage("Something went wrong while I was working, so I stopped. "
+                + "Nothing was left half-written. Settings keeps the details.");
         } finally {
             running.set(false);
             pendingApprovalId = "";
@@ -589,6 +594,7 @@ public final class AgentEngine {
     /** One model call. Returns raw text, or null when the turn already ended. */
     private String ask(ModelStore.Entry local, JSONObject cloud, RunGuards guards) {
         emit("thinking", new JSONObject());
+        final Spigot spigot = new Spigot();
         if (local != null) {
             final StringBuilder streamed = new StringBuilder();
             OnDeviceRuntime.Result result = runtime.generate(
@@ -600,9 +606,13 @@ public final class AgentEngine {
                     @Override
                     public void onToken(String text) {
                         streamed.append(text);
+                        String show = spigot.filter(text);
+                        if (show.isEmpty()) {
+                            return;
+                        }
                         JSONObject event = new JSONObject();
                         try {
-                            event.put("text", text);
+                            event.put("text", show);
                         } catch (JSONException ignored) {
                             return;
                         }
@@ -642,9 +652,13 @@ public final class AgentEngine {
             new CloudProvider.TokenSink() {
                 @Override
                 public void onToken(String text) {
+                    String show = spigot.filter(text);
+                    if (show.isEmpty()) {
+                        return;
+                    }
                     JSONObject event = new JSONObject();
                     try {
-                        event.put("text", text);
+                        event.put("text", show);
                     } catch (JSONException ignored) {
                         return;
                     }
@@ -1073,6 +1087,49 @@ public final class AgentEngine {
             return;
         }
         emit("step", event);
+    }
+
+    /**
+     * Decides whether a reply is for the person or for the machine, and only
+     * lets the first kind through.
+     *
+     * A tool call is one JSON object and nothing else, so the very first
+     * non-blank character settles it. Everything before that decision is held,
+     * which is at most a few characters; once the reply is known to be prose
+     * the held text is released in one go and the rest streams straight
+     * through. This is what stops {"tool":"write_file"...} being typed into the
+     * thread a word at a time and then yanked back out.
+     */
+    static final class Spigot {
+        private final StringBuilder held = new StringBuilder();
+        private boolean decided;
+        private boolean suppress;
+
+        String filter(String chunk) {
+            if (chunk == null || chunk.isEmpty()) {
+                return "";
+            }
+            if (decided) {
+                return suppress ? "" : chunk;
+            }
+            held.append(chunk);
+            String seen = held.toString();
+            String trimmed = seen.trim();
+            if (trimmed.isEmpty()) {
+                // Still only whitespace: nothing has been decided, and nothing
+                // shown. Leading blank lines are not worth streaming anyway.
+                return "";
+            }
+            char first = trimmed.charAt(0);
+            decided = true;
+            suppress = first == '{' || first == '[' || trimmed.startsWith("```");
+            if (suppress) {
+                held.setLength(0);
+                return "";
+            }
+            held.setLength(0);
+            return seen;
+        }
     }
 
     private void emit(String type, JSONObject payload) {

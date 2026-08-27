@@ -66,7 +66,10 @@ public final class ToolPolicy {
         switch (tool) {
             case "write_file": {
                 int lines = content == null || content.isEmpty() ? 0 : content.split("\n", -1).length;
-                return "Overwrite " + safePath + " with " + lines + " lines?";
+                // One line is one line. A count that cannot count is the first
+                // thing a person notices, and the last thing they trust.
+                return "Replace what is in " + safePath + " with "
+                    + lines + (lines == 1 ? " line?" : " lines?");
             }
             case "create_file":
                 return "Create " + safePath + "?";
@@ -77,14 +80,19 @@ public final class ToolPolicy {
             case "rename_file":
                 return "Rename " + safePath + "?";
             case "open_page":
-                return "Open " + safePath + " in a hidden browser?";
+                return "Open " + safePath + " in the background browser?";
             case "read_page":
                 return "Read the page that is open?";
             case "github_file":
                 return "Fetch " + safePath + " from GitHub?";
             default:
-                return "Run " + tool + "?";
+                return "Let Luna " + plainName(tool) + "?";
         }
+    }
+
+    /** A tool's name as a person would say it, for the rare unnamed case. */
+    private static String plainName(String tool) {
+        return tool == null ? "do that" : tool.replace('_', ' ');
     }
 
     /** The consequence line under the headline. Never softened. */
@@ -97,7 +105,7 @@ public final class ToolPolicy {
             case "open_page":
                 return "A page load off this device. Cookies are thrown away when the job ends.";
             case "read_page":
-                return "The page text goes into the model's context.";
+                return "The words on the page become part of what the model reads.";
             case "github_file":
                 return "Your GitHub token is sent to github.com to fetch this file.";
             default:

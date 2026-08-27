@@ -197,38 +197,38 @@ class AgentWorkingLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
-      child: Row(
-        children: <Widget>[
-          PixelLoader(active: !waiting),
-          const SizedBox(width: 10),
-          Flexible(child: ShimmerLabel(text: label, active: !waiting)),
-          const SizedBox(width: 8),
-          Text(
-            formatDuration(elapsed),
-            style: LunaTheme.monoStyle(size: 11.5, color: LunaTheme.ink3),
-          ),
-          const Spacer(),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onStop,
-            child: Semantics(
-              button: true,
-              label: 'Stop the job',
+    return Row(
+      children: <Widget>[
+        PixelLoader(size: 11, active: !waiting),
+        const SizedBox(width: 8),
+        Flexible(child: ShimmerLabel(text: label, active: !waiting, size: 12.5, weight: 600)),
+        const SizedBox(width: 8),
+        Text(
+          formatDuration(elapsed),
+          style: LunaTheme.monoStyle(size: 11, color: LunaTheme.ink3),
+        ),
+        const Spacer(),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onStop,
+          child: Semantics(
+            button: true,
+            label: 'Stop the job',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Glyph(FontAwesomeIcons.stop, size: 10.5, color: LunaTheme.ink),
-                  const SizedBox(width: 6),
-                  Text('Stop', style: LunaTheme.text(size: 12.5, weight: 600)),
+                  Glyph(FontAwesomeIcons.stop, size: 9.5, color: LunaTheme.ink3),
+                  const SizedBox(width: 5),
+                  Text('Stop',
+                      style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.ink2)),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -243,29 +243,37 @@ class TraceStep {
 
   final String label;
 
-  /// running, done, replayed, blocked, denied.
+  /// running, held, done, replayed, blocked, denied.
   final String state;
   final String detail;
 
   bool get isDone => state == 'done' || state == 'replayed';
   bool get isRefused => state == 'denied' || state == 'blocked' || state == 'unfinished';
   bool get isRunning => state == 'running';
+  bool get isHeld => state == 'held';
 }
 
-/// The expandable record of what Luna actually did. It opens itself while the
-/// run is live so you can watch, and folds back to one line when the run ends —
-/// unless you touched it, in which case you decide.
+/// The record of what Luna actually did.
+///
+/// No card, no fill: it sits in the same column as the answer, led by the
+/// mark, so a job reads as one block of text rather than a stack of panels. It
+/// opens itself while the run is live and folds back to one line when the run
+/// ends — unless you touched it, in which case you decide.
 class AgentTrace extends StatefulWidget {
   const AgentTrace({
     super.key,
     required this.steps,
     required this.running,
     required this.elapsed,
+    this.waiting = false,
   });
 
   final List<TraceStep> steps;
   final bool running;
   final Duration elapsed;
+
+  /// Parked on your answer. Not the same as working, and never says so.
+  final bool waiting;
 
   @override
   State<AgentTrace> createState() => _AgentTraceState();
@@ -278,123 +286,118 @@ class _AgentTraceState extends State<AgentTrace> {
 
   @override
   Widget build(BuildContext context) {
-    final String heading = widget.running
-        ? 'Working'
-        : 'Thought for ${formatDuration(widget.elapsed, precise: true)}';
-    return Container(
-      margin: const EdgeInsets.fromLTRB(52, 10, 20, 0),
-      padding: const EdgeInsets.fromLTRB(15, 4, 13, 6),
-      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rStep),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _pinned = !_open),
-            child: Semantics(
-              button: true,
-              label: '$heading, ${widget.steps.length} steps',
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                child: Row(
-                  children: <Widget>[
-                    ShimmerLabel(
+    final String heading = widget.waiting
+        ? 'Waiting on you'
+        : widget.running
+            ? 'Thinking'
+            : 'Thought for ${formatDuration(widget.elapsed, precise: true)}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _pinned = !_open),
+          child: Semantics(
+            button: true,
+            label: '$heading, ${widget.steps.length} steps',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: <Widget>[
+                  const Mark(size: 14),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: ShimmerLabel(
                       text: heading,
-                      active: widget.running,
+                      active: widget.running && !widget.waiting,
                       size: 12.5,
                       weight: 600,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${widget.steps.length} ${widget.steps.length == 1 ? 'step' : 'steps'}',
-                      style: LunaTheme.text(size: 12, color: LunaTheme.ink3),
-                    ),
-                    const Spacer(),
-                    // Always drawn. A control that only appears on hover does
-                    // not exist on a phone.
-                    AnimatedRotation(
-                      turns: _open ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 260),
-                      curve: _ease,
-                      child: Glyph(FontAwesomeIcons.chevronDown,
-                          size: 10, color: LunaTheme.ink3),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Always drawn. A control that only appears on hover does
+                  // not exist on a phone.
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: _ease,
+                    child: Glyph(FontAwesomeIcons.chevronDown,
+                        size: 9, color: LunaTheme.ink3),
+                  ),
+                ],
               ),
             ),
           ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 400),
-            curve: _ease,
-            alignment: Alignment.topCenter,
-            child: _open
-                ? Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Container(
-                      padding: const EdgeInsets.only(left: 13),
-                      decoration: BoxDecoration(
-                        border: Border(left: BorderSide(color: LunaTheme.line, width: 1)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: widget.steps.map(_row).toList(),
-                      ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 400),
+          curve: _ease,
+          alignment: Alignment.topLeft,
+          child: _open
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 6, top: 2),
+                  child: Container(
+                    padding: const EdgeInsets.only(left: 10),
+                    decoration: BoxDecoration(
+                      border: Border(left: BorderSide(color: LunaTheme.line, width: 1)),
                     ),
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
-        ],
-      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: widget.steps.map(_row).toList(),
+                    ),
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 
   Widget _row(TraceStep step) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.5),
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
         children: <Widget>[
           SizedBox(
-            width: 17,
-            height: 17,
-            child: step.isRunning
-                ? const Center(child: PixelLoader(size: 9))
-                : Container(
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: step.isDone ? LunaTheme.ink : LunaTheme.fill2,
-                      shape: BoxShape.circle,
+            width: 13,
+            height: 16,
+            child: Center(
+              child: step.isRunning
+                  ? const PixelLoader(size: 9)
+                  : Glyph(
+                      step.isHeld
+                          ? FontAwesomeIcons.hourglassHalf
+                          : step.isRefused
+                              ? FontAwesomeIcons.xmark
+                              : FontAwesomeIcons.check,
+                      size: 9.5,
+                      color: step.isDone ? LunaTheme.ink2 : LunaTheme.ink3,
                     ),
-                    child: Glyph(
-                      step.isRefused ? FontAwesomeIcons.xmark : FontAwesomeIcons.check,
-                      size: 8,
-                      color: step.isDone ? LunaTheme.onInk : LunaTheme.ink3,
-                    ),
-                  ),
+            ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 7),
           Expanded(
             child: Text(
               step.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: LunaTheme.text(
-                size: 13,
+                size: 12,
                 weight: step.isDone ? 550 : 500,
-                color: step.isDone ? LunaTheme.ink : LunaTheme.ink3,
+                color: step.isDone ? LunaTheme.ink : LunaTheme.ink2,
               ),
             ),
           ),
           if (step.detail.isNotEmpty) ...<Widget>[
-            const SizedBox(width: 8),
+            const SizedBox(width: 7),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 130),
+              constraints: const BoxConstraints(maxWidth: 110),
               child: Text(
                 step.detail,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: LunaTheme.text(size: 12, color: LunaTheme.ink3),
+                style: LunaTheme.text(size: 10.5, color: LunaTheme.ink3),
               ),
             ),
           ],
@@ -433,9 +436,10 @@ class _StreamedAnswerState extends State<StreamedAnswer> {
     if (!widget.animate) {
       _settled = 1 << 30;
     } else {
-      // 100ms a word, the same cadence as the reference. Words that arrive
-      // faster than that queue up rather than flashing in together.
-      _tick = Timer.periodic(const Duration(milliseconds: 100), (Timer _) {
+      // 170ms a word: slower than the reference, because a phone is held at
+      // arm's length and a line that outruns the eye is a line nobody reads.
+      // Words that arrive faster than this queue up rather than flashing in.
+      _tick = Timer.periodic(const Duration(milliseconds: 170), (Timer _) {
         if (!mounted) return;
         if (_settled >= _words.length) return;
         setState(() => _settled++);
