@@ -121,6 +121,7 @@ public final class ModelStore {
 
     private final Context context;
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    private final AtomicBoolean paused = new AtomicBoolean(false);
     private volatile String downloadingId = "";
 
     public ModelStore(Context context) {
@@ -185,6 +186,29 @@ public final class ModelStore {
         cancelled.set(true);
     }
 
+    /** Stop, but keep the part file. The next attempt carries on from the byte. */
+    public void pauseDownload() {
+        paused.set(true);
+    }
+
+    /** How much of a model is already on disk, whether or not it is finished. */
+    public long bytesOnDisk(Entry entry) {
+        File target = fileFor(entry);
+        if (target.exists()) {
+            return target.length();
+        }
+        File partial = new File(target.getAbsolutePath() + ".part");
+        return partial.exists() ? partial.length() : 0L;
+    }
+
+    /** Throw away a half-finished download for good. */
+    public void discardPartial(Entry entry) {
+        File partial = new File(fileFor(entry).getAbsolutePath() + ".part");
+        if (partial.exists()) {
+            partial.delete();
+        }
+    }
+
     public String downloadingId() {
         return downloadingId;
     }
@@ -197,6 +221,7 @@ public final class ModelStore {
         File target = fileFor(entry);
         File partial = new File(target.getAbsolutePath() + ".part");
         cancelled.set(false);
+        paused.set(false);
         downloadingId = entry.id;
 
         HttpURLConnection connection = null;
@@ -231,13 +256,25 @@ public final class ModelStore {
             long completed = already;
             long lastReport = 0L;
             int read;
+            sink.onProgress(entry.id, completed, entry.sizeBytes, "downloading");
             while ((read = input.read(chunk)) > 0) {
                 if (cancelled.get()) {
+                    output.flush();
+                    WorkspaceStore.closeQuietly(output);
+                    output = null;
+                    partial.delete();
+                    sink.onProgress(entry.id, 0L, entry.sizeBytes, "cancelled");
                     return "Cancelled.";
+                }
+                if (paused.get()) {
+                    output.flush();
+                    sink.onProgress(entry.id, completed, entry.sizeBytes, "paused");
+                    return "Paused.";
                 }
                 output.write(chunk, 0, read);
                 completed += read;
-                if (completed - lastReport > 1_000_000L) {
+                // A quarter of a megabyte, so the bar moves rather than jumps.
+                if (completed - lastReport > 262_144L) {
                     lastReport = completed;
                     sink.onProgress(entry.id, completed, entry.sizeBytes, "downloading");
                 }
@@ -250,8 +287,11 @@ public final class ModelStore {
             String digest = sha256(partial);
             if (!digest.equalsIgnoreCase(entry.sha256)) {
                 partial.delete();
-                return "The downloaded file failed its checksum and was deleted.";
+                sink.onProgress(entry.id, 0L, entry.sizeBytes, "checksum:failed:" + digest);
+                return "The file that arrived hashes to " + shortHash(digest) + ", not "
+                    + shortHash(entry.sha256) + ". It was deleted.";
             }
+            sink.onProgress(entry.id, entry.sizeBytes, entry.sizeBytes, "checksum:ok:" + digest);
             if (target.exists()) {
                 target.delete();
             }
@@ -271,6 +311,36 @@ public final class ModelStore {
             if (connection != null) {
                 connection.disconnect();
             }
+        }
+    }
+
+    /** Enough of a hash to compare by eye, without a wall of hex. */
+    public static String shortHash(String hex) {
+        if (hex == null || hex.length() < 16) {
+            return hex == null ? "" : hex;
+        }
+        return hex.substring(0, 8) + "…" + hex.substring(hex.length() - 8);
+    }
+
+    /** Read the parameter count out of a GGUF header, for an imported file. */
+    public static String describeGguf(File file) {
+        java.io.RandomAccessFile handle = null;
+        try {
+            handle = new java.io.RandomAccessFile(file, "r");
+            byte[] magic = new byte[4];
+            handle.readFully(magic);
+            if (magic[0] != 'G' || magic[1] != 'G' || magic[2] != 'U' || magic[3] != 'F') {
+                return "not a gguf";
+            }
+            long size = file.length();
+            // Quantised weights land near one byte per parameter at Q8, half that
+            // at Q4. Without reading the whole metadata block this is the honest
+            // answer: a size, not a claim about the architecture.
+            return String.format(Locale.US, "%.1f GB on disk", size / (1024.0 * 1024.0 * 1024.0));
+        } catch (Exception error) {
+            return "unreadable";
+        } finally {
+            WorkspaceStore.closeQuietly(handle);
         }
     }
 

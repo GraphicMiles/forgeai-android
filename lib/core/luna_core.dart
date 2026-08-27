@@ -25,6 +25,26 @@ class LunaCore extends ChangeNotifier {
   bool failover = false;
   bool hasToken = false;
   bool running = false;
+  String workspaceState = 'none';
+  List<Map<String, dynamic>> grants = <Map<String, dynamic>>[];
+  Map<String, String> toolRules = <String, String>{};
+  bool wifiOnly = false;
+  bool batteryGuard = true;
+  bool keepWarm = true;
+  String theme = 'system';
+  double textScale = 1.0;
+  bool walkthroughDone = false;
+  int budgetSteps = 12;
+  int budgetSeconds = 300;
+  int budgetCloudCalls = 8;
+  List<Map<String, dynamic>> importedModels = <Map<String, dynamic>>[];
+  Map<String, dynamic> downloadState = <String, dynamic>{};
+  List<Map<String, dynamic>> chats = <Map<String, dynamic>>[];
+  String activeChatId = '';
+  List<Map<String, dynamic>> errors = <Map<String, dynamic>>[];
+  int errorCount = 0;
+  Map<String, dynamic>? pendingQuestion;
+  String? lastChecksum;
   int maxFileBytes = 2 * 1024 * 1024;
   List<String> readOnlyTools = <String>[];
   List<String> mutatingTools = <String>[];
@@ -36,6 +56,9 @@ class LunaCore extends ChangeNotifier {
   Map<String, dynamic>? pendingApproval;
   Map<String, dynamic>? download;
 
+  /// A file another app just shared into the folder.
+  String sharedFile = '';
+
   /// Tool steps for the turn in flight.
   List<Map<String, String>> steps = <Map<String, String>>[];
   bool thinking = false;
@@ -45,6 +68,11 @@ class LunaCore extends ChangeNotifier {
   String? lastError;
 
   bool get unattended => executionMode == 'auto';
+
+  /// ask, always or never. A tool with no rule follows the global switch.
+  String ruleFor(String tool) => toolRules[tool] ?? 'ask';
+
+  bool get workspaceRevoked => workspaceState == 'revoked';
 
   Map<String, dynamic>? get activeCatalogModel {
     for (final Map<String, dynamic> model in catalog) {
@@ -102,6 +130,23 @@ class LunaCore extends ChangeNotifier {
     messages = _decodeList(snapshot['messages'] as String?);
     final String? backup = snapshot['lastBackup'] as String?;
     lastBackup = backup == null ? null : jsonDecode(backup) as Map<String, dynamic>;
+    workspaceState = (snapshot['workspaceState'] as String?) ?? 'none';
+    grants = _decodeList(snapshot['grants'] as String?);
+    toolRules = _decodeStringMap(snapshot['toolRules'] as String?);
+    wifiOnly = (snapshot['wifiOnly'] as bool?) ?? false;
+    batteryGuard = (snapshot['batteryGuard'] as bool?) ?? true;
+    keepWarm = (snapshot['keepWarm'] as bool?) ?? true;
+    theme = (snapshot['theme'] as String?) ?? 'system';
+    textScale = ((snapshot['textScale'] as num?) ?? 1).toDouble();
+    walkthroughDone = (snapshot['walkthroughDone'] as bool?) ?? false;
+    budgetSteps = (snapshot['budgetSteps'] as int?) ?? budgetSteps;
+    budgetSeconds = (snapshot['budgetSeconds'] as int?) ?? budgetSeconds;
+    budgetCloudCalls = (snapshot['budgetCloudCalls'] as int?) ?? budgetCloudCalls;
+    importedModels = _decodeList(snapshot['importedModels'] as String?);
+    downloadState = _decodeMap(snapshot['downloadState'] as String?);
+    chats = _decodeList(snapshot['chats'] as String?);
+    activeChatId = (snapshot['activeChatId'] as String?) ?? '';
+    errorCount = (snapshot['errorCount'] as int?) ?? 0;
   }
 
   Future<void> refresh() async {
@@ -160,18 +205,44 @@ class LunaCore extends ChangeNotifier {
       case 'speed':
         tokensPerSecond = ((event['tokensPerSecond'] as num?) ?? 0).toDouble();
         break;
+      case 'ask':
+        thinking = false;
+        pendingQuestion = event;
+        break;
       case 'download':
+        final String status = (event['status'] as String?) ?? '';
+        if (status.startsWith('checksum:')) {
+          // The hash is shown, not just a pass or a fail.
+          lastChecksum = status;
+          break;
+        }
         download = event;
-        if (event['status'] == 'done') {
+        downloadState = Map<String, dynamic>.from(downloadState)
+          ..[(event['id'] as String?) ?? ''] = event;
+        if (status == 'done' || status == 'cancelled') {
           download = null;
+          downloadState.remove((event['id'] as String?) ?? '');
           unawaited(refresh());
         }
+        break;
+      case 'import':
+        download = <String, dynamic>{
+          'id': 'import',
+          'completed': event['completed'],
+          'total': 0,
+          'status': 'importing',
+        };
+        break;
+      case 'shared':
+        sharedFile = (event['name'] as String?) ?? '';
+        unawaited(refresh());
         break;
       case 'run_done':
         running = false;
         thinking = false;
         streaming = '';
         pendingApproval = null;
+        pendingQuestion = null;
         unawaited(_reloadMessages());
         break;
       default:
@@ -210,6 +281,52 @@ class LunaCore extends ChangeNotifier {
     notifyListeners();
     await _channel.invokeMethod<void>(
         'resolveApproval', <String, dynamic>{'id': id, 'approved': approved});
+  }
+
+  /// Answer an ask_user question. An empty answer means "carry on without me".
+  Future<void> answerQuestion(String id, String text) async {
+    pendingQuestion = null;
+    thinking = true;
+    notifyListeners();
+    await _channel.invokeMethod<void>('answerQuestion', <String, dynamic>{'id': id, 'text': text});
+  }
+
+  // --- more than one chat ---------------------------------------------------
+
+  Future<void> loadChats() async {
+    chats = _decodeList(await _channel.invokeMethod<String>('chats'));
+    notifyListeners();
+  }
+
+  Future<List<Map<String, dynamic>>> searchChats(String query) async {
+    return _decodeList(
+        await _channel.invokeMethod<String>('searchChats', <String, dynamic>{'query': query}));
+  }
+
+  Future<void> switchChat(String id) async {
+    final String? raw = await _channel.invokeMethod<String>('switchChat', <String, dynamic>{'id': id});
+    messages = _decodeList(raw);
+    steps = <Map<String, String>>[];
+    streaming = '';
+    await refresh();
+  }
+
+  Future<void> deleteChat(String id) async {
+    chats = _decodeList(
+        await _channel.invokeMethod<String>('deleteChat', <String, dynamic>{'id': id}));
+    await refresh();
+  }
+
+  Future<String> exportChat() async {
+    return await _channel.invokeMethod<String>('exportChat') ?? '';
+  }
+
+  Future<void> startNewChat() async {
+    await _channel.invokeMethod<String>('newChat');
+    messages = <Map<String, dynamic>>[];
+    steps = <Map<String, String>>[];
+    streaming = '';
+    await refresh();
   }
 
   Future<void> newChat() async {
@@ -256,17 +373,55 @@ class LunaCore extends ChangeNotifier {
     return path;
   }
 
+  /// Starts the service. The download outlives this screen, and the app.
   Future<String?> downloadModel(String id) async {
     download = <String, dynamic>{'id': id, 'completed': 0, 'total': 0, 'status': 'downloading'};
+    downloadState = Map<String, dynamic>.from(downloadState)..[id] = download!;
     notifyListeners();
-    final String? failure =
-        await _channel.invokeMethod<String>('downloadModel', <String, dynamic>{'id': id});
-    download = null;
-    await refresh();
-    return failure;
+    await _invoke('downloadModel', <String, dynamic>{'id': id});
+    return null;
   }
 
-  Future<void> cancelDownload() => _invoke('cancelDownload');
+  Future<void> pauseDownload(String id) async {
+    await _invoke('pauseDownload', <String, dynamic>{'id': id});
+    final Map<String, dynamic> entry =
+        Map<String, dynamic>.from(downloadState[id] as Map<String, dynamic>? ?? <String, dynamic>{});
+    entry['status'] = 'paused';
+    downloadState = Map<String, dynamic>.from(downloadState)..[id] = entry;
+    download = entry;
+    notifyListeners();
+  }
+
+  Future<void> resumeDownload(String id) async {
+    await _invoke('resumeDownload', <String, dynamic>{'id': id});
+  }
+
+  Future<void> cancelDownload([String id = '']) async {
+    await _invoke('cancelDownload', <String, dynamic>{'id': id});
+    downloadState = Map<String, dynamic>.from(downloadState)..remove(id);
+    download = null;
+    notifyListeners();
+  }
+
+  /// Pick a .gguf off the phone. Returns the imported model, or null if cancelled.
+  Future<Map<String, dynamic>?> importModel() async {
+    final String? raw = await _channel.invokeMethod<String>('importModel');
+    await refresh();
+    if (raw == null || raw.isEmpty) return null;
+    return jsonDecode(raw) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteImportedModel(String id) async {
+    await _invoke('deleteImportedModel', <String, dynamic>{'id': id});
+    await refresh();
+  }
+
+  /// Copy a file from elsewhere on the phone into the granted folder.
+  Future<String?> bringInFile() async {
+    final String? name = await _channel.invokeMethod<String>('bringInFile');
+    await refresh();
+    return name;
+  }
 
   Future<void> deleteModel(String id) async {
     await _invoke('deleteModel', <String, dynamic>{'id': id});
@@ -311,6 +466,38 @@ class LunaCore extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> updateCloudProvider({
+    required String id,
+    String label = '',
+    String model = '',
+    String apiKey = '',
+  }) async {
+    await _invoke('updateCloudProvider', <String, dynamic>{
+      'id': id,
+      'label': label,
+      'model': model,
+      'apiKey': apiKey,
+    });
+    await refresh();
+  }
+
+  /// What the provider says it serves today. Throws with the provider's own words.
+  Future<List<String>> providerModels({
+    String id = '',
+    String baseUrl = '',
+    String apiKey = '',
+  }) async {
+    final String? raw = await _channel.invokeMethod<String>('providerModels', <String, dynamic>{
+      'id': id,
+      'baseUrl': baseUrl,
+      'apiKey': apiKey,
+    });
+    if (raw == null || raw.isEmpty) return <String>[];
+    final Object? parsed = jsonDecode(raw);
+    if (parsed is! List) return <String>[];
+    return parsed.map((Object? item) => '$item').toList();
+  }
+
   Future<void> removeCloudProvider(String id) async {
     await _invoke('removeCloudProvider', <String, dynamic>{'id': id});
     await refresh();
@@ -331,6 +518,113 @@ class LunaCore extends ChangeNotifier {
     await _invoke('clearToken');
     hasToken = false;
     notifyListeners();
+  }
+
+  // --- rules, limits and comfort ---------------------------------------------
+
+  Future<void> setToolRule(String tool, String rule) async {
+    toolRules = Map<String, String>.from(toolRules);
+    if (rule == 'ask') {
+      toolRules.remove(tool);
+    } else {
+      toolRules[tool] = rule;
+    }
+    notifyListeners();
+    await _invoke('setToolRule', <String, dynamic>{'tool': tool, 'rule': rule});
+  }
+
+  Future<void> cycleToolRule(String tool) {
+    const List<String> order = <String>['ask', 'always', 'never'];
+    final int next = (order.indexOf(ruleFor(tool)) + 1) % order.length;
+    return setToolRule(tool, order[next]);
+  }
+
+  Future<void> setBudget({int? steps, int? seconds, int? cloudCalls}) async {
+    budgetSteps = steps ?? budgetSteps;
+    budgetSeconds = seconds ?? budgetSeconds;
+    budgetCloudCalls = cloudCalls ?? budgetCloudCalls;
+    notifyListeners();
+    await _invoke('setBudget', <String, dynamic>{
+      'steps': budgetSteps,
+      'seconds': budgetSeconds,
+      'cloudCalls': budgetCloudCalls,
+    });
+  }
+
+  Future<void> setWifiOnly(bool value) async {
+    wifiOnly = value;
+    notifyListeners();
+    await _invoke('setWifiOnly', <String, dynamic>{'enabled': value});
+  }
+
+  Future<void> setBatteryGuard(bool value) async {
+    batteryGuard = value;
+    notifyListeners();
+    await _invoke('setBatteryGuard', <String, dynamic>{'enabled': value});
+  }
+
+  Future<void> setKeepWarm(bool value) async {
+    keepWarm = value;
+    notifyListeners();
+    await _invoke('setKeepWarm', <String, dynamic>{'enabled': value});
+  }
+
+  Future<void> setTheme(String value) async {
+    theme = value;
+    notifyListeners();
+    await _invoke('setTheme', <String, dynamic>{'theme': value});
+  }
+
+  Future<void> setTextScale(double value) async {
+    textScale = value;
+    notifyListeners();
+    await _invoke('setTextScale', <String, dynamic>{'scale': value});
+  }
+
+  Future<void> finishWalkthrough() async {
+    walkthroughDone = true;
+    notifyListeners();
+    await _invoke('setWalkthroughDone');
+  }
+
+  // --- folders ----------------------------------------------------------------
+
+  Future<void> useGrant(String uri) async {
+    await _invoke('useGrant', <String, dynamic>{'uri': uri});
+    await refresh();
+  }
+
+  Future<void> forgetGrant(String uri) async {
+    await _invoke('forgetGrant', <String, dynamic>{'uri': uri});
+    await refresh();
+  }
+
+  // --- what went wrong ---------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> loadErrors() async {
+    errors = _decodeList(await _channel.invokeMethod<String>('errors'));
+    errorCount = errors.length;
+    notifyListeners();
+    return errors;
+  }
+
+  Future<void> clearErrors() async {
+    await _invoke('clearErrors');
+    errors = <Map<String, dynamic>>[];
+    errorCount = 0;
+    notifyListeners();
+  }
+
+  // --- backup -------------------------------------------------------------------
+
+  Future<String> exportSettings() async {
+    return await _channel.invokeMethod<String>('exportSettings') ?? '{}';
+  }
+
+  Future<bool> restoreSettings() async {
+    final String? answer = await _channel.invokeMethod<String>('restoreSettings');
+    await refresh();
+    return answer == 'restored';
   }
 
   Future<void> resetAll() async {
@@ -355,6 +649,17 @@ class LunaCore extends ChangeNotifier {
     final Map<Object?, Object?>? raw = await _channel.invokeMethod<Map<Object?, Object?>>(method);
     if (raw == null) return <String, dynamic>{};
     return raw.map((Object? key, Object? value) => MapEntry<String, dynamic>('$key', value));
+  }
+
+  static Map<String, dynamic> _decodeMap(String? raw) {
+    if (raw == null || raw.isEmpty) return <String, dynamic>{};
+    final Object? parsed = jsonDecode(raw);
+    if (parsed is! Map) return <String, dynamic>{};
+    return parsed.map((Object? key, Object? value) => MapEntry<String, dynamic>('$key', value));
+  }
+
+  static Map<String, String> _decodeStringMap(String? raw) {
+    return _decodeMap(raw).map((String key, dynamic value) => MapEntry<String, String>(key, '$value'));
   }
 
   static List<String> _stringList(Object? raw) {

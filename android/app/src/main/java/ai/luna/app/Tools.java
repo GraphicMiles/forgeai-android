@@ -1,7 +1,15 @@
 package ai.luna.app;
 
+import android.util.Base64;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 /**
  * The tools themselves. Each one returns a short, factual string that goes
@@ -10,47 +18,161 @@ import org.json.JSONObject;
  */
 public final class Tools {
 
-    private static final int MAX_OBSERVATION = 2000;
+    private static final int MAX_OBSERVATION = 4000;
+
+    /** Everything a tool is allowed to touch, handed in rather than looked up. */
+    public static final class Env {
+        public final WorkspaceStore workspace;
+        public final HeadlessBrowser browser;
+        public final CredentialVault vault;
+        public final ErrorLog errors;
+
+        public Env(WorkspaceStore workspace, HeadlessBrowser browser, CredentialVault vault, ErrorLog errors) {
+            this.workspace = workspace;
+            this.browser = browser;
+            this.vault = vault;
+            this.errors = errors;
+        }
+    }
 
     private Tools() {
     }
 
-    public static String run(WorkspaceStore workspace, String tool, JSONObject args) {
+    public static String run(Env env, String tool, JSONObject args) {
         try {
             switch (tool) {
                 case "list_files":
-                    return listFiles(workspace, args.optString("path", ""));
+                    return listFiles(env.workspace, args.optString("path", ""));
                 case "read_file":
-                    return readFile(workspace, args.optString("path", ""));
+                    return readFile(env.workspace, args.optString("path", ""));
                 case "search_code":
-                    return search(workspace, args.optString("query", ""));
+                    return search(env.workspace, args.optString("query", ""));
                 case "write_file":
-                    workspace.writeText(args.optString("path", ""), args.optString("content", ""));
+                    env.workspace.writeText(args.optString("path", ""), args.optString("content", ""));
                     return "Wrote " + args.optString("path", "") + ".";
                 case "create_file":
-                    workspace.createFile(args.optString("path", ""));
+                    env.workspace.createFile(args.optString("path", ""));
                     return "Created " + args.optString("path", "") + ".";
                 case "create_folder":
-                    workspace.createFolder(args.optString("path", ""));
+                    env.workspace.createFolder(args.optString("path", ""));
                     return "Created the folder " + args.optString("path", "") + ".";
                 case "delete_file":
-                    workspace.delete(args.optString("path", ""));
+                    env.workspace.delete(args.optString("path", ""));
                     return "Deleted " + args.optString("path", "") + ". A backup was kept.";
                 case "rename_file":
-                    workspace.rename(args.optString("path", ""), args.optString("newName", ""));
+                    env.workspace.rename(args.optString("path", ""), args.optString("newName", ""));
                     return "Renamed to " + args.optString("newName", "") + ".";
-                case "ask_user":
-                    return "Ask the user directly in your next plain-text reply.";
+                case "open_page":
+                    return openPage(env, args.optString("url", args.optString("path", "")));
+                case "read_page":
+                    return readPage(env);
+                case "github_file":
+                    return githubFile(env, args);
                 default:
                     return "Unknown tool: " + tool;
             }
         } catch (Exception error) {
             String message = error.getMessage();
+            if (env.errors != null) {
+                env.errors.record(tool, message == null ? String.valueOf(error) : message);
+            }
             return "Failed: " + (message == null ? error.toString() : message);
         }
     }
 
+    // --- the web ---------------------------------------------------------------
+
+    private static String openPage(Env env, String url) {
+        if (env.browser == null) {
+            return "There is no browser available on this device.";
+        }
+        String refusal = env.browser.open(url, 20000L);
+        if (!refusal.isEmpty()) {
+            return "Could not open it: " + refusal.replace("refused: ", "") + ".";
+        }
+        String title = env.browser.currentTitle();
+        return "Opened " + env.browser.currentUrl() + (title.isEmpty() ? "" : " — " + title)
+            + ". Call read_page to read it.";
+    }
+
+    private static String readPage(Env env) {
+        if (env.browser == null) {
+            return "There is no browser available on this device.";
+        }
+        String text = env.browser.text();
+        if (text.isEmpty()) {
+            return "Nothing is open, or the page had no readable text.";
+        }
+        return clamp("Text of " + env.browser.currentUrl() + ":\n" + text);
+    }
+
+    /**
+     * The GitHub token finally does something. It is read from the keystore for
+     * this one call and never put in the prompt.
+     */
+    private static String githubFile(Env env, JSONObject args) throws Exception {
+        String repo = args.optString("repo", "");
+        String path = args.optString("path", "");
+        String ref = args.optString("ref", "");
+        if (repo.isEmpty() || path.isEmpty()) {
+            return "Give me repo as owner/name and path as the file inside it.";
+        }
+        String token = env.vault == null ? "" : env.vault.read("github");
+        String endpoint = "https://api.github.com/repos/" + repo + "/contents/" + path
+            + (ref.isEmpty() ? "" : "?ref=" + ref);
+
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(endpoint).openConnection();
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(30000);
+            connection.setRequestProperty("Accept", "application/vnd.github+json");
+            connection.setRequestProperty("User-Agent", "Luna");
+            if (!token.isEmpty()) {
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+            }
+            int code = connection.getResponseCode();
+            if (code == 404) {
+                return "GitHub says that file is not there" + (token.isEmpty()
+                    ? " — and no token is saved, so a private repo would look the same." : ".");
+            }
+            if (code == 401 || code == 403) {
+                return "GitHub refused the token (" + code + "). Check it in Settings.";
+            }
+            if (code != 200) {
+                return "GitHub answered " + code + ".";
+            }
+            StringBuilder payload = new StringBuilder();
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
+            try {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    payload.append(line);
+                }
+            } finally {
+                WorkspaceStore.closeQuietly(reader);
+            }
+            JSONObject json = new JSONObject(payload.toString());
+            String encoded = json.optString("content", "").replace("\n", "");
+            if (encoded.isEmpty()) {
+                return "That path is a folder, not a file.";
+            }
+            String decoded = new String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8);
+            return clamp(repo + "/" + path + ":\n" + decoded);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    // --- the folder --------------------------------------------------------------
+
     private static String listFiles(WorkspaceStore workspace, String path) throws Exception {
+        if (workspace.rootState().equals(WorkspaceStore.STATE_REVOKED)) {
+            return "The folder permission was withdrawn. Ask the user to grant it again in Files.";
+        }
         JSONArray entries = workspace.list(path);
         if (entries.length() == 0) {
             return "Empty (or no folder has been granted).";

@@ -79,14 +79,15 @@ class _MarkPainter extends CustomPainter {
 /// A FontAwesome glyph at the app's sizes. Icons are never decorative here:
 /// each one has to say what the thing it labels actually is.
 class Glyph extends StatelessWidget {
-  const Glyph(this.icon, {super.key, this.size = 13.5, this.color = LunaTheme.ink2});
+  const Glyph(this.icon, {super.key, this.size = 13.5, this.color});
 
   final FaIconData icon;
   final double size;
-  final Color color;
+  final Color? color;
 
   @override
-  Widget build(BuildContext context) => FaIcon(icon, size: size, color: color);
+  Widget build(BuildContext context) =>
+      FaIcon(icon, size: size, color: color ?? LunaTheme.ink2);
 }
 
 /// The circular 34px action button in a screen header.
@@ -206,7 +207,7 @@ class Group extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rGroup),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rGroup),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
     );
   }
@@ -235,6 +236,9 @@ class PlainList extends StatelessWidget {
 }
 
 /// One row: tile, title, subtitle, and whatever sits at the end.
+/// A row. When it does something it is announced as a button, with its
+/// subtitle read out as the hint — a screen reader should get the same
+/// information a sighted person gets from the second line.
 class LunaRow extends StatelessWidget {
   const LunaRow({
     super.key,
@@ -300,8 +304,15 @@ class LunaRow extends StatelessWidget {
         ],
       ),
     );
-    if (onTap == null) return content;
-    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: content);
+    if (onTap == null) {
+      return Semantics(label: title, hint: subtitle, child: content);
+    }
+    return Semantics(
+      button: true,
+      label: title,
+      hint: subtitle,
+      child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: content),
+    );
   }
 }
 
@@ -332,7 +343,11 @@ class PillButton extends StatelessWidget {
         : soft
             ? LunaTheme.ink
             : LunaTheme.onInk;
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: enabled,
+      child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: enabled ? onTap : null,
       child: Container(
@@ -353,6 +368,7 @@ class PillButton extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 }
@@ -370,7 +386,7 @@ class Segmented extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(3),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rPill),
       child: Row(
         children: List<Widget>.generate(items.length, (int itemIndex) {
           final bool selected = itemIndex == index;
@@ -431,7 +447,7 @@ class LunaSwitch extends StatelessWidget {
               child: Container(
                 width: 20,
                 height: 20,
-                decoration: const BoxDecoration(color: LunaTheme.paper, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: LunaTheme.paper, shape: BoxShape.circle),
               ),
             ),
           ],
@@ -484,7 +500,7 @@ class Note extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 9, 20, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rNote),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rNote),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -527,7 +543,7 @@ class EmptyState extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-      decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rGroup),
+      decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rGroup),
       child: Column(
         children: <Widget>[
           if (mascot) const Mark(size: 40) else Glyph(icon, size: 18, color: LunaTheme.ink4),
@@ -575,7 +591,7 @@ Future<T?> showLunaSheet<T>({
                 Container(
                   width: 38,
                   height: 4,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                       color: LunaTheme.fill2, borderRadius: LunaTheme.rPill),
                 ),
                 Padding(
@@ -623,6 +639,8 @@ class LunaField extends StatelessWidget {
     this.mono = false,
     this.autofocus = false,
     this.onSubmitted,
+    this.onChanged,
+    this.obscure = false,
   });
 
   final String label;
@@ -632,6 +650,8 @@ class LunaField extends StatelessWidget {
   final bool mono;
   final bool autofocus;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+  final bool obscure;
 
   @override
   Widget build(BuildContext context) {
@@ -643,12 +663,14 @@ class LunaField extends StatelessWidget {
           Text(label, style: LunaTheme.sectionLabel),
           const SizedBox(height: 6),
           Container(
-            decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rField),
+            decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rField),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: TextField(
               controller: controller,
               autofocus: autofocus,
               onSubmitted: onSubmitted,
+              onChanged: onChanged,
+              obscureText: obscure,
               cursorColor: LunaTheme.ink,
               cursorWidth: 1.6,
               style: mono

@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luna — working prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+/* ===========================================================================
+   LUNA — functional prototype
+   Same tokens as docs/design/luna-screens.html. Monochrome, soft radii,
+   zero shadows, one filled-black surface per screen. Colour only on the mascot.
+   =========================================================================== */
+:root{
+  --ink:#0b0b0c; --ink-2:#3d3d42; --ink-3:#76767e; --ink-4:#a3a3ab;
+  --line:#ededf0; --fill:#f4f4f6; --fill-2:#eaeaee; --paper:#fff;
+  --display:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ease:cubic-bezier(.23,1,.32,1);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{background:#e8e8ea;color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;line-height:1.5}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}
+input,textarea{font:inherit;color:inherit;background:none;border:0;outline:0;width:100%}
+svg.ic{width:1em;height:1em;display:block;flex:0 0 auto}
+
+.stage{display:flex;gap:34px;align-items:flex-start;justify-content:center;padding:38px 22px 70px;flex-wrap:wrap}
+
+/* ---------- device ---------- */
+.device{width:372px;flex:0 0 auto}
+.phone{width:372px;height:790px;background:var(--paper);border-radius:44px;overflow:hidden;position:relative}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column}
+.sbar{display:flex;justify-content:space-between;align-items:center;padding:15px 26px 2px;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.sbar .r{display:flex;gap:7px;align-items:center;font-size:11px}
+.grow{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.grow::-webkit-scrollbar{display:none}
+.pad{padding:0 20px}
+
+/* ---------- header ---------- */
+.top{display:flex;align-items:center;gap:9px;padding:8px 20px 10px}
+.top .title{flex:1;font-family:var(--display);font-size:27px;font-weight:800;letter-spacing:-.038em;line-height:1.1}
+.top .title.sm{font-size:16.5px;font-weight:700;letter-spacing:-.028em}
+.ib{width:34px;height:34px;border-radius:50%;background:var(--fill);display:grid;place-items:center;font-size:13px;color:var(--ink-2);flex:0 0 auto}
+.ib.on{background:var(--ink);color:#fff}
+.ib[disabled]{opacity:.4;cursor:default}
+
+.ctx{display:inline-flex;align-items:center;gap:7px;background:var(--fill);border-radius:999px;padding:6px 13px;font-size:12px;color:var(--ink-2);font-weight:500;max-width:100%}
+.ctx i,.ctx svg{font-size:10.5px;color:var(--ink-4)}
+.ctx .sep{width:3px;height:3px;border-radius:50%;background:var(--ink-4);flex:0 0 auto}
+.ctx b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+
+/* ---------- structure ---------- */
+.lbl{font-size:12.5px;font-weight:600;color:var(--ink-3);padding:14px 20px 7px;letter-spacing:-.005em;display:flex;align-items:center;gap:8px}
+.lbl .act{margin-left:auto;color:var(--ink);font-size:12.5px;font-weight:600}
+.group{background:var(--fill);border-radius:22px;padding:2px 14px;margin:0 20px}
+.group .row{border-bottom:1px solid rgba(0,0,0,.05)}
+.group .row:last-child{border-bottom:0}
+.list{margin:0 20px}
+.list .row{border-bottom:1px solid var(--line)}
+.list .row:last-child{border-bottom:0}
+.list .row .tile{background:var(--fill)}
+
+.row{display:flex;align-items:center;gap:12px;padding:10px 0;width:100%}
+.row.top-align{align-items:flex-start}
+.row .tile{width:34px;height:34px;border-radius:12px;background:var(--paper);display:grid;place-items:center;font-size:13.5px;color:var(--ink-2);flex:0 0 auto}
+.row .tx{flex:1;min-width:0}
+.row .tx b{display:block;font-size:14.5px;font-weight:600;letter-spacing:-.018em;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .tx span{display:block;font-size:12px;color:var(--ink-3);line-height:1.35;margin-top:1px}
+.row .end{font-size:12.5px;color:var(--ink-3);white-space:nowrap;display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.row.off .tx b,.row.off .tile{color:var(--ink-4)}
+.row.off .end{color:var(--ink-4)}
+
+/* ---------- controls ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--ink);color:#fff;border-radius:999px;padding:10px 18px;font-size:13.5px;font-weight:600;letter-spacing:-.015em;white-space:nowrap}
+.btn.soft{background:var(--fill);color:var(--ink)}
+.btn.sm{padding:6px 14px;font-size:12.5px}
+.btn.wide{width:100%}
+.btn[disabled]{background:var(--fill);color:var(--ink-4);cursor:default}
+.actions{display:flex;gap:8px;margin:2px 20px 0}
+.actions.end{justify-content:flex-end}
+
+.seg{display:flex;background:var(--fill);border-radius:999px;padding:3px;margin:0 20px}
+.seg button{flex:1;text-align:center;font-size:12.5px;padding:7px;border-radius:999px;color:var(--ink-3);font-weight:500;letter-spacing:-.012em}
+.seg button.on{background:var(--paper);color:var(--ink);font-weight:600}
+
+.sw{width:44px;height:26px;border-radius:999px;background:var(--ink);position:relative;flex:0 0 auto;transition:background .16s}
+.sw b{position:absolute;top:3px;left:21px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .16s var(--ease)}
+.sw.off{background:var(--fill-2)}
+.sw.off b{left:3px}
+
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;border-radius:999px;padding:5px 12px;background:var(--fill);color:var(--ink-2);margin:0 5px 6px 0;font-weight:500;letter-spacing:-.01em}
+.chip.k{background:var(--ink);color:#fff;font-weight:600}
+.chip.no{background:var(--fill);color:var(--ink-4);text-decoration:line-through}
+.chips{padding:0 20px}
+
+.note{display:flex;gap:10px;background:var(--fill);border-radius:18px;padding:12px 14px;margin:9px 20px 0;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.note svg,.note i{font-size:12px;color:var(--ink);margin-top:2px;flex:0 0 auto}
+.note b{font-weight:600;color:var(--ink)}
+.note u{text-decoration:underline;cursor:pointer;font-weight:600;color:var(--ink)}
+.mono{font-family:var(--mono)}
+
+.empty{background:var(--fill);border-radius:22px;margin:10px 20px 0;padding:20px 18px;text-align:center}
+.empty .h{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.02em;margin-top:9px}
+.empty .p{font-size:13px;color:var(--ink-3);line-height:1.5;margin-top:4px}
+.empty .b{margin-top:12px;display:flex;justify-content:center}
+
+.bar{height:5px;border-radius:999px;background:var(--fill-2);margin-top:8px;overflow:hidden}
+.bar b{display:block;height:5px;border-radius:999px;background:var(--ink);transition:width .35s linear}
+.dl{display:flex;align-items:center;gap:9px;margin-top:8px}
+.dl .ctl{width:28px;height:28px;border-radius:50%;background:var(--paper);display:grid;place-items:center;font-size:10.5px;color:var(--ink);flex:0 0 auto}
+.dl .ctl.k{background:var(--ink);color:#fff}
+.dl .meta{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 20px 0}
+.stat{background:var(--fill);border-radius:18px;padding:11px 12px;min-width:0}
+.stat span{display:block;font-size:11px;color:var(--ink-3)}
+.stat b{display:block;font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+
+/* ---------- hero / approval: the one black surface ---------- */
+.hero{background:var(--ink);border-radius:24px;padding:16px;margin:0 20px}
+.hero .r1{display:flex;align-items:center;gap:12px}
+.hero .nm{flex:1;min-width:0}
+.hero .nm b{display:block;font-family:var(--display);color:#fff;font-size:17px;font-weight:700;letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero .nm span{font-size:12.5px;color:#9a9aa2}
+.hero .pill{background:#fff;color:var(--ink);border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:700}
+.hero .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:13px}
+.hero .cell{background:#1a1a1e;border-radius:15px;padding:10px 11px;min-width:0}
+.hero .cell b{display:block;font-family:var(--display);font-size:14px;font-weight:700;color:#fff;letter-spacing:-.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero .cell span{font-size:11px;color:#8f8f98}
+
+.approve{background:var(--ink);border-radius:24px;padding:16px 16px 13px;margin:12px 20px 0}
+.approve .k{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#9a9aa2}
+.approve .h{font-family:var(--display);font-size:19px;font-weight:700;color:#fff;letter-spacing:-.03em;margin-top:5px;line-height:1.22}
+.approve .d{font-size:12.5px;color:#8f8f98;margin-top:4px;line-height:1.4}
+.approve pre{background:#17171a;border-radius:15px;padding:11px 12px;margin-top:10px;max-height:130px;overflow:auto;font-family:var(--mono);font-size:11.5px;color:#d9d9de;white-space:pre-wrap}
+.approve .b{display:flex;gap:8px;margin-top:13px}
+.approve .b button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;padding:10px;font-size:13.5px;font-weight:600}
+.approve .y{background:#fff;color:var(--ink)}
+.approve .n{background:#232327;color:#d9d9de}
+
+/* ---------- chat ---------- */
+.thread{padding:2px 20px 4px;display:flex;flex-direction:column;gap:16px}
+.turn{display:flex;gap:10px;align-items:flex-start}
+.turn .avatar{width:21px;height:21px;flex:0 0 auto;display:grid;place-items:center}
+.turn .body{flex:1;min-width:0;font-size:14px;line-height:1.55;letter-spacing:-.012em}
+.you{align-self:flex-end;max-width:84%;background:var(--ink);color:#fff;border-radius:20px 20px 7px 20px;padding:10px 14px;font-size:14px;line-height:1.4;letter-spacing:-.01em}
+.attached{align-self:flex-end;display:flex;align-items:center;gap:7px;background:var(--fill);border-radius:999px;padding:5px 12px;font-size:11.5px;color:var(--ink-2);margin-top:-10px}
+
+/* trace */
+.trace{width:100%}
+.trace .head{display:flex;align-items:center;gap:8px;padding:3px 0;width:fit-content}
+.trace .head .lab{font-size:13px;font-weight:500;white-space:nowrap}
+.trace .head .lab.work,.working .lab.work{background:linear-gradient(90deg,var(--ink-4) 35%,var(--ink) 50%,var(--ink-4) 65%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 1.4s linear infinite}
+.trace .head .lab.rest{color:var(--ink-3);animation:fadein .35s ease-out both}
+.trace .head .chev{transition:transform .3s var(--ease);color:var(--ink-4);font-size:12px}
+.trace .head .chev.open{transform:rotate(180deg)}
+.trace .wrap{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .4s var(--ease),opacity .3s}
+.trace .wrap.open{grid-template-rows:1fr;opacity:1}
+.trace .inner{overflow:hidden}
+.trace .rows{margin-top:4px;margin-left:4px;padding-left:14px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.trow{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:12.5px;animation:fadeup .3s var(--ease) both}
+.trow .st{width:15px;height:15px;border-radius:50%;display:grid;place-items:center;font-size:7.5px;background:var(--fill);color:var(--ink-3);flex:0 0 auto}
+.trow.done .st{background:var(--ink);color:#fff}
+.trow.denied .st{background:var(--fill-2);color:var(--ink-3)}
+.trow .p{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow.done .p{color:var(--ink)}
+.trow .s{margin-left:auto;color:var(--ink-3);font-family:var(--mono);font-size:11px;white-space:nowrap}
+
+.working{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2)}
+.working .elapsed{color:var(--ink-3);font-size:12px}
+.working .stop{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink)}
+.pixels{display:grid;grid-template-columns:repeat(3,3px);grid-template-rows:repeat(3,3px);gap:2px}
+.pixels i{width:3px;height:3px;border-radius:1px;background:var(--ink-4);animation:pulse .65s linear infinite}
+
+.answer .src{display:inline-flex;align-items:center;justify-content:center;height:16px;min-width:16px;padding:0 4px;margin-left:3px;border-radius:5px;background:var(--sunk);color:var(--ink-3);font-size:9.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;vertical-align:1px}
+.answer .w{display:inline-block;filter:blur(9px);opacity:0;animation:streamin .5s cubic-bezier(.22,.61,.25,1) forwards}
+.answer .caret{display:inline-block;width:2px;height:14px;background:var(--ink);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+.answer code{font-family:var(--mono);font-size:12.5px;background:var(--fill);border-radius:6px;padding:1px 5px}
+
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@keyframes streamin{to{filter:blur(0);opacity:1}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes fadeup{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes blink{50%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes sheetin{from{transform:translateY(100%)}to{transform:none}}
+@keyframes scrimin{from{opacity:0}to{opacity:1}}
+
+/* composer */
+.comp{display:flex;align-items:flex-end;gap:9px;margin:8px 20px 6px;background:var(--fill);border-radius:24px;padding:5px 5px 5px 15px}
+.comp textarea{flex:1;font-size:13.5px;resize:none;max-height:84px;padding:9px 0;line-height:1.4}
+.comp textarea::placeholder{color:var(--ink-3)}
+.comp .att{color:var(--ink-3);font-size:13.5px;padding-bottom:9px}
+.comp .go{width:34px;height:34px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12.5px;flex:0 0 auto}
+.pend{display:flex;align-items:center;gap:7px;margin:0 20px 6px;background:var(--fill);border-radius:999px;padding:5px 12px;font-size:11.5px;color:var(--ink-2);width:fit-content}
+
+/* nav */
+.tabs{display:flex;padding:0 12px 10px;gap:4px;border-top:1px solid var(--line)}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 0 3px;color:var(--ink-4);font-size:10.5px;font-weight:500}
+.tabs button svg,.tabs button i{font-size:16px}
+.tabs button.on{color:var(--ink);font-weight:600}
+
+/* sheets */
+.scrim{position:absolute;inset:0;background:rgba(11,11,12,.32);z-index:2;animation:scrimin .2s ease-out both}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:88%;display:flex;flex-direction:column;background:var(--paper);border-radius:28px 28px 0 0;padding:9px 0 14px;z-index:3;animation:sheetin .28s var(--ease) both}
+.sheet .grab{width:38px;height:4px;border-radius:999px;background:var(--fill-2);margin:0 auto 8px}
+.sheet .shead{display:flex;align-items:center;gap:9px;padding:0 20px 10px}
+.sheet .shead b{flex:1;font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet .sbody{overflow-y:auto;scrollbar-width:none}
+.sheet .sbody::-webkit-scrollbar{display:none}
+
+.field{margin:0 20px 10px}
+.field .fl{font-size:12.5px;font-weight:600;color:var(--ink-3);margin-bottom:6px}
+.field .fi{background:var(--fill);border-radius:15px;padding:11px 14px;font-size:13.5px;display:flex;align-items:center;gap:9px}
+.field .fi.lock{color:var(--ink-2)}
+.field .fi.lock svg,.field .fi.lock i{margin-left:auto;font-size:11px;color:var(--ink-4)}
+.field .fh{font-size:11.5px;color:var(--ink-3);margin-top:6px;line-height:1.45}
+.viewer{margin:0 20px;background:var(--fill);border-radius:18px;padding:14px;font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:pre-wrap;max-height:340px;overflow:auto}
+
+.badge{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:999px;padding:3px 8px;background:var(--fill-2);color:var(--ink-2)}
+.badge.k{background:var(--ink);color:#fff}
+
+.crumbs{display:flex;align-items:center;gap:6px;padding:0 20px 6px;font-size:12.5px;overflow-x:auto;scrollbar-width:none}
+.crumbs::-webkit-scrollbar{display:none}
+.crumbs button{color:var(--ink-3);white-space:nowrap}
+.crumbs button.last{color:var(--ink);font-weight:600}
+.crumbs svg,.crumbs i{font-size:8.5px;color:var(--ink-4)}
+
+.toast{position:absolute;left:20px;right:20px;bottom:78px;background:var(--ink);color:#fff;border-radius:999px;padding:11px 16px;font-size:12.5px;z-index:5;display:flex;align-items:center;gap:9px;animation:fadeup .25s var(--ease) both}
+.toast u{margin-left:auto;text-decoration:underline;cursor:pointer;font-weight:600}
+
+/* ---------- side panel ---------- */
+.panel{width:340px;flex:0 0 auto;font-size:13px;color:#3f3f45}
+.panel h1{font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:-.035em;color:var(--ink)}
+.panel .lede{margin-top:9px;line-height:1.6}
+.panel h2{font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--ink-3);margin:26px 0 10px}
+.card{background:#fff;border-radius:20px;padding:15px 17px;margin-bottom:10px}
+.card h3{font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
+.card p{font-size:12.5px;line-height:1.55;color:var(--ink-2);margin-bottom:6px;display:flex;gap:8px}
+.card p:last-child{margin-bottom:0}
+.card p svg,.card p i{color:var(--ink);font-size:10.5px;margin-top:4px;flex:0 0 auto}
+.card code{font-family:var(--mono);font-size:11.5px;background:var(--fill);border-radius:6px;padding:1px 5px}
+.demo{display:flex;flex-wrap:wrap;gap:7px}
+.demo button{background:#fff;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:7px}
+.demo button.hot{background:var(--ink);color:#fff}
+@media(max-width:820px){.stage{padding:20px 12px 60px}.panel{width:372px}}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="device">
+    <div class="phone"><div class="scr" id="app"></div></div>
+  </div>
+
+  <aside class="panel">
+    <h1>Luna, working</h1>
+    <p class="lede">Every screen is live. Send a job and the pipeline runs: trace rows, an approval you have
+      to answer, then the answer streaming word by word. Files really change. Downloads really pause, and
+      really survive a reload.</p>
+
+    <h2>TRY THIS</h2>
+    <div class="demo">
+      <button data-demo="job"><i class="fa-solid fa-play"></i>Run a job</button>
+      <button data-demo="browse"><i class="fa-solid fa-globe"></i>Job with a web page</button>
+      <button data-demo="download"><i class="fa-solid fa-download"></i>Start a download</button>
+      <button data-demo="drop" id="netBtn"><i class="fa-solid fa-wifi"></i>Drop the network</button>
+      <button data-demo="reset"><i class="fa-solid fa-arrow-rotate-left"></i>Reset everything</button>
+    </div>
+
+    <h2>WHAT IS NEW HERE</h2>
+    <div class="card">
+      <h3>Downloads that survive</h3>
+      <p><i class="fa-solid fa-pause"></i><span>Pause and resume per row and in the sheet. Cancel is separate and says so.</span></p>
+      <p><i class="fa-solid fa-signal"></i><span>Drop the network and a running download parks at <b>Waiting for signal</b>, then picks up.</span></p>
+      <p><i class="fa-solid fa-rotate-right"></i><span>Reload the page mid-download: progress is on disk, so it carries on from the same byte.</span></p>
+    </div>
+    <div class="card">
+      <h3>Model Zoo</h3>
+      <p><i class="fa-solid fa-file-import"></i><span>Import a <code>.gguf</code> you already have — a real file picker, marked <b>not verified</b>.</span></p>
+      <p><i class="fa-solid fa-list-ul"></i><span>Cloud asks who the provider is first, then locks the address.</span></p>
+      <p><i class="fa-solid fa-arrows-rotate"></i><span><b>Check models</b> lists what the provider serves today; a retired model is flagged.</span></p>
+    </div>
+    <div class="card">
+      <h3>Chat</h3>
+      <p><i class="fa-solid fa-paperclip"></i><span>The paperclip attaches a real file from the folder and Luna reads it.</span></p>
+      <p><i class="fa-solid fa-sparkles"></i><span>Trace expands while working, collapses to <b>Thought for 4.2s</b>, and stays that way on reload.</span></p>
+      <p><i class="fa-solid fa-hand"></i><span>Anything permanent stops at the black card until you answer it.</span></p>
+    </div>
+    <div class="card">
+      <h3>Settings</h3>
+      <p><i class="fa-solid fa-check"></i><span>Save is as wide as the word Save.</span></p>
+      <p><i class="fa-solid fa-sliders"></i><span>Per-tool rules: tap a held tool to set ask, always allow, or never.</span></p>
+      <p><i class="fa-solid fa-triangle-exclamation"></i><span>The error log is real — every failure in this prototype lands in it.</span></p>
+    </div>
+  </aside>
+</div>
+<script>
+/* ===========================================================================
+   0 · ICONS
+   Markup stays FontAwesome classes. When the CDN is unreachable — an offline
+   preview, an air-gapped machine — the same names are painted from an embedded
+   stroke set, so the prototype never shows empty squares.
+   =========================================================================== */
+const ICON = {
+  'check':'M4 12l5 5L20 6','xmark':'M6 6l12 12M18 6L6 18','chevron-right':'M9 5l7 7-7 7',
+  'chevron-down':'M6 9l6 6 6-6','chevron-left':'M15 5l-7 7 7 7','arrow-up':'M12 20V5M6 11l6-6 6 6',
+  'arrow-left':'M20 12H5M11 6l-6 6 6 6','plus':'M12 5v14M5 12h14','minus':'M5 12h14',
+  'pause':'M9 5v14M15 5v14','stop':'M6 6h12v12H6z','play':'M8 5l11 7-11 7z',
+  'download':'M12 4v11M7 12l5 5 5-5M5 20h14','down-long':'M12 4v12M7 13l5 5 5-5',
+  'file':'M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5',
+  'file-lines':'M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5M9 13h6M9 17h4',
+  'file-code':'M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5M10 13l-2 2 2 2M14 13l2 2-2 2',
+  'file-pen':'M14 3H7a2 2 0 00-2 2v9M14 3v5h5M13 21H7M12 19l6-6 3 3-6 6h-3z',
+  'file-import':'M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5M12 17V9M9 12l3-3 3 3',
+  'file-shield':'M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h4M14 3v5h5M18 13l4 1.5V18c0 2.2-1.7 3.5-4 4-2.3-.5-4-1.8-4-4v-3.5z',
+  'folder':'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z',
+  'folder-open':'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1H3zM3 10h18l-2 8H5z',
+  'folder-plus':'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2zM12 10v6M9 13h6',
+  'folder-tree':'M3 5a1 1 0 011-1h3l1 1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h3l1 1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1zM16 7h5M16 17h5',
+  'comment':'M21 12a8 8 0 01-8 8H8l-5 3 1.5-5A8 8 0 0111 4h2a8 8 0 018 8z',
+  'cube':'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
+  'gear':'M12 15a3 3 0 100-6 3 3 0 000 6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1',
+  'sliders':'M4 8h10M18 8h2M4 16h4M12 16h8M15 5v6M8 13v6',
+  'pen':'M4 20h4L18 10l-4-4L4 16z','pen-to-square':'M4 20h4L18 10l-4-4L4 16zM14 4l6 6',
+  'trash':'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13','eye':'M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6zM12 14.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z',
+  'lock':'M7 11V8a5 5 0 0110 0v3M5 11h14v9H5z','key':'M8.5 18.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM11 14l8-8 3 3-2 2-2-2-2 2',
+  'microchip':'M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
+  'memory':'M3 8h18v9H3zM7 12v3M11 12v3M15 12v3M19 12v3','hard-drive':'M3 8h18v9H3zM7 13h.01M11 13h.01',
+  'paperclip':'M20 9l-8.6 8.6a4 4 0 01-5.7-5.7L14 3.7a2.7 2.7 0 013.8 3.8l-8.5 8.5a1.4 1.4 0 01-2-2L15 6',
+  'hand':'M8 13V6.5a1.5 1.5 0 013 0V11m0-1V5a1.5 1.5 0 013 0v6m0-2a1.5 1.5 0 013 0v6a6 6 0 01-6 6 6 6 0 01-6-6v-2a1.5 1.5 0 013 0',
+  'cloud':'M7 18a4 4 0 01.4-8A5.5 5.5 0 0118 9.5a3.6 3.6 0 01-.5 8.5z',
+  'cloud-arrow-up':'M7 18a4 4 0 01.4-8A5.5 5.5 0 0118 9.5a3.6 3.6 0 01-.5 8.5M12 21v-8M9 16l3-3 3 3',
+  'bolt':'M13 2L4 14h7l-1 8 9-12h-7z','shield-halved':'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM12 3v18',
+  'triangle-exclamation':'M12 4l9 16H3zM12 10v4M12 17h.01','circle-info':'M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8h.01',
+  'circle-exclamation':'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v6M12 16h.01',
+  'circle-check':'M12 21a9 9 0 100-18 9 9 0 000 18zM8 12l3 3 5-5',
+  'wifi':'M2 9a15 15 0 0120 0M5.5 12.5a10 10 0 0113 0M9 16a5 5 0 016 0M12 20h.01',
+  'signal':'M4 20v-3M9 20v-7M14 20v-11M19 20V6','battery-full':'M2 8h17v8H2zM21 11v2M5 10.5h11v3H5z',
+  'rotate-left':'M4 10a8 8 0 11-.6 5M4 4v6h6','arrow-rotate-left':'M4 10a8 8 0 11-.6 5M4 4v6h6',
+  'arrows-rotate':'M20 12a8 8 0 01-13.7 5.6M4 12a8 8 0 0113.7-5.6M18 3v4h-4M6 21v-4h4',
+  'clock-rotate-left':'M12 8v4l3 2M4 10a8 8 0 11-.6 5M4 4v6h6',
+  'magnifying-glass':'M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4.2-4.2',
+  'globe':'M12 21a9 9 0 100-18 9 9 0 000 18zM3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z',
+  'sparkles':'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18 16l.8 2.2L21 19l-2.2.8L18 22l-.8-2.2L15 19l2.2-.8z',
+  'power-off':'M12 3v9M6.6 6.6a8 8 0 1010.8 0','plug':'M9 3v6M15 3v6M7 9h10v3a5 5 0 01-10 0zM12 17v4',
+  'house-laptop':'M3 11l9-7 9 7M5 11v9h14v-9M9 15h6','mobile-screen':'M7 3h10v18H7zM11 18h2',
+  'image':'M3 5h18v14H3zM3 15l5-4 4 3 3-3 6 5M8.5 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z',
+  'server':'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01','list-ul':'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
+  'circle-nodes':'M7 7a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM19 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM9 21a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM9 6l8 2M8 10v6M11 18l6-7',
+  'code-branch':'M6 4v10a3 3 0 003 3h6M6 21a3 3 0 100-6 3 3 0 000 6zM6 7a2 2 0 100-4 2 2 0 000 4zM18 11a3 3 0 100-6 3 3 0 000 6z',
+  'shuffle':'M17 4l4 4-4 4M3 8h5l8 8h5M17 20l4-4M3 16h4',
+  'ellipsis':'M6 12h.01M12 12h.01M18 12h.01','hourglass-half':'M7 3h10M7 21h10M7 3c0 5 10 5 10 0M7 21c0-5 10-5 10 0',
+  'a':'M5 20l7-16 7 16M8.5 14h7','ban':'M12 21a9 9 0 100-18 9 9 0 000 18zM5.6 5.6l12.8 12.8'
+};
+let FA_OK = true;
+function paintIcons(root){
+  if (FA_OK) return;
+  root.querySelectorAll('i[class*="fa-"]').forEach(el => {
+    const name = (el.className.match(/fa-(?!solid|regular|brands)([a-z0-9-]+)/) || [])[1];
+    const d = ICON[name] || ICON['circle-info'];
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 24 24');
+    svg.setAttribute('fill','none');
+    svg.setAttribute('stroke','currentColor');
+    svg.setAttribute('stroke-width', name==='play' ? '1' : '1.8');
+    svg.setAttribute('stroke-linecap','round');
+    svg.setAttribute('stroke-linejoin','round');
+    if (name==='play'||name==='stop') svg.setAttribute('fill','currentColor');
+    svg.setAttribute('class','ic');
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d', d);
+    svg.appendChild(p);
+    if (el.style.cssText) svg.style.cssText = el.style.cssText;
+    el.replaceWith(svg);
+  });
+}
+(function detectFA(){
+  const probe = document.createElement('i');
+  probe.className = 'fa-solid fa-check';
+  probe.style.cssText = 'position:absolute;visibility:hidden';
+  document.body.appendChild(probe);
+  const check = () => {
+    const fam = getComputedStyle(probe,'::before').fontFamily || '';
+    FA_OK = /Font Awesome/i.test(fam);
+    probe.remove();
+    render();
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => setTimeout(check, 60));
+  else setTimeout(check, 600);
+})();
+
+/* ===========================================================================
+   1 · THE MASCOT — the one thing allowed to carry colour
+   =========================================================================== */
+function mark(size){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="flex:0 0 auto;display:block">
+    <path d="M52 5c25 0 43 20 43 45 0 27-20 45-46 45C24 95 5 74 5 49 5 23 26 5 52 5z" fill="#7c5cff"/>
+    <rect x="36" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(-11 40 49)"/>
+    <rect x="56" y="36" width="9" height="26" rx="4.5" fill="#fff" transform="rotate(11 60 49)"/></svg>`;
+}
+
+/* ===========================================================================
+   2 · STATE — everything the app knows, persisted like the real prefs file
+   =========================================================================== */
+const CATALOG = [
+  {id:'smollm-135m-q3',   name:'SmolLM 135M',        params:'135M', bytes:93510048,   ram:2},
+  {id:'smollm2-360m-q3',  name:'SmolLM2 360M',       params:'360M', bytes:234700000,  ram:2},
+  {id:'qwen25-05b-q4',    name:'Qwen2.5 0.5B',       params:'0.5B', bytes:491400000,  ram:3},
+  {id:'qwen25-coder-05b', name:'Qwen2.5-Coder 0.5B', params:'0.5B', bytes:491400000,  ram:3},
+  {id:'smollm2-17b-q4',   name:'SmolLM2 1.7B',       params:'1.7B', bytes:1056000000, ram:4},
+  {id:'qwen25-15b-q4',    name:'Qwen2.5 1.5B',       params:'1.5B', bytes:1117000000, ram:4},
+  {id:'qwen25-coder-15b', name:'Qwen2.5-Coder 1.5B', params:'1.5B', bytes:1117000000, ram:4},
+  {id:'qwen25-coder-3b',  name:'Qwen2.5-Coder 3B',   params:'3B',   bytes:1724000000, ram:6}
+];
+
+const PROVIDERS = {
+  openai:     {label:'OpenAI',     host:'api.openai.com',  base:'https://api.openai.com/v1',        icon:'circle-nodes',
+               models:['gpt-4o-mini','gpt-4o','o4-mini']},
+  anthropic:  {label:'Anthropic',  host:'api.anthropic.com', base:'https://api.anthropic.com/v1',   icon:'a',
+               models:['claude-haiku-4.5','claude-sonnet-4.5']},
+  groq:       {label:'Groq',       host:'api.groq.com',    base:'https://api.groq.com/openai/v1',   icon:'bolt',
+               models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','qwen-2.5-32b']},
+  openrouter: {label:'OpenRouter', host:'openrouter.ai',   base:'https://openrouter.ai/api/v1',     icon:'shuffle',
+               models:['meta-llama/llama-3.3-70b','deepseek/deepseek-r1','google/gemini-2.5-flash']},
+  other:      {label:'Other',      host:'anything OpenAI-compatible', base:'', icon:'sliders', models:[]}
+};
+
+const TOOLS = {
+  list_files:   {label:'List files',    tier:'free'},
+  read_file:    {label:'Read a file',   tier:'free'},
+  search_code:  {label:'Search',        tier:'free'},
+  open_page:    {label:'Open a page',   tier:'held'},
+  read_page:    {label:'Read a page',   tier:'held'},
+  write_file:   {label:'Write a file',  tier:'held'},
+  create_file:  {label:'Create a file', tier:'held'},
+  create_folder:{label:'Create a folder',tier:'held'},
+  rename_file:  {label:'Rename a file', tier:'held'},
+  delete_file:  {label:'Delete a file', tier:'held'}
+};
+
+function seedFiles(){
+  return {
+    'routine.md':      {text:'# Toddler routine\n\n07:00 wake\n08:00 breakfast\n09:30 park\n12:00 lunch\n13:00 nap\n'},
+    'shopping.txt':    {text:'nappies\nwipes\noat milk\nbananas\n'},
+    'notes':           {dir:{
+        'nursery.md':  {text:'Nursery called. Settling-in day moved to Tuesday.\n'},
+        'names.txt':   {text:'Ada\nZainab\nTomiwa\n'}
+    }},
+    'photos':          {dir:{
+        'park.jpg':    {text:'(binary image)', bin:true},
+        'garden.jpg':  {text:'(binary image)', bin:true}
+    }},
+    '.env':            {text:'API_KEY=never-read-this\n', locked:true}
+  };
+}
+
+const DEFAULT = {
+  screen:'chat',
+  zooTab:0, setTab:0,
+  device:{ramBytes:3.5*1024**3, freeRam:880*1024**2, freeDisk:57.8*1024**3, threads:6},
+  installed:['qwen25-05b-q4'],
+  imported:[],
+  downloads:{},
+  active:'qwen25-05b-q4',
+  providers:[{id:'p1', provider:'openai', label:'Work key', model:'gpt-4o-mini',
+              key:'sk-••••••••••••3f8a', checkedAt:Date.now()-2*864e5, offered:['gpt-4o-mini','gpt-4o','o4-mini']},
+             {id:'p2', provider:'groq', label:'Old key', model:'mixtral-8x7b',
+              key:'gsk_••••••••••••7c21', checkedAt:Date.now()-40*864e5, offered:['llama-3.3-70b-versatile','llama-3.1-8b-instant']}],
+  workspace:{granted:true, name:'Toddler', files:seedFiles()},
+  path:[],
+  messages:[],
+  attachment:null,
+  askFirst:true,
+  overrides:{},
+  failover:false,
+  endpoint:'http://192.168.1.20:11434',
+  token:'',
+  network:true,
+  errors:[],
+  backup:null,
+  speed:11.4
+};
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+let S = load();
+function load(){
+  try {
+    const raw = localStorage.getItem('luna.proto');
+    if (!raw) return clone(DEFAULT);
+    return Object.assign(clone(DEFAULT), JSON.parse(raw));
+  } catch (e) { return clone(DEFAULT); }
+}
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem('luna.proto', JSON.stringify(S)); } catch (e) {}
+  }, 120);
+}
+function logError(where, what){
+  S.errors.unshift({at:Date.now(), where, what});
+  S.errors = S.errors.slice(0, 12);
+  save();
+}
+
+/* run state is deliberately not persisted: a job does not survive a restart */
+let RUN = null;
+let sheet = null;
+let toast = null;
+
+/* ===========================================================================
+   3 · SMALL HELPERS
+   =========================================================================== */
+const KB = 1024, MB = KB*1024, GB = MB*1024;
+function bytes(n){
+  if (n === 0) return '0 B';
+  if (!n) return '—';
+  if (n < KB) return n + ' B';
+  if (n < MB) return Math.round(n/KB) + ' KB';
+  if (n < GB) { const v = n/MB; return (v < 10 ? v.toFixed(1) : Math.round(v)) + ' MB'; }
+  return (n/GB).toFixed(1) + ' GB';
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function ago(t){
+  const s = Math.round((Date.now()-t)/1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.round(s/60) + ' min ago';
+  if (s < 86400) return Math.round(s/3600) + ' hours ago';
+  return Math.round(s/86400) + ' days ago';
+}
+function icon(n, cls){ return `<i class="fa-solid fa-${n}"${cls?` style="${cls}"`:''}></i>`; }
+function modelById(id){ return CATALOG.find(m => m.id === id) || S.imported.find(m => m.id === id); }
+function activeName(){
+  if (!S.active) return '';
+  if (S.active.startsWith('cloud:')) {
+    const p = S.providers.find(x => 'cloud:'+x.id === S.active);
+    return p ? p.label : '';
+  }
+  const m = modelById(S.active);
+  return m ? m.name : '';
+}
+function toolRule(t){ return S.overrides[t] || 'ask'; }
+function needsApproval(tool){
+  if (TOOLS[tool].tier === 'free') return false;
+  const rule = toolRule(tool);
+  if (rule === 'always') return false;
+  if (rule === 'never') return 'denied';
+  return S.askFirst;
+}
+
+/* the mock filesystem, addressed by an array of path segments */
+function nodeAt(segs){
+  let node = {dir:S.workspace.files};
+  for (const s of segs) {
+    if (!node.dir || !node.dir[s]) return null;
+    node = node.dir[s];
+  }
+  return node;
+}
+function folderAt(segs){ const n = nodeAt(segs); return n && n.dir ? n.dir : null; }
+function showToast(text, undoLabel){
+  toast = {text, undo:!!undoLabel, label:undoLabel};
+  render();
+  clearTimeout(showToast.t);
+  showToast.t = setTimeout(() => { toast = null; render(); }, 4200);
+}
+
+/* ===========================================================================
+   4 · RENDER — one function per screen, all pure string building
+   =========================================================================== */
+const app = document.getElementById('app');
+
+function statusBar(){
+  const t = new Date();
+  const hh = String(t.getHours()).padStart(2,'0'), mm = String(t.getMinutes()).padStart(2,'0');
+  return `<div class="sbar"><span>${hh}:${mm}</span><span class="r">
+    ${S.network ? icon('signal') : icon('ban')}${icon('wifi')}${icon('battery-full')}</span></div>`;
+}
+
+function nav(){
+  const tabs = [['chat','Chat','comment'],['files','Files','folder'],['models','Model Zoo','cube'],['settings','Settings','gear']];
+  return `<div class="tabs">${tabs.map(([id,label,ic]) =>
+    `<button data-act="tab" data-id="${id}" class="${S.screen===id?'on':''}">${icon(ic)}<span>${label}</span></button>`
+  ).join('')}</div>`;
+}
+
+function render(){
+  const body = ({chat:renderChat, files:renderFiles, models:renderZoo, settings:renderSettings})[S.screen]();
+  app.innerHTML = statusBar() + body + nav()
+    + (sheet ? `<div class="scrim" data-act="closeSheet"></div>${renderSheet()}` : '')
+    + (toast ? `<div class="toast">${icon('circle-check')}<span>${esc(toast.text)}</span>${toast.undo?`<u data-act="undo">${esc(toast.label)}</u>`:''}</div>` : '');
+  paintIcons(app);
+  if (S.screen === 'chat') {
+    const g = app.querySelector('.grow');
+    if (g) g.scrollTop = g.scrollHeight;
+  }
+}
+
+/* ---------------------------------------------------------------- CHAT --- */
+function traceRow(step){
+  const state = step.state === 'denied' ? 'denied' : step.state === 'done' ? 'done' : '';
+  const g = step.state === 'done' ? 'check' : step.state === 'denied' ? 'xmark' : 'hourglass-half';
+  return `<div class="trow ${state}"><span class="st">${icon(g)}</span>
+    <span class="p">${esc(step.label)}</span>
+    ${step.detail ? `<span class="s">${esc(step.detail)}</span>` : ''}</div>`;
+}
+
+function traceBlock(steps, running, doneLabel, open, idx){
+  return `<div class="trace">
+    ${running ? '' : `<button class="head" data-act="toggleTrace" data-i="${idx}">
+        ${icon('sparkles', 'font-size:12px;color:var(--ink-3)')}
+        <span class="lab rest">${esc(doneLabel)}</span>
+        <span class="chev ${open?'open':''}">${icon('chevron-down')}</span>
+      </button>`}
+    <div class="wrap ${open?'open':''}"><div class="inner"><div class="rows">
+      ${steps.map(traceRow).join('')}
+    </div></div></div>
+  </div>`;
+}
+
+function workingLine(){
+  const secs = (workMs()/1000).toFixed(1);
+  return `<div class="working">
+    <span class="pixels">${'<i></i>'.repeat(9)}</span>
+    <span class="lab work">${esc(RUN.label)}</span>
+    <span class="elapsed" id="elapsed">${secs}s</span>
+    <button class="stop" data-act="stopRun">${icon('stop')}Stop</button>
+  </div>`;
+}
+
+function approvalCard(a){
+  return `<div class="approve">
+    <div class="k">${icon('hand')}<span>Needs your approval</span></div>
+    <div class="h">${esc(a.headline)}</div>
+    <div class="d">${esc(a.consequence)}</div>
+    ${a.preview ? `<pre>${esc(a.preview)}</pre>` : ''}
+    <div class="b">
+      <button class="n" data-act="approve" data-ok="0">${icon('xmark')}Skip</button>
+      <button class="y" data-act="approve" data-ok="1">${icon('check')}Allow</button>
+    </div>
+  </div>`;
+}
+
+function renderChat(){
+  const model = activeName() || 'Pick a model';
+  const folder = S.workspace.granted ? S.workspace.name : 'No folder';
+  const empty = !S.messages.length && !RUN;
+
+  let thread = S.messages.map((m, i) => {
+    if (m.role === 'user') return `<div class="you">${esc(m.text)}</div>`
+      + (m.attachment ? `<div class="attached">${icon('paperclip')}${esc(m.attachment)}</div>` : '');
+    return `<div class="turn"><span class="avatar">${mark(19)}</span><div class="body">
+      ${m.steps && m.steps.length ? traceBlock(m.steps, false, m.doneLabel, !!m.open, i) : ''}
+      <div class="answer" style="margin-top:6px">${m.html || esc(m.text)}</div>
+    </div></div>`;
+  }).join('');
+
+  if (RUN) {
+    thread += `<div class="turn"><span class="avatar">${mark(19)}</span><div class="body">
+      ${RUN.steps.length ? traceBlock(RUN.steps, RUN.running, RUN.doneLabel || 'Thinking', true) : ''}
+      ${RUN.running ? workingLine() : ''}
+      <div class="answer" id="stream" style="margin-top:8px">${RUN.streamed || ''}</div>
+    </div></div>`;
+  }
+
+  return `<div class="top">
+      ${mark(32)}
+      <span class="title sm">${S.messages.length || RUN ? 'This job' : 'New chat'}</span>
+      <button class="ib" data-act="newChat" ${RUN?'disabled':''}>${icon('pen-to-square')}</button>
+    </div>
+    <div class="pad" style="padding-bottom:10px;display:flex;gap:7px">
+      <button class="ctx" data-act="tab" data-id="models">
+        ${icon('microchip')}<b>${esc(model)}</b><span class="sep"></span>${icon('folder-open')}<b>${esc(folder)}</b>
+      </button>
+      ${!S.askFirst ? `<span class="ctx">${icon('bolt')}<b>Unattended</b></span>` : ''}
+    </div>
+    <div class="grow">
+      ${empty ? `<div class="empty">${mark(40)}
+          <div class="h">Give Luna a job</div>
+          <div class="p">Describe the outcome. She reads before she writes, and stops before anything
+            permanent. Try “tidy the notes folder” or “what is in routine.md”.</div>
+        </div>` : ''}
+      <div class="thread">${thread}</div>
+      ${RUN && RUN.approval ? approvalCard(RUN.approval) : ''}
+      <div style="height:6px"></div>
+    </div>
+    ${S.attachment ? `<div class="pend">${icon('paperclip')}<span>${esc(S.attachment)}</span>
+        <button data-act="unattach" style="display:flex">${icon('xmark')}</button></div>` : ''}
+    <div class="comp">
+      <button class="att" data-act="attach">${icon('paperclip')}</button>
+      <textarea id="input" rows="1" placeholder="${RUN?'Luna is working…':'Tell Luna what to do…'}"></textarea>
+      <button class="go" data-act="${RUN?'stopRun':'send'}">${icon(RUN?'stop':'arrow-up')}</button>
+    </div>`;
+}
+
+/* --------------------------------------------------------------- FILES --- */
+function fileIcon(name, node){
+  if (node.locked) return 'lock';
+  if (node.dir) return 'folder';
+  if (/\.(md|txt)$/.test(name)) return 'file-lines';
+  if (/\.(json|ya?ml|js|dart|java)$/.test(name)) return 'file-code';
+  if (/\.(png|jpe?g)$/.test(name)) return 'image';
+  return 'file';
+}
+
+function renderFiles(){
+  if (!S.workspace.granted) {
+    return `<div class="top"><span class="title">Files</span></div>
+      <div class="grow"><div class="empty">${icon('folder-open','font-size:18px;color:var(--ink-4)')}
+        <div class="h">Grant Luna a folder</div>
+        <div class="p">She only ever sees the one folder you choose. Everything else on the device stays
+          out of reach.</div>
+        <div class="b"><button class="btn" data-act="grant">${icon('folder-open')}Choose folder</button></div>
+      </div></div>`;
+  }
+  const dir = folderAt(S.path) || {};
+  const names = Object.keys(dir).sort((a,b) => {
+    const ad = !!dir[a].dir, bd = !!dir[b].dir;
+    if (ad !== bd) return ad ? -1 : 1;
+    return a.toLowerCase().localeCompare(b.toLowerCase());
+  });
+  const folders = names.filter(n => dir[n].dir), files = names.filter(n => !dir[n].dir);
+
+  const crumbs = `<div class="crumbs">
+    <button data-act="crumb" data-i="-1" class="${S.path.length?'':'last'}">${esc(S.workspace.name)}</button>
+    ${S.path.map((p,i) => `${icon('chevron-right')}<button data-act="crumb" data-i="${i}"
+      class="${i===S.path.length-1?'last':''}">${esc(p)}</button>`).join('')}
+  </div>`;
+
+  return `<div class="top"><span class="title">Files</span>
+      <button class="ib" data-act="newFolder">${icon('folder-plus')}</button>
+      <button class="ib" data-act="newFile">${icon('file-pen')}</button>
+    </div>
+    ${crumbs}
+    <div class="grow">
+      ${!names.length ? `<div class="empty">${icon('folder-open','font-size:18px;color:var(--ink-4)')}
+        <div class="h">Nothing here</div><div class="p">This folder is empty. Create a file, or ask Luna
+        to fill it.</div></div>` : ''}
+      ${folders.length ? `<div class="lbl">${folders.length} folder${folders.length>1?'s':''}</div>
+        <div class="group">${folders.map(n => `
+          <button class="row" data-act="open" data-name="${esc(n)}">
+            <span class="tile">${icon('folder')}</span>
+            <span class="tx"><b>${esc(n)}</b><span>${Object.keys(dir[n].dir).length} items</span></span>
+            <span class="end">${icon('chevron-right')}</span>
+          </button>`).join('')}</div>` : ''}
+      ${files.length ? `<div class="lbl">${files.length} file${files.length>1?'s':''}</div>
+        <div class="list">${files.map(n => {
+          const f = dir[n];
+          return `<button class="row ${f.locked?'off':''}" data-act="${f.locked?'locked':'fileSheet'}" data-name="${esc(n)}">
+            <span class="tile">${icon(fileIcon(n,f))}</span>
+            <span class="tx"><b>${esc(n)}</b><span>${f.locked?'Protected — Luna cannot open this'
+              :bytes((f.text||'').length + (f.bin?248000:0))}</span></span>
+            <span class="end">${f.locked?icon('lock'):icon('ellipsis')}</span>
+          </button>`;
+        }).join('')}</div>` : ''}
+      ${S.backup ? `<div class="note">${icon('rotate-left')}<span>Luna last changed
+        <b>${esc(S.backup.name)}</b>. <u data-act="undo">Undo that</u></span></div>` : ''}
+      <div class="note">${icon('comment')}<span>Want a summary of this folder?
+        <u data-act="askFolder">Ask Luna</u></span></div>
+      <div style="height:10px"></div>
+    </div>`;
+}
+
+/* ------------------------------------------------------------ MODEL ZOO --- */
+function downloadRow(m){
+  const d = S.downloads[m.id];
+  const pct = d ? Math.min(100, Math.round(d.got / m.bytes * 100)) : 0;
+  const label = d.state === 'paused'   ? `Paused · ${bytes(d.got)} of ${bytes(m.bytes)} · resumes here`
+              : d.state === 'waiting'  ? `Waiting for signal · ${bytes(d.got)} of ${bytes(m.bytes)}`
+              : d.state === 'verifying'? 'Checking the file against its SHA-256…'
+              : `${bytes(d.got)} of ${bytes(m.bytes)} · ${pct}%`;
+  const primary = d.state === 'downloading' ? 'pause' : 'play';
+  return `<div class="row top-align">
+    <span class="tile" style="margin-top:2px">${icon('down-long')}</span>
+    <span class="tx"><b>${esc(m.name)}</b>
+      <div class="bar"><b style="width:${pct}%"></b></div>
+      <div class="dl">
+        <button class="ctl k" data-act="dlToggle" data-id="${m.id}">${icon(primary)}</button>
+        <button class="ctl" data-act="dlCancel" data-id="${m.id}">${icon('xmark')}</button>
+        <span class="meta">${label}</span>
+      </div>
+    </span>
+  </div>`;
+}
+
+function renderZoo(){
+  const tabs = ['On device','My computer','Cloud'];
+  let body = '';
+
+  if (S.zooTab === 0) {
+    const active = !S.active.startsWith('cloud:') ? modelById(S.active) : null;
+    const installed = [...CATALOG.filter(m => S.installed.includes(m.id)), ...S.imported];
+    const downloading = Object.keys(S.downloads);
+    const available = CATALOG.filter(m => !S.installed.includes(m.id) && !S.downloads[m.id]);
+    const ramGb = S.device.ramBytes / GB;
+
+    body = `
+      ${active ? `<div class="lbl">Running now</div>
+        <div class="hero">
+          <div class="r1">${mark(36)}
+            <span class="nm"><b>${esc(active.name)}</b><span>${active.imported?'Imported':'On this device'} ·
+              ${bytes(active.bytes)}</span></span>
+            <span class="pill">Active</span></div>
+          <div class="grid">
+            <div class="cell"><b>${bytes(active.bytes)}</b><span>Size</span></div>
+            <div class="cell"><b>${esc(active.params)}</b><span>Params</span></div>
+            <div class="cell"><b>${S.speed.toFixed(1)} t/s</b><span>Speed</span></div>
+          </div>
+        </div>` : ''}
+
+      <div class="lbl">Your own files</div>
+      <div class="group">
+        <button class="row" data-act="import">
+          <span class="tile">${icon('file-import')}</span>
+          <span class="tx"><b>Import a .gguf</b><span>From this phone, an SD card or Drive</span></span>
+          <span class="end">${icon('chevron-right')}</span>
+        </button>
+        ${S.imported.map(m => `<div class="row">
+          <span class="tile">${icon('cube')}</span>
+          <span class="tx"><b>${esc(m.name)}</b><span>Imported · ${bytes(m.bytes)} · not verified</span></span>
+          <span class="end">${S.active===m.id?'<b style="color:var(--ink)">Active</b>'
+            :`<button class="btn sm soft" data-act="use" data-id="${m.id}">Use</button>`}
+            <button data-act="dropImport" data-id="${m.id}" style="display:flex">${icon('trash')}</button></span>
+        </div>`).join('')}
+      </div>
+
+      ${downloading.length ? `<div class="lbl">Downloading</div>
+        <div class="group">${downloading.map(id => downloadRow(modelById(id))).join('')}</div>` : ''}
+
+      ${installed.filter(m => !m.imported).length ? `<div class="lbl">Downloaded</div>
+        <div class="group">${installed.filter(m => !m.imported).map(m => `
+          <div class="row">
+            <span class="tile">${icon('microchip')}</span>
+            <span class="tx"><b>${esc(m.name)}</b><span>${m.params} · ${bytes(m.bytes)}</span></span>
+            <span class="end">${S.active===m.id?'<b style="color:var(--ink)">Active</b>'
+              :`<button class="btn sm soft" data-act="use" data-id="${m.id}">Use</button>`}
+              <button data-act="deleteModel" data-id="${m.id}" style="display:flex">${icon('trash')}</button></span>
+          </div>`).join('')}</div>` : ''}
+
+      <div class="lbl">Available to download</div>
+      <div class="group">${available.map(m => {
+        const tooBig = m.ram > ramGb;
+        return `<div class="row ${tooBig?'off':''}">
+          <span class="tile">${icon('download')}</span>
+          <span class="tx"><b>${esc(m.name)}</b><span>${tooBig
+            ? `Needs ${m.ram} GB of RAM — this device has ${ramGb.toFixed(1)} GB`
+            : `${m.params} · ${bytes(m.bytes)}`}</span></span>
+          <span class="end">${tooBig ? `<span class="badge">Won't run</span>`
+            : `<button class="btn sm soft" data-act="dlStart" data-id="${m.id}">Get</button>`}</span>
+        </div>`;
+      }).join('')}</div>
+
+      <div class="stats">
+        <div class="stat"><span>Memory free</span><b>${bytes(S.device.freeRam)} / ${bytes(S.device.ramBytes)}</b></div>
+        <div class="stat"><span>Storage free</span><b>${bytes(S.device.freeDisk)}</b></div>
+        <div class="stat"><span>Threads</span><b>${S.device.threads}</b></div>
+      </div>
+      <div class="note">${icon('shield-halved')}<span>Downloaded models run entirely on this device.
+        Nothing leaves it, and they keep working with the radio off.</span></div>`;
+  }
+
+  if (S.zooTab === 1) {
+    body = `<div style="height:12px"></div>
+      <div class="field">
+        <div class="fl">Ollama address</div>
+        <div class="fi"><input class="mono" id="endpoint" value="${esc(S.endpoint)}"
+          placeholder="http://192.168.1.20:11434"></div>
+        <div class="fh">Your phone and your computer have to be on the same network.</div>
+      </div>
+      <div class="actions"><button class="btn" data-act="probe">${icon('plug')}Save and check</button></div>
+      <div class="note">${icon('house-laptop')}<span>Your computer does the thinking, your phone does the
+        work. Prompts stay on your own network.</span></div>`;
+  }
+
+  if (S.zooTab === 2) {
+    body = `
+      ${S.providers.length ? `<div class="lbl">${S.providers.length} connected</div>
+        <div class="group">${S.providers.map(p => {
+          const meta = PROVIDERS[p.provider];
+          const stale = !meta.models.includes(p.model);
+          return `<div class="row ${stale?'off':''}">
+            <span class="tile">${icon(stale?'triangle-exclamation':'cloud')}</span>
+            <span class="tx"><b>${esc(p.label)} · ${esc(meta.label)}</b><span>${stale
+              ? `${esc(p.model)} is no longer offered — pick another`
+              : `${esc(p.model)} · checked ${ago(p.checkedAt)}`}</span></span>
+            <span class="end">${stale
+              ? `<button class="btn sm soft" data-act="pickModels" data-id="${p.id}">Fix</button>`
+              : (S.active==='cloud:'+p.id ? '<b style="color:var(--ink)">Active</b>'
+                : `<button class="btn sm soft" data-act="use" data-id="cloud:${p.id}">Use</button>`)}
+              <button data-act="editKey" data-id="${p.id}" style="display:flex">${icon('ellipsis')}</button></span>
+          </div>`;
+        }).join('')}</div>` : `<div class="empty">${icon('key','font-size:18px;color:var(--ink-4)')}
+          <div class="h">No keys yet</div><div class="p">Add a provider and a key. Luna keeps it in the
+          device keystore, not in a file.</div></div>`}
+
+      <div class="lbl">Add a provider</div>
+      <div class="group">${Object.entries(PROVIDERS).map(([k,p]) => `
+        <button class="row" data-act="newKey" data-p="${k}">
+          <span class="tile">${icon(p.icon)}</span>
+          <span class="tx"><b>${esc(p.label)}</b><span>${esc(p.host)}</span></span>
+          <span class="end">${icon('chevron-right')}</span>
+        </button>`).join('')}</div>
+
+      <div class="note">${icon('circle-exclamation')}<span>A cloud model sends your prompt and the file
+        contents it reads to that provider. On-device models never do.</span></div>`;
+  }
+
+  return `<div class="top"><span class="title">Model Zoo</span></div>
+    <div class="seg">${tabs.map((t,i) =>
+      `<button data-act="zooTab" data-i="${i}" class="${S.zooTab===i?'on':''}">${t}</button>`).join('')}</div>
+    <div class="grow">${body}<div style="height:14px"></div></div>`;
+}
+
+/* ------------------------------------------------------------ SETTINGS --- */
+function renderSettings(){
+  const tabs = ['Agent','Connections','Data'];
+  let body = '';
+
+  if (S.setTab === 0) {
+    const free = Object.entries(TOOLS).filter(([,t]) => t.tier === 'free');
+    const held = Object.entries(TOOLS).filter(([,t]) => t.tier === 'held');
+    body = `<div class="lbl">Before anything permanent</div>
+      <div class="group"><div class="row">
+        <span class="tile">${icon('hand')}</span>
+        <span class="tx"><b>Ask me first</b><span>${S.askFirst
+          ? 'On — Luna stops before she changes anything' : 'Off — Luna acts without stopping'}</span></span>
+        <span class="end"><button class="sw ${S.askFirst?'':'off'}" data-act="toggleAsk"><b></b></button></span>
+      </div></div>
+
+      <div class="lbl">Luna does these on her own</div>
+      <div class="chips">${free.map(([k,t]) => `<span class="chip">${esc(t.label)}</span>`).join('')}</div>
+
+      <div class="lbl">These stop and wait for you<span class="act">tap to change</span></div>
+      <div class="chips">${held.map(([k,t]) => {
+        const rule = toolRule(k);
+        const cls = rule === 'never' ? 'no' : rule === 'always' ? '' : 'k';
+        const suffix = rule === 'always' ? ' · always' : rule === 'never' ? ' · never' : '';
+        return `<button class="chip ${cls}" data-act="cycleTool" data-id="${k}">${esc(t.label)}${suffix}</button>`;
+      }).join('')}</div>
+
+      <div class="note">${icon('lock')}<span>Files that hold secrets stay locked in both modes: keys,
+        <span class="mono">.env</span>, credentials and certificates. Luna cannot open them at all.</span></div>
+      <div class="note">${icon('file-shield')}<span>Luna will not read a file larger than 2 MB.</span></div>`;
+  }
+
+  if (S.setTab === 1) {
+    body = `<div class="lbl">Your computer</div>
+      <div class="field"><div class="fl">Ollama address</div>
+        <div class="fi"><input class="mono" id="endpoint2" value="${esc(S.endpoint)}"></div></div>
+
+      <div class="lbl">When the on-device model cannot cope</div>
+      <div class="group"><div class="row">
+        <span class="tile">${icon('cloud-arrow-up')}</span>
+        <span class="tx"><b>Fall back to a cloud key</b><span>${S.failover
+          ? 'On — prompts may leave the device' : 'Off — everything stays on the device'}</span></span>
+        <span class="end"><button class="sw ${S.failover?'':'off'}" data-act="toggleFailover"><b></b></button></span>
+      </div></div>
+
+      <div class="lbl">GitHub</div>
+      <div class="group"><div class="row">
+        <span class="tile">${icon('code-branch')}</span>
+        <span class="tx"><b>${S.token?'Token saved':'No token'}</b><span>Kept in the device keystore</span></span>
+        <span class="end">${S.token
+          ? `<button class="btn sm soft" data-act="clearToken">Remove</button>`
+          : `<button class="btn sm" data-act="tokenSheet">Add</button>`}</span>
+      </div></div>
+
+      <div class="note">${icon('wifi')}<span>With no connections set up and a downloaded model, Luna works
+        with the radio off.</span></div>`;
+  }
+
+  if (S.setTab === 2) {
+    body = `<div class="lbl">Folder</div>
+      <div class="group"><div class="row">
+        <span class="tile">${icon('folder-open')}</span>
+        <span class="tx"><b>${S.workspace.granted?esc(S.workspace.name):'No folder granted'}</b>
+          <span>The only place Luna can see</span></span>
+        <span class="end"><button class="btn sm ${S.workspace.granted?'soft':''}" data-act="grant">
+          ${S.workspace.granted?'Change':'Choose'}</button></span>
+      </div></div>
+
+      <div class="lbl">Stored on this device</div>
+      <div class="group">
+        <div class="row"><span class="tile">${icon('comment')}</span>
+          <span class="tx"><b>One chat, kept until you clear it</b><span>${S.messages.length} messages</span></span>
+          <span class="end"><button class="btn sm soft" data-act="newChat">Clear</button></span></div>
+        <div class="row"><span class="tile">${icon('rotate-left')}</span>
+          <span class="tx"><b>Undo backups</b><span>${S.backup?`Last: ${esc(S.backup.name)}`:'Nothing to undo'}</span></span>
+          <span class="end">${S.backup?`<button class="btn sm soft" data-act="undo">Undo</button>`:''}</span></div>
+        <button class="row" data-act="errorLog"><span class="tile">${icon('triangle-exclamation')}</span>
+          <span class="tx"><b>Error log</b><span>${S.errors.length?`${S.errors.length} recorded · last ${ago(S.errors[0].at)}`:'Nothing has failed'}</span></span>
+          <span class="end">${icon('chevron-right')}</span></button>
+      </div>
+
+      <div class="lbl">Start over</div>
+      <div class="group"><div class="row">
+        <span class="tile">${icon('arrow-rotate-left')}</span>
+        <span class="tx"><b>Reset Luna</b><span>Clears the chat, keys and settings. Downloads and your
+          files stay.</span></span>
+        <span class="end"><button class="btn sm" data-act="resetSheet">Reset</button></span>
+      </div></div>
+
+      <div style="text-align:center;padding:18px 20px 0">
+        <div style="display:flex;justify-content:center">${mark(28)}</div>
+        <div style="font-family:var(--display);font-weight:700;font-size:14px;margin-top:8px">Luna</div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:2px">A local utility agent.
+          No account, no telemetry.</div>
+      </div>`;
+  }
+
+  return `<div class="top"><span class="title">Settings</span></div>
+    <div class="seg">${tabs.map((t,i) =>
+      `<button data-act="setTab" data-i="${i}" class="${S.setTab===i?'on':''}">${t}</button>`).join('')}</div>
+    <div class="grow">${body}<div style="height:14px"></div></div>`;
+}
+
+/* ===========================================================================
+   5 · SHEETS — every secondary surface in the app is one of these
+   =========================================================================== */
+function sheetShell(title, body, action){
+  return `<div class="sheet">
+    <div class="grab"></div>
+    <div class="shead"><b>${esc(title)}</b>${action||''}
+      <button class="ib" data-act="closeSheet">${icon('xmark')}</button></div>
+    <div class="sbody">${body}</div>
+  </div>`;
+}
+
+function renderSheet(){
+  const k = sheet.kind;
+
+  if (k === 'attach') {
+    const dir = folderAt(S.path) || {};
+    const files = Object.keys(dir).filter(n => !dir[n].dir && !dir[n].locked);
+    return sheetShell('Attach', `
+      <div class="group">
+        ${files.map(n => `<button class="row" data-act="doAttach" data-name="${esc(n)}">
+          <span class="tile">${icon(fileIcon(n,dir[n]))}</span>
+          <span class="tx"><b>${esc(n)}</b><span>${esc([S.workspace.name,...S.path].join('/'))}/${esc(n)}</span></span>
+          <span class="end">${icon('chevron-right')}</span></button>`).join('')}
+        <button class="row" data-act="attachFolder">
+          <span class="tile">${icon('folder-tree')}</span>
+          <span class="tx"><b>The whole folder</b><span>Luna lists it and decides what to open</span></span>
+          <span class="end">${icon('chevron-right')}</span></button>
+        <button class="row" data-act="attachDevice">
+          <span class="tile">${icon('mobile-screen')}</span>
+          <span class="tx"><b>A file from the phone</b><span>Copied into the folder first, so she can read it</span></span>
+          <span class="end">${icon('chevron-right')}</span></button>
+      </div>
+      <div class="note">${icon('circle-info')}<span>An attachment is a path, not an upload. Luna opens it
+        with <span class="mono">read_file</span> when she needs it.</span></div>`);
+  }
+
+  if (k === 'file') {
+    const n = sheet.name, f = (folderAt(S.path)||{})[n] || {};
+    return sheetShell(n, `
+      <div class="group">
+        <button class="row" data-act="view" data-name="${esc(n)}"><span class="tile">${icon('eye')}</span>
+          <span class="tx"><b>View</b><span>${bytes((f.text||'').length)}</span></span>
+          <span class="end">${icon('chevron-right')}</span></button>
+        <button class="row" data-act="renameSheet" data-name="${esc(n)}"><span class="tile">${icon('pen')}</span>
+          <span class="tx"><b>Rename</b></span><span class="end">${icon('chevron-right')}</span></button>
+        <button class="row" data-act="askFile" data-name="${esc(n)}"><span class="tile">${icon('comment')}</span>
+          <span class="tx"><b>Ask Luna about this file</b></span><span class="end">${icon('chevron-right')}</span></button>
+        <button class="row" data-act="attachThis" data-name="${esc(n)}"><span class="tile">${icon('paperclip')}</span>
+          <span class="tx"><b>Attach to the chat</b></span><span class="end">${icon('chevron-right')}</span></button>
+        <button class="row" data-act="deleteFile" data-name="${esc(n)}"><span class="tile">${icon('trash')}</span>
+          <span class="tx"><b>Delete</b><span>A backup is kept so you can undo it</span></span>
+          <span class="end">${icon('chevron-right')}</span></button>
+      </div>`);
+  }
+
+  if (k === 'viewer') {
+    const f = (folderAt(S.path)||{})[sheet.name] || {};
+    return sheetShell(sheet.name, `<div class="viewer">${esc(f.text||'')}</div><div style="height:10px"></div>`);
+  }
+
+  if (k === 'rename' || k === 'create') {
+    const isFolder = sheet.folder;
+    return sheetShell(k === 'rename' ? 'Rename' : (isFolder ? 'New folder' : 'New file'), `
+      <div class="field"><div class="fl">${k==='rename'?'New name':'Name'}</div>
+        <div class="fi"><input id="nameInput" value="${esc(sheet.name||'')}"
+          placeholder="${isFolder?'notes':'notes.md'}"></div></div>
+      <div class="actions end" style="margin-bottom:6px">
+        <button class="btn soft" data-act="closeSheet">Cancel</button>
+        <button class="btn" data-act="${k==='rename'?'doRename':'doCreate'}">${icon('check')}
+          ${k==='rename'?'Rename':'Create'}</button>
+      </div>`);
+  }
+
+  if (k === 'download') {
+    const m = modelById(sheet.id), d = S.downloads[sheet.id];
+    if (!d) return sheetShell(m.name, `<div class="note">${icon('circle-check')}<span>Finished.</span></div>`);
+    const pct = Math.round(d.got / m.bytes * 100);
+    return sheetShell(m.name, `
+      <div style="margin:0 20px">
+        <div class="bar"><b style="width:${pct}%"></b></div>
+        <div style="display:flex;align-items:baseline;gap:9px;margin-top:9px">
+          <b style="font-family:var(--display);font-size:19px;letter-spacing:-.03em">${pct}%</b>
+          <span style="font-size:12.5px;color:var(--ink-3)">${bytes(d.got)} of ${bytes(m.bytes)}</span>
+          <span class="badge" style="margin-left:auto">${d.state}</span>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <button class="btn" data-act="dlToggle" data-id="${m.id}">
+          ${icon(d.state==='downloading'?'pause':'play')}${d.state==='downloading'?'Pause':'Resume'}</button>
+        <button class="btn soft" data-act="dlCancel" data-id="${m.id}">${icon('xmark')}Cancel</button>
+      </div>
+      <div class="lbl">What happens next</div>
+      <div class="group">
+        <div class="row"><span class="tile">${icon('power-off')}</span>
+          <span class="tx"><b>Closing Luna is safe</b><span>The part file stays; it restarts at byte
+            ${d.got.toLocaleString()}</span></span></div>
+        <div class="row"><span class="tile">${icon('signal')}</span>
+          <span class="tx"><b>Bad signal waits</b><span>It parks instead of failing, and retries when
+            you are back</span></span></div>
+        <div class="row"><span class="tile">${icon('shield-halved')}</span>
+          <span class="tx"><b>Checked on arrival</b><span>SHA-256 must match or the file is deleted</span></span></div>
+      </div>`);
+  }
+
+  if (k === 'key') {
+    const meta = PROVIDERS[sheet.provider];
+    const p = sheet.id ? S.providers.find(x => x.id === sheet.id) : null;
+    return sheetShell(meta.label, `
+      <div class="field"><div class="fl">Name</div>
+        <div class="fi"><input id="keyLabel" value="${esc(p?p.label:'')}" placeholder="Work key"></div></div>
+      <div class="field"><div class="fl">Address</div>
+        ${sheet.provider === 'other'
+          ? `<div class="fi"><input class="mono" id="keyBase" value="${esc(sheet.base||'')}"
+               placeholder="https://your-host/v1"></div>`
+          : `<div class="fi lock mono">${esc(meta.base)}${icon('lock')}</div>`}
+        <div class="fh">${sheet.provider === 'other'
+          ? 'Any OpenAI-compatible address.' : 'Set by the provider, so there is nothing to mistype.'}</div></div>
+      <div class="field"><div class="fl">Key</div>
+        <div class="fi"><input class="mono" id="keyValue" value="${esc(p?p.key:'')}"
+          placeholder="sk-…"></div>
+        <div class="fh">Kept in the device keystore. It never appears in a file.</div></div>
+      <div class="field"><div class="fl">Model</div>
+        <div class="fi ${sheet.model?'':'lock'}" style="color:${sheet.model?'var(--ink)':'var(--ink-4)'}">
+          ${esc(sheet.model || (p ? p.model : 'Not chosen yet'))}</div>
+        ${sheet.checkedAt ? `<div class="fh">Provider list refreshed ${ago(sheet.checkedAt)}.</div>` : ''}</div>
+      <div class="actions" style="margin-bottom:8px">
+        <button class="btn" data-act="checkModels">${icon('arrows-rotate')}Check models</button>
+        <button class="btn soft" data-act="saveKey">Save</button>
+      </div>`);
+  }
+
+  if (k === 'models') {
+    const meta = PROVIDERS[sheet.provider];
+    const list = sheet.offered || meta.models;
+    return sheetShell(`${meta.label} offers ${list.length}`, `
+      <div style="padding:0 20px 8px;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:7px">
+        ${icon('clock-rotate-left','font-size:11px')}<span>Refreshed just now</span></div>
+      <div class="group">${list.map(m => `<div class="row">
+        <span class="tile">${icon('microchip')}</span>
+        <span class="tx"><b>${esc(m)}</b><span>from the provider's own list</span></span>
+        <span class="end">${sheet.model===m ? '<span class="badge k">Chosen</span>'
+          : `<button class="btn sm soft" data-act="pickModel" data-m="${esc(m)}">Pick</button>`}</span>
+      </div>`).join('')}</div>
+      <div class="note">${icon('list-ul')}<span>This is what the provider says it serves today. A saved
+        model that stops appearing is flagged in the list.</span></div>`);
+  }
+
+  if (k === 'probe') {
+    return sheetShell(sheet.ok ? `Found ${sheet.models.length} models` : 'Could not connect',
+      sheet.ok
+        ? `<div class="group">${sheet.models.map(m => `<div class="row">
+            <span class="tile">${icon('server')}</span>
+            <span class="tx"><b>${esc(m.name)}</b><span>${bytes(m.size)}</span></span>
+            <span class="end"><button class="btn sm soft" data-act="useOllama" data-m="${esc(m.name)}">Use</button></span>
+          </div>`).join('')}</div>`
+        : `<div class="note">${icon('triangle-exclamation')}<span>Nothing answered at
+            <span class="mono">${esc(S.endpoint)}</span>. Check the address, and that Ollama is running with
+            <span class="mono">OLLAMA_HOST=0.0.0.0</span>.</span></div>`);
+  }
+
+  if (k === 'token') {
+    return sheetShell('GitHub token', `
+      <div class="field"><div class="fl">Token</div>
+        <div class="fi"><input class="mono" id="tokenInput" placeholder="ghp_…"></div>
+        <div class="fh">Stored encrypted by the device keystore. It never appears in a file.</div></div>
+      <div class="actions end" style="margin-bottom:6px">
+        <button class="btn soft" data-act="closeSheet">Cancel</button>
+        <button class="btn" data-act="saveToken">${icon('check')}Save</button>
+      </div>`);
+  }
+
+  if (k === 'errors') {
+    return sheetShell('Error log', S.errors.length ? `
+      <div class="list">${S.errors.map(e => `<div class="row">
+        <span class="tile">${icon('triangle-exclamation')}</span>
+        <span class="tx"><b>${esc(e.where)}</b><span>${esc(e.what)}</span></span>
+        <span class="end">${ago(e.at)}</span></div>`).join('')}</div>
+      <div class="actions end" style="margin-top:10px"><button class="btn soft" data-act="clearErrors">Clear</button></div>`
+      : `<div class="note">${icon('circle-check')}<span>Nothing has failed yet.</span></div>`);
+  }
+
+  if (k === 'reset') {
+    return sheetShell('Reset Luna?', `
+      <div style="padding:0 20px 12px;font-size:13.5px;color:var(--ink-2);line-height:1.5">
+        The chat, saved keys and settings go. Your files and downloaded models are untouched.</div>
+      <div class="actions" style="margin-bottom:8px">
+        <button class="btn soft" style="flex:1" data-act="closeSheet">Keep everything</button>
+        <button class="btn" style="flex:1" data-act="doReset">${icon('arrow-rotate-left')}Reset</button>
+      </div>`);
+  }
+
+  if (k === 'import') {
+    return sheetShell('Import a .gguf', `
+      <div class="empty" style="margin-top:0">${icon('file-import','font-size:18px;color:var(--ink-4)')}
+        <div class="h">Pick the file</div>
+        <div class="p">Luna copies it into her models folder so it survives a permission change, then reads
+          the header for the real parameter count.</div>
+        <div class="b"><label class="btn">${icon('folder-open')}Browse this device
+          <input type="file" id="ggufInput" accept=".gguf" style="display:none"></label></div>
+      </div>
+      <div class="note">${icon('circle-exclamation')}<span>An imported model has no published checksum, so
+        Luna marks it <b>not verified</b> rather than implying she checked it.</span></div>`);
+  }
+
+  return '';
+}
+
+/* ===========================================================================
+   6 · THE RUN ENGINE — a job is a list of operations, each one a real change
+   Stage lengths are deliberately uneven: work does not tick like a progress bar.
+   =========================================================================== */
+const STAGE = [800, 600, 1800, 2600, 1600];
+const WORD_MS = 62;
+
+function say(html){ return {answer: html}; }
+
+/* --- the scripts ------------------------------------------------------- */
+function scriptFor(text){
+  const t = text.toLowerCase();
+  if (/http|web|page|online|look ?up|price|news|search the/.test(t)) return browseScript(text);
+  if (/tidy|organi[sz]|sort|clean|move|group/.test(t))              return tidyScript();
+  if (/delete|remove|bin/.test(t))                                   return deleteScript();
+  return readScript(text);
+}
+
+function readScript(text){
+  const target = /shopping/.test(text.toLowerCase()) ? 'shopping.txt' : 'routine.md';
+  return [
+    {label:'Reading the job', detail:'deciding what it needs'},
+    {tool:'list_files', label:'Listing the folder', detail:'Toddler'},
+    {tool:'read_file',  label:'Reading a file', detail:target},
+    {label:'Writing the answer', detail:''},
+    say(target === 'shopping.txt'
+      ? `Four things on the list: nappies, wipes, oat milk and bananas. Nothing is crossed off, so I have left it as it is.`
+      : `The day starts at 07:00 and runs to a 13:00 nap, with the park at 09:30. There is nothing after the nap, so the afternoon is open. Want me to add an afternoon block?`)
+  ];
+}
+
+function tidyScript(){
+  return [
+    {label:'Reading the job', detail:'tidy the folder'},
+    {tool:'list_files', label:'Listing the folder', detail:'6 items, one of them locked'},
+    {tool:'read_file',  label:'Reading a file', detail:'routine.md'},
+    {tool:'read_file',  label:'Reading a file', detail:'shopping.txt'},
+    {tool:'create_folder', label:'Creating a folder', detail:'lists',
+     approval:{headline:'Create the folder “lists”', consequence:'A new folder inside Toddler. Nothing else moves yet.'},
+     apply(){ S.workspace.files['lists'] = {dir:{}}; }},
+    {tool:'write_file', label:'Writing a file', detail:'lists/week.md',
+     approval:{headline:'Write lists/week.md',
+               consequence:'A new file. The two files it summarises are left untouched.',
+               preview:'# This week\n\n- Nursery settling-in moved to Tuesday\n- Nap holds at 13:00\n- Shop: nappies, wipes, oat milk, bananas\n'},
+     apply(){
+       if (!S.workspace.files['lists']) S.workspace.files['lists'] = {dir:{}};
+       S.workspace.files['lists'].dir['week.md'] =
+         {text:'# This week\n\n- Nursery settling-in moved to Tuesday\n- Nap holds at 13:00\n- Shop: nappies, wipes, oat milk, bananas\n'};
+       S.backup = {name:'lists/week.md'};
+     }},
+    {label:'Writing the answer', detail:''},
+    say(`I made a folder called <b>lists</b> and put a single <b>week.md</b> in it, pulling the nursery change, the nap time and the shopping into one page. I did not touch <b>routine.md</b> or <b>shopping.txt</b>, and I could not open <b>.env</b> — it is protected. You can undo the new file from Files.`)
+  ];
+}
+
+function deleteScript(){
+  return [
+    {label:'Reading the job', detail:'a delete was asked for'},
+    {tool:'list_files', label:'Listing the folder', detail:'Toddler'},
+    {tool:'delete_file', label:'Deleting a file', detail:'names.txt',
+     approval:{headline:'Delete notes/names.txt', consequence:'A backup is kept, so this can be undone once.'},
+     apply(){
+       const d = S.workspace.files['notes'].dir;
+       S.backup = {name:'notes/names.txt', node:d['names.txt'], parent:['notes']};
+       delete d['names.txt'];
+     }},
+    {label:'Writing the answer', detail:''},
+    say(`Deleted <b>notes/names.txt</b>. A backup is kept, so <u>undo</u> in Files puts it back exactly as it was.`)
+  ];
+}
+
+function browseScript(text){
+  return [
+    {label:'Reading the job', detail:'this one needs the web'},
+    {tool:'list_files', label:'Listing the folder', detail:'Toddler'},
+    {tool:'open_page', label:'Opening a page', detail:'nhs.uk',
+     approval:{headline:'Open nhs.uk in a hidden browser',
+               consequence:'A page load off this device. Cookies are thrown away when the job ends.'},
+     apply(){}},
+    {tool:'read_page', label:'Reading the page', detail:'2,140 words of text kept, scripts dropped'},
+    {tool:'write_file', label:'Writing a file', detail:'notes/naps.md',
+     approval:{headline:'Write notes/naps.md',
+               consequence:'A new file holding what the page said, with the source line at the bottom.',
+               preview:'# Naps at two\n\nOne nap, early afternoon, 1–2 hours.\n\nSource: nhs.uk, read 27 Aug 2026\n'},
+     apply(){
+       S.workspace.files['notes'].dir['naps.md'] =
+         {text:'# Naps at two\n\nOne nap, early afternoon, 1–2 hours.\n\nSource: nhs.uk, read 27 Aug 2026\n'};
+       S.backup = {name:'notes/naps.md'};
+     }},
+    {label:'Writing the answer', detail:''},
+    say(`One nap in the early afternoon, an hour or two, is the usual pattern at this age — which matches your 13:00. I saved it to <b>notes/naps.md</b> with the source line, so you can check where it came from. <span class="src">nhs</span>`)
+  ];
+}
+
+/* --- running it -------------------------------------------------------- */
+let stepTimer = null, elapsedTimer = null, streamTimer = null;
+
+/* the clock counts Luna's work, not the time she spent waiting on you */
+function workMs(){
+  if (!RUN) return 0;
+  const paused = RUN.paused + (RUN.pausedAt ? Date.now() - RUN.pausedAt : 0);
+  return Math.max(0, Date.now() - RUN.startedAt - paused);
+}
+
+function startRun(text){
+  if (RUN) return;
+  if (!S.active) { showToast('Pick a model first'); S.screen = 'models'; render(); return; }
+  S.messages.push({role:'user', text, attachment:S.attachment});
+  const attached = S.attachment;
+  S.attachment = null;
+  S.screen = 'chat';
+  RUN = {startedAt:Date.now(), label:'Reading the job', steps:[], ops:scriptFor(text + ' ' + (attached||'')),
+         i:0, running:true, streamed:'', approval:null, paused:0, pausedAt:0};
+  save(); render();
+  elapsedTimer = setInterval(() => {
+    const el = document.getElementById('elapsed');
+    if (el && RUN) el.textContent = (workMs()/1000).toFixed(1) + 's';
+  }, 100);
+  nextOp();
+}
+
+function nextOp(){
+  if (!RUN) return;
+  const op = RUN.ops[RUN.i];
+  if (!op) return finishRun();
+
+  if (op.answer) { RUN.label = 'Writing the answer'; return stream(op.answer); }
+
+  /* a tool that is held back stops the whole chain until you answer */
+  if (op.tool) {
+    const gate = needsApproval(op.tool);
+    if (gate === 'denied') {
+      RUN.steps.push({label:op.label, detail:'blocked by your rule', state:'denied'});
+      RUN.i++; render();
+      return stepTimer = setTimeout(nextOp, 500);
+    }
+    if (gate === true && op.approval) {
+      RUN.label = 'Waiting for you';
+      RUN.approval = Object.assign({tool:op.tool}, op.approval);
+      RUN.pausedAt = Date.now();
+      render();
+      return; /* the chain is genuinely stopped here */
+    }
+  }
+  runOp(op);
+}
+
+function runOp(op){
+  RUN.label = op.label;
+  const step = {label:op.label, detail:op.detail, state:'running'};
+  RUN.steps.push(step);
+  render();
+  const ms = STAGE[RUN.i % STAGE.length];
+  stepTimer = setTimeout(() => {
+    if (!RUN) return;
+    if (op.apply) { try { op.apply(); } catch(e){ logError(op.tool||'run', e.message); } }
+    step.state = 'done';
+    RUN.i++;
+    save(); render();
+    nextOp();
+  }, ms);
+}
+
+function resolveApproval(ok){
+  if (!RUN || !RUN.approval) return;
+  const op = RUN.ops[RUN.i];
+  RUN.approval = null;
+  if (RUN.pausedAt) { RUN.paused += Date.now() - RUN.pausedAt; RUN.pausedAt = 0; }
+  if (!ok) {
+    RUN.steps.push({label:op.label, detail:'you skipped this', state:'denied'});
+    RUN.i++;
+    /* the rest of the job still runs, minus what depended on it */
+    RUN.ops = RUN.ops.filter(o => !o.tool || o !== op);
+    render();
+    return stepTimer = setTimeout(nextOp, 450);
+  }
+  runOp(op);
+}
+
+function stream(html){
+  const parts = html.split(/(\s+)/);
+  let k = 0;
+  RUN.streamed = '';
+  render();
+  const el = () => document.getElementById('stream');
+  streamTimer = setInterval(() => {
+    if (!RUN) return clearInterval(streamTimer);
+    if (k >= parts.length) { clearInterval(streamTimer); return finishRun(); }
+    const chunk = parts[k++];
+    RUN.streamed += /^\s+$/.test(chunk) ? chunk : `<span class="w">${chunk}</span>`;
+    const node = el();
+    if (node) { node.innerHTML = RUN.streamed; paintIcons(node); }
+    const g = app.querySelector('.grow');
+    if (g) g.scrollTop = g.scrollHeight;
+  }, WORD_MS);
+}
+
+function finishRun(){
+  clearInterval(elapsedTimer); clearTimeout(stepTimer); clearInterval(streamTimer);
+  if (!RUN) return;
+  const secs = (workMs()/1000).toFixed(1);
+  S.messages.push({
+    role:'luna',
+    steps:RUN.steps.map(s => ({label:s.label, detail:s.detail, state:s.state === 'running' ? 'done' : s.state})),
+    doneLabel:`Thought for ${secs}s`,
+    open:false,
+    html:RUN.streamed || '<i>Stopped.</i>'
+  });
+  RUN = null;
+  S.speed = 9 + Math.random()*5;
+  save(); render();
+}
+
+function stopRun(){
+  if (!RUN) return;
+  clearInterval(elapsedTimer); clearTimeout(stepTimer); clearInterval(streamTimer);
+  RUN.steps.forEach(s => { if (s.state === 'running') { s.state = 'denied'; s.detail = 'you stopped it'; } });
+  RUN.streamed = RUN.streamed || '<i>Stopped before the answer.</i>';
+  finishRun();
+}
+
+/* ===========================================================================
+   7 · DOWNLOADS — they survive a reload, park without signal, resume on the byte
+   =========================================================================== */
+setInterval(() => {
+  const ids = Object.keys(S.downloads);
+  if (!ids.length) return;
+  let touched = false;
+  for (const id of ids) {
+    const d = S.downloads[id], m = modelById(id);
+    if (!m) { delete S.downloads[id]; touched = true; continue; }
+    if (d.state === 'paused') continue;
+    if (!S.network && d.state === 'downloading') { d.state = 'waiting'; touched = true; continue; }
+    if (S.network && d.state === 'waiting') { d.state = 'downloading'; touched = true; }
+    if (d.state === 'downloading') {
+      d.got = Math.min(m.bytes, d.got + m.bytes/26);
+      touched = true;
+      if (d.got >= m.bytes) { d.state = 'verifying'; d.since = Date.now(); }
+    } else if (d.state === 'verifying' && Date.now() - d.since > 1400) {
+      delete S.downloads[id];
+      if (!S.installed.includes(id)) S.installed.push(id);
+      touched = true;
+      showToast(`${m.name} checked and ready`);
+    }
+  }
+  if (touched) { save(); if (S.screen === 'models' || sheet) render(); }
+}, 420);
+
+/* ===========================================================================
+   8 · EVENTS — one delegated handler for the whole app
+   =========================================================================== */
+function val(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function openSheet(o){ sheet = o; render(); }
+function closeSheet(){ sheet = null; render(); }
+
+app.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const a = el.dataset.act, id = el.dataset.id, name = el.dataset.name, i = +el.dataset.i;
+
+  switch (a) {
+
+  /* ---- shell */
+  case 'tab':      S.screen = id; sheet = null; save(); render(); break;
+  case 'zooTab':   S.zooTab = i; save(); render(); break;
+  case 'setTab':   S.setTab = i; save(); render(); break;
+  case 'closeSheet': closeSheet(); break;
+
+  /* ---- chat */
+  case 'send': {
+    const t = val('input');
+    if (!t) break;
+    startRun(t);
+    break;
+  }
+  case 'stopRun':  stopRun(); break;
+  case 'newChat':  if (RUN) break; S.messages = []; save(); render(); break;
+  case 'approve':  resolveApproval(el.dataset.ok === '1'); break;
+  case 'toggleTrace':
+    if (Number.isInteger(i) && S.messages[i]) { S.messages[i].open = !S.messages[i].open; save(); render(); }
+    break;
+  case 'attach':   openSheet({kind:'attach'}); break;
+  case 'doAttach': S.attachment = name; closeSheet(); break;
+  case 'attachThis': S.attachment = name; S.screen = 'chat'; closeSheet(); break;
+  case 'attachFolder': S.attachment = [S.workspace.name, ...S.path].join('/'); closeSheet(); break;
+  case 'attachDevice':
+    showToast('Copied into the folder first');
+    S.workspace.files['scan.pdf'] = {text:'(copied from the device)'};
+    S.attachment = 'scan.pdf'; closeSheet(); break;
+  case 'unattach': S.attachment = null; save(); render(); break;
+  case 'askFile':  closeSheet(); startRun(`what is in ${name}`); break;
+  case 'askFolder': startRun('tidy this folder'); break;
+
+  /* ---- files */
+  case 'open':     S.path.push(name); save(); render(); break;
+  case 'crumb':    S.path = i < 0 ? [] : S.path.slice(0, i+1); save(); render(); break;
+  case 'fileSheet':openSheet({kind:'file', name}); break;
+  case 'locked':   showToast('Protected — Luna cannot open this'); break;
+  case 'view':     openSheet({kind:'viewer', name}); break;
+  case 'renameSheet': openSheet({kind:'rename', name}); break;
+  case 'newFile':  openSheet({kind:'create', folder:false}); break;
+  case 'newFolder':openSheet({kind:'create', folder:true}); break;
+  case 'doRename': {
+    const n = val('nameInput'), dir = folderAt(S.path);
+    if (!n || !dir) break;
+    if (dir[n]) { showToast('That name is taken'); break; }
+    dir[n] = dir[sheet.name]; delete dir[sheet.name];
+    closeSheet(); showToast('Renamed');
+    break;
+  }
+  case 'doCreate': {
+    const n = val('nameInput'), dir = folderAt(S.path);
+    if (!n || !dir) break;
+    if (dir[n]) { showToast('That name is taken'); break; }
+    dir[n] = sheet.folder ? {dir:{}} : {text:''};
+    closeSheet(); showToast(sheet && sheet.folder ? 'Folder created' : 'File created');
+    break;
+  }
+  case 'deleteFile': {
+    const dir = folderAt(S.path);
+    S.backup = {name, node:dir[name], parent:[...S.path]};
+    delete dir[name];
+    closeSheet(); showToast(`${name} deleted`, 'Undo');
+    break;
+  }
+  case 'undo': {
+    if (!S.backup) break;
+    if (S.backup.node) {
+      const dir = folderAt(S.backup.parent) || S.workspace.files;
+      dir[S.backup.name.split('/').pop()] = S.backup.node;
+      showToast('Put back');
+    } else {
+      const segs = S.backup.name.split('/');
+      const file = segs.pop();
+      const dir = folderAt(segs) || S.workspace.files;
+      delete dir[file];
+      showToast('Undone');
+    }
+    S.backup = null; save(); render();
+    break;
+  }
+  case 'grant':
+    S.workspace.granted = true;
+    if (!Object.keys(S.workspace.files).length) S.workspace.files = seedFiles();
+    S.path = []; save(); showToast('Luna can see Toddler'); break;
+
+  /* ---- model zoo */
+  case 'use':
+    S.active = id; save();
+    showToast(id.startsWith('cloud:') ? 'Cloud model in use — prompts leave the device' : 'Loaded on the device');
+    break;
+  case 'dlStart':
+    S.downloads[id] = {got:0, state:S.network ? 'downloading' : 'waiting', since:Date.now()};
+    save(); render(); break;
+  case 'dlToggle': {
+    const d = S.downloads[id]; if (!d) break;
+    d.state = d.state === 'downloading' ? 'paused' : (S.network ? 'downloading' : 'waiting');
+    save(); render(); break;
+  }
+  case 'dlCancel': {
+    const d = S.downloads[id];
+    delete S.downloads[id];
+    logError('download', `${modelById(id).name} cancelled at ${bytes(d?d.got:0)}`);
+    if (sheet && sheet.kind === 'download') closeSheet(); else render();
+    showToast('Cancelled — the part file was removed');
+    break;
+  }
+  case 'deleteModel':
+    S.installed = S.installed.filter(x => x !== id);
+    if (S.active === id) S.active = '';
+    save(); showToast('Removed from the device'); break;
+  case 'dropImport':
+    S.imported = S.imported.filter(m => m.id !== id);
+    if (S.active === id) S.active = '';
+    save(); render(); break;
+  case 'import':   openSheet({kind:'import'}); break;
+  case 'probe': {
+    const ep = val('endpoint') || S.endpoint;
+    S.endpoint = ep; save();
+    if (!S.network) { logError('ollama', 'no network'); openSheet({kind:'probe', ok:false}); break; }
+    openSheet({kind:'probe', ok:true, models:[
+      {name:'llama3.2:3b', size:2019000000},
+      {name:'qwen2.5-coder:7b', size:4680000000},
+      {name:'phi4-mini:latest', size:2490000000}
+    ]});
+    break;
+  }
+  case 'useOllama': {
+    const m = el.dataset.m;
+    const p = {id:'o'+Date.now(), provider:'other', label:'Your computer', model:m,
+               key:'', checkedAt:Date.now()};
+    S.providers.push(p); S.active = 'cloud:'+p.id;
+    closeSheet(); showToast(`${m} on your computer is in use`); break;
+  }
+  case 'newKey':   openSheet({kind:'key', provider:el.dataset.p, base:PROVIDERS[el.dataset.p].base}); break;
+  case 'editKey': {
+    const p = S.providers.find(x => x.id === id);
+    openSheet({kind:'key', provider:p.provider, id:p.id, model:p.model, base:PROVIDERS[p.provider].base});
+    break;
+  }
+  case 'pickModels': {
+    const p = S.providers.find(x => x.id === id);
+    openSheet({kind:'models', provider:p.provider, id:p.id, model:p.model,
+               offered:PROVIDERS[p.provider].models});
+    break;
+  }
+  case 'checkModels': {
+    if (!S.network) { logError('models', 'no network'); showToast('No network — nothing to ask'); break; }
+    const prov = sheet.provider;
+    sheet = Object.assign({}, sheet, {kind:'models', offered:PROVIDERS[prov].models, keep:sheet});
+    render(); break;
+  }
+  case 'pickModel': {
+    const m = el.dataset.m;
+    if (sheet.id) {
+      const p = S.providers.find(x => x.id === sheet.id);
+      p.model = m; p.checkedAt = Date.now();
+      closeSheet(); showToast(`Now using ${m}`);
+    } else {
+      sheet = Object.assign({}, sheet.keep || sheet, {kind:'key', model:m, checkedAt:Date.now()});
+      render();
+    }
+    break;
+  }
+  case 'saveKey': {
+    const label = val('keyLabel') || PROVIDERS[sheet.provider].label;
+    const key = val('keyValue');
+    const base = sheet.provider === 'other' ? val('keyBase') : PROVIDERS[sheet.provider].base;
+    const model = sheet.model || (sheet.id ? S.providers.find(x => x.id === sheet.id).model : '');
+    if (!key) { showToast('A key is needed'); break; }
+    if (!model) { showToast('Check the models and pick one'); break; }
+    if (sheet.id) {
+      Object.assign(S.providers.find(x => x.id === sheet.id), {label, key, model, base, checkedAt:Date.now()});
+    } else {
+      S.providers.push({id:'p'+Date.now(), provider:sheet.provider, label, key, model, base, checkedAt:Date.now()});
+    }
+    closeSheet(); showToast('Saved to the keystore'); break;
+  }
+
+  /* ---- settings */
+  case 'toggleAsk':      S.askFirst = !S.askFirst; save(); render(); break;
+  case 'toggleFailover': S.failover = !S.failover; save(); render(); break;
+  case 'cycleTool': {
+    const order = ['ask','always','never'];
+    S.overrides[id] = order[(order.indexOf(toolRule(id)) + 1) % 3];
+    save(); render(); break;
+  }
+  case 'tokenSheet': openSheet({kind:'token'}); break;
+  case 'saveToken': {
+    const t = val('tokenInput');
+    if (!t) { showToast('Nothing to save'); break; }
+    S.token = t; closeSheet(); showToast('Token in the keystore'); break;
+  }
+  case 'clearToken': S.token = ''; save(); showToast('Token removed'); break;
+  case 'errorLog':   openSheet({kind:'errors'}); break;
+  case 'clearErrors':S.errors = []; save(); render(); break;
+  case 'resetSheet': openSheet({kind:'reset'}); break;
+  case 'doReset': {
+    const files = S.workspace.files, installed = S.installed, imported = S.imported;
+    S = clone(DEFAULT);
+    S.workspace.files = files; S.installed = installed; S.imported = imported;
+    S.providers = [];
+    closeSheet(); showToast('Luna is back to defaults'); break;
+  }
+  }
+  save();
+});
+
+/* enter sends, shift-enter is a newline, and the box grows with the text */
+app.addEventListener('keydown', e => {
+  if (e.target.id === 'input' && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const t = e.target.value.trim();
+    if (t) startRun(t);
+  }
+  if (e.target.id === 'nameInput' && e.key === 'Enter') {
+    e.preventDefault();
+    app.querySelector(`[data-act="${sheet.kind === 'rename' ? 'doRename' : 'doCreate'}"]`).click();
+  }
+});
+app.addEventListener('input', e => {
+  if (e.target.id === 'input') {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(96, e.target.scrollHeight) + 'px';
+  }
+  if (e.target.id === 'ggufInput') {
+    const f = e.target.files[0]; if (!f) return;
+    const m = {id:'imp'+Date.now(), name:f.name.replace(/\.gguf$/i,''), params:'unknown',
+               bytes:f.size, ram:2, imported:true};
+    S.imported.push(m); S.active = m.id;
+    closeSheet(); showToast(`${m.name} imported · not verified`);
+  }
+  if (e.target.id === 'endpoint' || e.target.id === 'endpoint2') { S.endpoint = e.target.value; save(); }
+});
+
+/* ===========================================================================
+   9 · THE SIDE PANEL — canned journeys, so nothing has to be typed
+   =========================================================================== */
+document.querySelectorAll('[data-demo]').forEach(b => b.addEventListener('click', () => {
+  const d = b.dataset.demo;
+  if (d === 'job')      { S.screen = 'chat'; S.attachment = 'routine.md'; startRun('tidy this folder and pull the week into one page'); }
+  if (d === 'browse')   { S.screen = 'chat'; startRun('how long should a two year old nap? check the web'); }
+  if (d === 'download') { S.screen = 'models'; S.zooTab = 0;
+                          S.downloads['smollm2-17b-q4'] = {got:0, state:S.network?'downloading':'waiting', since:Date.now()};
+                          save(); render(); }
+  if (d === 'drop')     { S.network = !S.network;
+                          document.getElementById('netBtn').innerHTML =
+                            `<i class="fa-solid fa-wifi"></i>${S.network ? 'Drop the network' : 'Bring the network back'}`;
+                          paintIcons(document.getElementById('netBtn'));
+                          if (!S.network) logError('network', 'radio off — cloud and downloads park');
+                          save(); render(); }
+  if (d === 'reset')    { localStorage.removeItem('luna.proto'); S = clone(DEFAULT); sheet = null; RUN = null; render(); }
+}));
+
+/* ===========================================================================
+   10 · BOOT
+   =========================================================================== */
+render();
+if (!S.network) {
+  const nb = document.getElementById('netBtn');
+  nb.innerHTML = '<i class="fa-solid fa-wifi"></i>Bring the network back';
+  paintIcons(nb);
+}
+</script></body></html>

@@ -98,11 +98,29 @@ class _FilesScreenState extends State<FilesScreen> {
               label: 'New file',
               onTap: core.workspaceGranted ? () => _createSheet(folder: false) : null,
             ),
+            IconButtonSoft(
+              icon: FontAwesomeIcons.fileImport,
+              label: 'Bring in a file from the phone',
+              onTap: core.workspaceGranted
+                  ? () async {
+                      final String? name = await core.bringInFile();
+                      if (!mounted) return;
+                      await _reload();
+                      if (name != null && name.isNotEmpty && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Copied $name into the folder')),
+                        );
+                      }
+                    }
+                  : null,
+            ),
           ],
         ),
         if (core.workspaceGranted) _breadcrumbs(core),
         Expanded(
-          child: !core.workspaceGranted
+          child: core.workspaceRevoked
+              ? ListView(children: <Widget>[_revokedPrompt(core)])
+              : !core.workspaceGranted
               ? ListView(children: <Widget>[_grantPrompt(core)])
               : RefreshIndicator(
                   color: LunaTheme.ink,
@@ -112,7 +130,7 @@ class _FilesScreenState extends State<FilesScreen> {
                     children: <Widget>[
                       if (_error != null) _errorNote(_error!),
                       if (_loading && _entries.isEmpty)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.only(top: 40),
                           child: Center(
                             child: SizedBox(
@@ -142,7 +160,7 @@ class _FilesScreenState extends State<FilesScreen> {
                               .map((Map<String, dynamic> entry) => LunaRow(
                                     icon: FontAwesomeIcons.folder,
                                     title: '${entry['name']}',
-                                    trailing: const Glyph(FontAwesomeIcons.chevronRight,
+                                    trailing: Glyph(FontAwesomeIcons.chevronRight,
                                         size: 10.5, color: LunaTheme.ink4),
                                     onTap: () => _open('${entry['name']}'),
                                   ))
@@ -174,7 +192,7 @@ class _FilesScreenState extends State<FilesScreen> {
           last: parts.isEmpty),
     ];
     for (int index = 0; index < parts.length; index++) {
-      crumbs.add(const Padding(
+      crumbs.add(Padding(
         padding: EdgeInsets.symmetric(horizontal: 6),
         child: Glyph(FontAwesomeIcons.chevronRight, size: 8.5, color: LunaTheme.ink4),
       ));
@@ -217,7 +235,7 @@ class _FilesScreenState extends State<FilesScreen> {
       tileOnFill: true,
       trailing: locked
           ? null
-          : const Glyph(FontAwesomeIcons.ellipsis, size: 13, color: LunaTheme.ink4),
+          : Glyph(FontAwesomeIcons.ellipsis, size: 13, color: LunaTheme.ink4),
       onTap: locked ? null : () => _fileSheet(entry),
     );
   }
@@ -251,6 +269,24 @@ class _FilesScreenState extends State<FilesScreen> {
           'Luna only ever sees the one folder you choose. Everything else on the device stays out of reach.',
       action: PillButton(
         label: 'Choose folder',
+        icon: FontAwesomeIcons.folderOpen,
+        onTap: () async {
+          await core.pickFolder();
+          if (mounted) _reload();
+        },
+      ),
+    );
+  }
+
+  /// A withdrawn permission looks exactly like an empty folder unless you say so.
+  Widget _revokedPrompt(LunaCore core) {
+    return EmptyState(
+      icon: FontAwesomeIcons.folderMinus,
+      title: 'The permission was withdrawn',
+      body: 'Android has taken back access to ${core.workspaceName.isEmpty ? 'the folder' : core.workspaceName}. '
+          'Nothing has been deleted — Luna simply cannot see it until you grant it again.',
+      action: PillButton(
+        label: 'Grant it again',
         icon: FontAwesomeIcons.folderOpen,
         onTap: () async {
           await core.pickFolder();
@@ -393,7 +429,7 @@ class _FilesScreenState extends State<FilesScreen> {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
         child: Container(
           padding: const EdgeInsets.all(14),
-          decoration: const BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rNote),
+          decoration: BoxDecoration(color: LunaTheme.fill, borderRadius: LunaTheme.rNote),
           child: SelectableText(content, style: LunaTheme.monoStyle(size: 12, color: LunaTheme.ink2)),
         ),
       ),

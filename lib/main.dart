@@ -12,13 +12,20 @@ import 'widgets/common.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0x00000000),
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: LunaTheme.paper,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  ));
   runApp(const LunaApp());
+}
+
+/// The status and navigation bars have to follow the palette, or dark mode
+/// ends with two white strips framing a black app.
+void _paintSystemBars() {
+  final Brightness icons = LunaTheme.isDark ? Brightness.light : Brightness.dark;
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+    statusBarColor: const Color(0x00000000),
+    statusBarIconBrightness: icons,
+    statusBarBrightness: LunaTheme.isDark ? Brightness.dark : Brightness.light,
+    systemNavigationBarColor: LunaTheme.paper,
+    systemNavigationBarIconBrightness: icons,
+  ));
 }
 
 class LunaApp extends StatefulWidget {
@@ -28,17 +35,44 @@ class LunaApp extends StatefulWidget {
   State<LunaApp> createState() => _LunaAppState();
 }
 
-class _LunaAppState extends State<LunaApp> {
+class _LunaAppState extends State<LunaApp> with WidgetsBindingObserver {
   final LunaCore _core = LunaCore();
+  String _applied = '';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _core.addListener(_syncTheme);
     _core.load();
+    _syncTheme();
+  }
+
+  /// The phone changed between light and dark while we were open.
+  @override
+  void didChangePlatformBrightness() {
+    _syncTheme();
+  }
+
+  /// One place decides which palette is live: the setting, or the phone when
+  /// the setting says to follow it.
+  void _syncTheme() {
+    final Brightness system =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final bool dark = _core.theme == 'dark' ||
+        (_core.theme == 'system' && system == Brightness.dark);
+    final String key = '$dark';
+    if (key == _applied) return;
+    _applied = key;
+    LunaTheme.apply(dark: dark);
+    _paintSystemBars();
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _core.removeListener(_syncTheme);
     _core.dispose();
     super.dispose();
   }
@@ -50,17 +84,21 @@ class _LunaAppState extends State<LunaApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        brightness: LunaTheme.isDark ? Brightness.dark : Brightness.light,
         scaffoldBackgroundColor: LunaTheme.paper,
         canvasColor: LunaTheme.paper,
         splashFactory: NoSplash.splashFactory,
         highlightColor: const Color(0x00000000),
         fontFamily: LunaTheme.sans,
-        colorScheme: const ColorScheme.light(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: LunaTheme.ink,
+          brightness: LunaTheme.isDark ? Brightness.dark : Brightness.light,
+        ).copyWith(
           primary: LunaTheme.ink,
           secondary: LunaTheme.ink,
           surface: LunaTheme.paper,
         ),
-        textSelectionTheme: const TextSelectionThemeData(
+        textSelectionTheme: TextSelectionThemeData(
           cursorColor: LunaTheme.ink,
           selectionColor: LunaTheme.fill2,
           selectionHandleColor: LunaTheme.ink2,
@@ -68,7 +106,11 @@ class _LunaAppState extends State<LunaApp> {
       ),
       home: AnimatedBuilder(
         animation: _core,
-        builder: (BuildContext context, Widget? _) => Shell(core: _core),
+        builder: (BuildContext context, Widget? _) => MediaQuery.withClampedTextScaling(
+          minScaleFactor: _core.textScale,
+          maxScaleFactor: _core.textScale,
+          child: Shell(core: _core),
+        ),
       ),
     );
   }
@@ -118,6 +160,13 @@ class _ShellState extends State<Shell> {
       SettingsScreen(core: core),
     ];
 
+    if (!core.walkthroughDone) {
+      return Scaffold(
+        backgroundColor: LunaTheme.paper,
+        body: SafeArea(child: _Walkthrough(core: core)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: LunaTheme.paper,
       resizeToAvoidBottomInset: true,
@@ -135,7 +184,7 @@ class _ShellState extends State<Shell> {
 
   Widget _tabBar() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: LunaTheme.paper,
         border: Border(top: BorderSide(color: LunaTheme.line, width: 1)),
       ),
@@ -188,4 +237,84 @@ class _Tab {
   final String label;
   final FaIconData active;
   final FaIconData idle;
+}
+
+
+/// Shown once. Three plain facts and a folder, because the app is useless
+/// until Luna has somewhere to look and a model to think with.
+class _Walkthrough extends StatefulWidget {
+  const _Walkthrough({required this.core});
+
+  final LunaCore core;
+
+  @override
+  State<_Walkthrough> createState() => _WalkthroughState();
+}
+
+class _WalkthroughState extends State<_Walkthrough> {
+  @override
+  Widget build(BuildContext context) {
+    final LunaCore core = widget.core;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(0, 40, 0, 24),
+      children: <Widget>[
+        const Center(child: Mark(size: 52)),
+        const SizedBox(height: 18),
+        Center(child: Text('Luna', style: LunaTheme.displayStyle(size: 28, weight: 700))),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Text(
+            'A local agent. It runs on this phone, and it only touches what you hand it.',
+            textAlign: TextAlign.center,
+            style: LunaTheme.text(size: 13.5, color: LunaTheme.ink3, height: 1.5),
+          ),
+        ),
+        const SizedBox(height: 26),
+        Group(children: <Widget>[
+          LunaRow(
+            icon: FontAwesomeIcons.folderOpen,
+            title: 'One folder',
+            subtitle: core.workspaceGranted
+                ? 'Granted: ${core.workspaceName}'
+                : 'Choose the folder Luna is allowed to see. Nothing outside it exists to her.',
+            trailing: PillButton(
+              label: core.workspaceGranted ? 'Change' : 'Choose',
+              small: true,
+              soft: core.workspaceGranted,
+              onTap: () async {
+                await core.pickFolder();
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
+          LunaRow(
+            icon: FontAwesomeIcons.hand,
+            title: 'It stops before it changes anything',
+            subtitle: 'Writing, renaming and deleting wait for you to say yes.',
+          ),
+          LunaRow(
+            icon: FontAwesomeIcons.cube,
+            title: 'It needs a model',
+            subtitle: 'Download one in the Model Zoo, point at Ollama, or add a cloud key.',
+          ),
+        ]),
+        const SizedBox(height: 22),
+        Center(
+          child: PillButton(
+            label: 'Start',
+            icon: FontAwesomeIcons.arrowRight,
+            onTap: core.finishWalkthrough,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            'No account. No telemetry.',
+            style: LunaTheme.text(size: 12, color: LunaTheme.ink4),
+          ),
+        ),
+      ],
+    );
+  }
 }
