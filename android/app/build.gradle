@@ -9,6 +9,25 @@ if (localPropertiesFile.exists()) {
     localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
 }
 
+// The upload key. Three ways in, in order: a key.properties file next to the
+// Gradle build for local signing, environment variables for CI, and nothing at
+// all — in which case the release build falls back to the debug key so a fork
+// or a clean checkout still produces an installable APK.
+def signingProps = new Properties()
+def signingPropsFile = rootProject.file("key.properties")
+if (signingPropsFile.exists()) {
+    signingPropsFile.withReader("UTF-8") { reader -> signingProps.load(reader) }
+}
+
+def signingValue = { String propKey, String envKey, String fallback ->
+    def value = signingProps.getProperty(propKey) ?: System.getenv(envKey)
+    return (value == null || value.trim().isEmpty()) ? fallback : value.trim()
+}
+
+def keystorePath = signingValue("storeFile", "LUNA_KEYSTORE_FILE", null)
+def keystoreFile = keystorePath == null ? null : rootProject.file(keystorePath)
+def hasUploadKey = keystoreFile != null && keystoreFile.exists()
+
 android {
     namespace = "ai.luna.app"
     compileSdk = 35
@@ -64,14 +83,30 @@ android {
         includeInBundle = false
     }
 
+    signingConfigs {
+        if (hasUploadKey) {
+            create("upload") {
+                storeFile = keystoreFile
+                storePassword = signingValue("storePassword", "LUNA_KEYSTORE_PASSWORD", "")
+                keyAlias = signingValue("keyAlias", "LUNA_KEY_ALIAS", "luna")
+                keyPassword = signingValue("keyPassword", "LUNA_KEY_PASSWORD", "")
+                // v1 as well as v2/v3: minSdk is 23, and 23 predates v2.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             ndk { debugSymbolLevel "none" }
         }
         release {
-            // The release build is signed with the debug key so CI can produce an
-            // installable artifact; swap in a real keystore before shipping.
-            signingConfig = signingConfigs.debug
+            // Signed with the upload key when one is present, and with the debug
+            // key when it is not, so a build never silently produces something
+            // that cannot be installed.
+            signingConfig = hasUploadKey ? signingConfigs.getByName("upload") : signingConfigs.debug
             // Nothing is shrunk: JGit-style reflection and the JNI bridge are
             // easy to break, and 27 MiB leaves plenty of room under the budget.
             minifyEnabled = false
