@@ -1,5 +1,7 @@
 package ai.luna.app;
 
+import ai.luna.contracts.Trace;
+
 import android.content.Context;
 
 import org.json.JSONArray;
@@ -22,7 +24,7 @@ import java.util.Deque;
  * ring of the last few hundred lines, so the debug panel can show the run as it
  * happens without writing a megabyte of noise to storage every minute.
  */
-public final class ErrorLog {
+public final class ErrorLog implements Trace {
 
     private static final int MAX_ENTRIES = 50;
     private static final int MAX_LIVE = 400;
@@ -74,11 +76,19 @@ public final class ErrorLog {
         record(where, message == null || message.isEmpty() ? String.valueOf(error) : message);
     }
 
+    /** The Trace contract: a failure, said once. */
+    @Override
+    public void fail(String where, String what) {
+        line(ERROR, where, what);
+    }
+
     /** Background detail. Memory only. */
+    @Override
     public void note(String where, String what) {
         line(INFO, where, what);
     }
 
+    @Override
     public void warn(String where, String what) {
         line(WARN, where, what);
     }

@@ -32,8 +32,10 @@ curl -sL -o "$json" \
 javac --release 11 -encoding UTF-8 -nowarn \
   -cp "$json:$platform:$root/tools/jvm-stubs" \
   -d "$work/classes" \
+  "$root"/android/app/src/main/java/ai/luna/contracts/*.java \
   "$root"/android/app/src/main/java/ai/luna/app/*.java \
   "$root"/tools/tests/ai/luna/app/*.java
 
 java -cp "$json:$platform:$work/classes" ai.luna.app.MemoryRecoveryTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.ProviderConfigTest
+java -cp "$json:$platform:$work/classes" ai.luna.app.ContractsTest

@@ -1,6 +1,8 @@
 package ai.luna.app;
 
 import android.content.Context;
+
+import ai.luna.contracts.StorageProvider;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.DocumentsContract;
@@ -34,7 +36,14 @@ import java.util.Locale;
  * read or write, and a deny-list of credential-shaped paths that no execution
  * mode can override. Every destructive operation writes a backup first.
  */
-public final class WorkspaceStore {
+public final class WorkspaceStore implements StorageProvider {
+
+    /** The first storage provider: one Android folder, granted through SAF. */
+    @Override
+    public String id() {
+        return "android.saf";
+    }
+
 
     public static final long MAX_BYTES = 2L * 1024L * 1024L;
 

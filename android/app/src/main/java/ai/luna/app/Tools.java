@@ -1,5 +1,10 @@
 package ai.luna.app;
 
+import ai.luna.contracts.BrowserProvider;
+import ai.luna.contracts.SecretProvider;
+import ai.luna.contracts.StorageProvider;
+import ai.luna.contracts.Trace;
+
 import android.util.Base64;
 
 import org.json.JSONArray;
@@ -22,12 +27,14 @@ public final class Tools {
 
     /** Everything a tool is allowed to touch, handed in rather than looked up. */
     public static final class Env {
-        public final WorkspaceStore workspace;
-        public final HeadlessBrowser browser;
-        public final CredentialVault vault;
-        public final ErrorLog errors;
+        // Contracts, not concrete classes: the same tool has to work against a
+        // granted Android folder, a git checkout or a box on the network.
+        public final StorageProvider workspace;
+        public final BrowserProvider browser;
+        public final SecretProvider vault;
+        public final Trace errors;
 
-        public Env(WorkspaceStore workspace, HeadlessBrowser browser, CredentialVault vault, ErrorLog errors) {
+        public Env(StorageProvider workspace, BrowserProvider browser, SecretProvider vault, Trace errors) {
             this.workspace = workspace;
             this.browser = browser;
             this.vault = vault;
@@ -74,7 +81,7 @@ public final class Tools {
         } catch (Exception error) {
             String message = error.getMessage();
             if (env.errors != null) {
-                env.errors.record(tool, message == null ? String.valueOf(error) : message);
+                env.errors.fail(tool, message == null ? String.valueOf(error) : message);
             }
             return "Failed: " + (message == null ? error.toString() : message);
         }
@@ -117,7 +124,7 @@ public final class Tools {
         if (repo.isEmpty() || path.isEmpty()) {
             return "Give me repo as owner/name and path as the file inside it.";
         }
-        String token = env.vault == null ? "" : env.vault.read("github");
+        String token = env.vault == null ? "" : env.vault.get(SecretProvider.CORE, "github");
         String endpoint = "https://api.github.com/repos/" + repo + "/contents/" + path
             + (ref.isEmpty() ? "" : "?ref=" + ref);
 
@@ -169,7 +176,7 @@ public final class Tools {
 
     // --- the folder --------------------------------------------------------------
 
-    private static String listFiles(WorkspaceStore workspace, String path) throws Exception {
+    private static String listFiles(StorageProvider workspace, String path) throws Exception {
         if (workspace.rootState().equals(WorkspaceStore.STATE_REVOKED)) {
             return "The folder permission was withdrawn. Ask the user to grant it again in Files.";
         }
@@ -193,12 +200,12 @@ public final class Tools {
         return clamp(out.toString());
     }
 
-    private static String readFile(WorkspaceStore workspace, String path) throws Exception {
+    private static String readFile(StorageProvider workspace, String path) throws Exception {
         String text = workspace.readText(path);
         return clamp(path + ":\n" + text);
     }
 
-    private static String search(WorkspaceStore workspace, String query) throws Exception {
+    private static String search(StorageProvider workspace, String query) throws Exception {
         JSONArray hits = workspace.search(query, 12);
         if (hits.length() == 0) {
             return "No matches for " + query + ".";
