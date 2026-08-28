@@ -14,6 +14,7 @@ import ai.luna.contracts.WorkflowDefinition;
 import ai.luna.runtime.AgentManager;
 import ai.luna.runtime.AgentRegistry;
 import ai.luna.runtime.EphemeralMemory;
+import ai.luna.runtime.InferenceRouter;
 import ai.luna.runtime.MemoryRegistry;
 import ai.luna.runtime.PluginManager;
 import ai.luna.runtime.PluginVerifier;
@@ -102,6 +103,9 @@ public final class AgentEngine {
     /** Five kinds of remembering, only two of which outlive the run. */
     private final MemoryRegistry memory = new MemoryRegistry();
 
+    /** Which brain answers, and the sentence that justifies it. */
+    private final InferenceRouter router = new InferenceRouter();
+
     /** Assembles the system prompt from the skills and the available tools. */
     private final SystemPrompt prompt;
 
@@ -175,6 +179,7 @@ public final class AgentEngine {
         tools.grant(environment.capabilities());
         skills.register(new CoreSkills());
         skills.disable(prefs.disabledSkills());
+        router.register(new LocalInference(runtime, models));
         memory.register(new EphemeralMemory());
         memory.register(new FileMemory(this.context.getFilesDir(), errors));
         agents.register(LunaAgent.DEFINITION);
@@ -559,17 +564,20 @@ public final class AgentEngine {
                 return;
             }
             if (local != null && !loadIfNeeded(local)) {
+                // The router decides, and says why. "It failed over" is not an
+                // explanation; "this is bigger than the phone's model can hold"
+                // is something a person can act on.
+                router.failed("local.llamacpp");
                 JSONObject standby = failoverProvider();
-                if (standby == null) {
+                InferenceRouter.Route route = router.choose(
+                    candidates(local, standby), needFor(userText, standby));
+                if (standby == null || !route.any() || !route.chosen.remote) {
                     finishWithMessage("That model would not load. It may be a bad download; "
                         + "delete it and get it again.");
                     return;
                 }
-                // The switch in Settings says prompts may leave the device when
-                // the on-device model cannot cope. This is that moment.
-                emit("failover", new JSONObject());
-                appendObservation("failover", "The on-device model would not load, so "
-                    + standby.optString("label", "the configured provider") + " answered instead.");
+                emit("failover", reasonEvent(route.reason));
+                appendObservation("failover", route.reason);
                 local = null;
                 cloud = standby;
             }
@@ -796,9 +804,11 @@ public final class AgentEngine {
                 });
             String failure = result.failure();
             if (failure != null) {
+                router.failed("local.llamacpp");
                 finishWithMessage(failure);
                 return null;
             }
+            router.worked("local.llamacpp");
             JSONObject speed = new JSONObject();
             try {
                 speed.put("tokensPerSecond", result.tokensPerSecond());
@@ -853,6 +863,7 @@ public final class AgentEngine {
                 }
             });
         if (reply.error != null) {
+            router.failed("cloud:" + cloud.optString("id"));
             errors.record("cloud", reply.error);
             // A model that is no longer there must not stay selected, or every
             // job from now on fails with the same sentence.
@@ -867,6 +878,7 @@ public final class AgentEngine {
             finishWithMessage(reply.error);
             return null;
         }
+        router.worked("cloud:" + cloud.optString("id"));
         return reply.text;
     }
 
@@ -1061,6 +1073,50 @@ public final class AgentEngine {
             }
         }
         return null;
+    }
+
+    /** Everything that could answer this turn, as the router sees it. */
+    private List<InferenceRouter.Candidate> candidates(ModelStore.Entry local, JSONObject cloud) {
+        List<InferenceRouter.Candidate> out = new java.util.ArrayList<>();
+        if (local != null) {
+            out.add(new InferenceRouter.Candidate("local.llamacpp", local.name, false,
+                local.contextTokens, 0));
+        }
+        if (cloud != null) {
+            out.add(new InferenceRouter.Candidate("cloud:" + cloud.optString("id"),
+                cloud.optString("label", "the configured provider"), true, 0, 1));
+        }
+        return out;
+    }
+
+    /** What this turn needs: roughly its size, and whether it may leave. */
+    private InferenceRouter.Need needFor(String userText, JSONObject standby) {
+        int tokens = Math.max(512, (transcriptCharacters() + userText.length()) / 4);
+        return new InferenceRouter.Need(tokens, false, prefs.activeModelId(),
+            prefs.failoverEnabled() && standby != null);
+    }
+
+    private int transcriptCharacters() {
+        int total = 0;
+        for (JSONObject message : transcript) {
+            total += message.optString("content").length();
+        }
+        return total;
+    }
+
+    private JSONObject reasonEvent(String reason) {
+        JSONObject event = new JSONObject();
+        try {
+            event.put("reason", reason);
+        } catch (JSONException ignored) {
+            // The event is still worth emitting without its sentence.
+        }
+        return event;
+    }
+
+    /** Which providers have been working, for the debug panel. */
+    public JSONArray inferenceHealth() {
+        return router.health();
     }
 
     private JSONObject ollamaProvider(String model) {
