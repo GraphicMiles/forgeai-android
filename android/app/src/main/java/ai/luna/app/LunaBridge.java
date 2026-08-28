@@ -164,13 +164,6 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 agent.answerQuestion(String.valueOf(call.argument("id")), (String) call.argument("text"));
                 result.success(null);
                 return;
-            case "setToolRule":
-                prefs.setToolRule(argString(call, "tool"), argString(call, "rule"));
-                result.success(prefs.toolRules().toString());
-                return;
-            case "toolRules":
-                result.success(prefs.toolRules().toString());
-                return;
             case "setBudget":
                 prefs.setBudget(intArg(call, "steps", prefs.budgetSteps()),
                     intArg(call, "seconds", prefs.budgetSeconds()),
@@ -527,7 +520,6 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         out.put("readOnlyTools", new ArrayList<>(ToolPolicy.READ_ONLY));
         out.put("mutatingTools", new ArrayList<>(ToolPolicy.MUTATING));
         out.put("maxFileBytes", WorkspaceStore.MAX_BYTES);
-        out.put("toolRules", prefs.toolRules().toString());
         out.put("wifiOnly", prefs.wifiOnly());
         out.put("batteryGuard", prefs.batteryGuard());
         out.put("keepWarm", prefs.keepWarm());

@@ -578,7 +578,7 @@ public final class AgentEngine {
                 if (ToolPolicy.needsFolder(tool) && !workspace.hasRoot()) {
                     // Asking the person to approve something that cannot work
                     // is a way of blaming them for it.
-                    emitStep(tool, path, "blocked");
+                    emitStep(tool, path, "no_folder");
                     appendObservation(tool, "No folder is granted, so there is nothing to read or "
                         + "write. Ask for a folder in one sentence, or answer without files.");
                     continue;
@@ -588,7 +588,7 @@ public final class AgentEngine {
                     String invented = NetworkTargets.placeholderReason(
                         args.optString("url", path));
                     if (invented != null) {
-                        emitStep(tool, path, "blocked");
+                        emitStep(tool, path, "invented");
                         appendObservation(tool, invented);
                         continue;
                     }
@@ -611,16 +611,7 @@ public final class AgentEngine {
                     continue;
                 }
 
-                ToolPolicy.Decision decision = ToolPolicy.decide(tool, prefs);
-                if (decision == ToolPolicy.Decision.REFUSE) {
-                    // "refused" is your standing rule; "declined" is this one
-                    // time. The trace says which, because they mean different
-                    // things to the person reading it.
-                    emitStep(tool, path, "refused");
-                    appendObservation(tool, "Your rules say never for " + tool
-                        + ". It was not run. Do something else, or say what you would have needed.");
-                    continue;
-                }
+                ToolPolicy.Decision decision = ToolPolicy.decide(tool, path, prefs);
                 if (decision == ToolPolicy.Decision.ASK) {
                     // The row has to exist while the job is parked on it. A
                     // trace that hides the tool you are being asked about is

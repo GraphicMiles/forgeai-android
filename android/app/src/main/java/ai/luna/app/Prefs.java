@@ -20,9 +20,6 @@ public final class Prefs {
     public static final String MODE_ASK = "ask";
     public static final String MODE_AUTO = "auto";
 
-    public static final String RULE_ASK = "ask";
-    public static final String RULE_ALWAYS = "always";
-    public static final String RULE_NEVER = "never";
 
     private static final String FILE = "luna_prefs";
     private static final String KEY_MODE = "execution_mode";
@@ -51,6 +48,7 @@ public final class Prefs {
 
     public Prefs(Context context) {
         this.prefs = context.getApplicationContext().getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        dropOldToolRules();
     }
 
     // --- how she is allowed to act -------------------------------------------
@@ -68,39 +66,14 @@ public final class Prefs {
         return MODE_AUTO.equals(executionMode());
     }
 
-    /** ask, always or never, per tool. A missing rule means ask. */
-    public String toolRule(String tool) {
-        try {
-            JSONObject rules = new JSONObject(prefs.getString(KEY_TOOL_RULES, "{}"));
-            String value = rules.optString(tool, RULE_ASK);
-            if (RULE_ALWAYS.equals(value) || RULE_NEVER.equals(value)) {
-                return value;
-            }
-        } catch (JSONException ignored) {
-            // A broken rule set falls back to asking, which is the safe end.
-        }
-        return RULE_ASK;
-    }
-
-    public void setToolRule(String tool, String rule) {
-        try {
-            JSONObject rules = new JSONObject(prefs.getString(KEY_TOOL_RULES, "{}"));
-            if (RULE_ASK.equals(rule)) {
-                rules.remove(tool);
-            } else {
-                rules.put(tool, RULE_ALWAYS.equals(rule) ? RULE_ALWAYS : RULE_NEVER);
-            }
-            prefs.edit().putString(KEY_TOOL_RULES, rules.toString()).apply();
-        } catch (JSONException ignored) {
-            // Leaving the rule unchanged is safer than writing a broken one.
-        }
-    }
-
-    public JSONObject toolRules() {
-        try {
-            return new JSONObject(prefs.getString(KEY_TOOL_RULES, "{}"));
-        } catch (JSONException error) {
-            return new JSONObject();
+    /**
+     * Per-tool rules used to live here. They are gone on purpose: one switch is
+     * the whole gate, and a stored rule from an older build must not quietly
+     * keep granting permission. The key is cleared the first time this runs.
+     */
+    private void dropOldToolRules() {
+        if (prefs.contains(KEY_TOOL_RULES)) {
+            prefs.edit().remove(KEY_TOOL_RULES).apply();
         }
     }
 
@@ -546,7 +519,6 @@ public final class Prefs {
     public JSONObject exportSettings() throws JSONException {
         JSONObject out = new JSONObject();
         out.put("executionMode", executionMode());
-        out.put("toolRules", toolRules());
         out.put("endpoint", endpoint());
         out.put("failover", failoverEnabled());
         out.put("wifiOnly", wifiOnly());
@@ -577,9 +549,5 @@ public final class Prefs {
         setBudget(saved.optInt("budgetSteps", budgetSteps()),
             saved.optInt("budgetSeconds", budgetSeconds()),
             saved.optInt("budgetCloudCalls", budgetCloudCalls()));
-        JSONObject rules = saved.optJSONObject("toolRules");
-        if (rules != null) {
-            prefs.edit().putString(KEY_TOOL_RULES, rules.toString()).apply();
-        }
     }
 }

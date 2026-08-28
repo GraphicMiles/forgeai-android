@@ -8,11 +8,15 @@ import java.util.Set;
 /**
  * Who is allowed to do what, without asking.
  *
- * Reading is free. Anything that changes a file, or reaches off the device, is
- * held back. Held tools obey a rule you set per tool — ask, always, or never —
- * and the global "ask me first" switch decides what an unset rule means. The
- * model never sees this decision: it is made here, after the call is parsed and
- * before anything happens.
+ * <p>There is one gate, and it is a single switch. With "ask me first" on,
+ * Luna stops before anything that alters your files, anything that leaves the
+ * device, and anything that reads material that looks private. With it off she
+ * works unsupervised. Nothing is configured tool by tool: a wall of per-tool
+ * permissions is a decision you make once, badly, months before the situation
+ * it applies to.
+ *
+ * <p>The model never sees this decision. It is made here, after the call is
+ * parsed and before anything happens.
  */
 public final class ToolPolicy {
 
@@ -49,25 +53,52 @@ public final class ToolPolicy {
         return NEEDS_FOLDER.contains(tool);
     }
 
-    /** What a held tool should do this time. */
-    public enum Decision { RUN, ASK, REFUSE }
+    /** Names that mean the contents are somebody's secret. */
+    private static final String[] SENSITIVE = {
+        ".env", ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", "id_rsa", "id_ed25519",
+        ".ssh/", ".netrc", ".git-credentials", "credential", "secret", "password", "passwd",
+        "token", "apikey", "api_key", "wallet", "seed-phrase", "seedphrase", "shadow",
+    };
 
-    public static Decision decide(String tool, Prefs prefs) {
-        if (!isMutating(tool)) {
+    /**
+     * True when a path looks like it holds a key, a password or a private
+     * account file. Reading one is not destructive, but it is the kind of thing
+     * a person wants to be asked about, because the contents then travel
+     * wherever the model runs.
+     */
+    public static boolean isSensitive(String path) {
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        String lower = path.toLowerCase(java.util.Locale.US);
+        for (String marker : SENSITIVE) {
+            if (lower.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** What a held tool should do this time. */
+    public enum Decision { RUN, ASK }
+
+    public static Decision decide(String tool, String path, Prefs prefs) {
+        // The switch is off: you have said to get on with it.
+        if (prefs.unattended()) {
             return Decision.RUN;
         }
-        String rule = prefs.toolRule(tool);
-        if (Prefs.RULE_NEVER.equals(rule)) {
-            return Decision.REFUSE;
-        }
-        if (Prefs.RULE_ALWAYS.equals(rule)) {
-            return Decision.RUN;
-        }
-        // ask_user is the one held tool that has to reach the person by design.
+        // ask_user is the asking. Holding it behind an approval would mean
+        // approving a question before you are allowed to be asked it.
         if ("ask_user".equals(tool)) {
             return Decision.RUN;
         }
-        return prefs.unattended() ? Decision.RUN : Decision.ASK;
+        if (isMutating(tool)) {
+            return Decision.ASK;
+        }
+        if ("read_file".equals(tool) && isSensitive(path)) {
+            return Decision.ASK;
+        }
+        return Decision.RUN;
     }
 
     /** One plain sentence describing what is about to happen. */

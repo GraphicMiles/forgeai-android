@@ -21,22 +21,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   int _tab = 0;
 
-  static const Map<String, String> _toolNames = <String, String>{
-    'list_files': 'List files',
-    'read_file': 'Read a file',
-    'search_code': 'Search',
-    'write_file': 'Write a file',
-    'create_file': 'Create a file',
-    'create_folder': 'Create a folder',
-    'delete_file': 'Delete a file',
-    'rename_file': 'Rename a file',
-    'respond': 'Reply',
-    'ask_user': 'Ask you',
-    'open_page': 'Open a page',
-    'read_page': 'Read a page',
-    'github_file': 'Read from GitHub',
-  };
-
   late final TextEditingController _endpoint =
       TextEditingController(text: widget.core.endpoint);
 
@@ -104,43 +88,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      const SectionLabel('Luna does these on her own'),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-        child: Wrap(
-          children: core.readOnlyTools
-              .map((String tool) => LunaChip(_toolNames[tool] ?? tool))
-              .toList(),
-        ),
-      ),
-      SectionLabel('These stop and wait for you',
-          action: Text('tap to change', style: LunaTheme.text(size: 11.5, color: LunaTheme.ink3))),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-        child: Wrap(
-          children: core.mutatingTools.map((String tool) {
-            final String rule = core.ruleFor(tool);
-            final String name = _toolNames[tool] ?? tool;
-            final String label = rule == 'ask' ? name : '$name · $rule';
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () async {
-                await core.cycleToolRule(tool);
-                if (mounted) setState(() {});
-              },
-              child: Semantics(
-                button: true,
-                label: '$name, currently $rule',
-                child: LunaChip(label, held: rule != 'never'),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-      const Note(icon: FontAwesomeIcons.handPointer, children: <InlineSpan>[
+      Note(icon: FontAwesomeIcons.handPointer, children: <InlineSpan>[
         TextSpan(
-            text: 'Ask means it stops for you. Always means it runs without asking. '
-                'Never means Luna cannot use it at all, and has to say so instead.'),
+            text: core.unattended
+                ? 'Luna works unsupervised. She will change files, delete them, open pages and '
+                    'read whatever the job needs without stopping. Everything she does is still '
+                    'written down in the job, and a deleted file is still backed up first.'
+                : 'Luna stops and asks before she changes or deletes a file, before she opens or '
+                    'reads a web page, before she fetches from GitHub, and before she reads '
+                    'anything that looks like a key, a password or an account file. Listing and '
+                    'reading ordinary files in your folder she does on her own.'),
       ]),
 
       const SectionLabel('Limits on one job'),

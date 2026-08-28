@@ -457,38 +457,7 @@ class LunaSwitch extends StatelessWidget {
   }
 }
 
-/// A chip. Grey means free; filled black means it stops for you.
-class LunaChip extends StatelessWidget {
-  const LunaChip(this.label, {super.key, this.held = false, this.mono = false});
-
-  final String label;
-  final bool held;
-  final bool mono;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 5, bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: held ? LunaTheme.ink : LunaTheme.fill,
-        borderRadius: LunaTheme.rPill,
-      ),
-      child: Text(
-        label,
-        style: mono
-            ? LunaTheme.monoStyle(size: 11.5, color: held ? LunaTheme.onInk : LunaTheme.ink2)
-            : LunaTheme.text(
-                size: 12,
-                weight: held ? 550 : 500,
-                color: held ? LunaTheme.onInk : LunaTheme.ink2,
-              ),
-      ),
-    );
-  }
-}
-
-/// The grey explanatory note, with the glyph that names its subject.
+/// A quiet explanatory paragraph with an icon, under the thing it explains.
 class Note extends StatelessWidget {
   const Note({super.key, required this.icon, required this.children});
 
