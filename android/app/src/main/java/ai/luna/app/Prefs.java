@@ -48,6 +48,7 @@ public final class Prefs {
     private static final String KEY_AGENT = "active_agent";
     private static final String KEY_AGENTS = "installed_agents";
     private static final String KEY_PLUGINS = "installed_plugins";
+    private static final String KEY_ENVIRONMENTS = "environments";
     private static final String KEY_UNSIGNED = "allow_unsigned_plugins";
 
     private final SharedPreferences prefs;
@@ -70,6 +71,35 @@ public final class Prefs {
 
     public boolean unattended() {
         return MODE_AUTO.equals(executionMode());
+    }
+
+    /**
+     * Machines the person has told Luna about besides this phone.
+     *
+     * <p>Described, not connected: a laptop or a VPS is a row here long before
+     * anything can reach it, which is what lets Luna say "not here, but on the
+     * machine you added" instead of "no".
+     */
+    public java.util.List<org.json.JSONObject> declaredEnvironments() {
+        java.util.List<org.json.JSONObject> out = new java.util.ArrayList<>();
+        try {
+            org.json.JSONArray array =
+                new org.json.JSONArray(prefs.getString(KEY_ENVIRONMENTS, "[]"));
+            for (int index = 0; index < array.length(); index++) {
+                org.json.JSONObject row = array.optJSONObject(index);
+                if (row != null && !row.optString("id", "").isEmpty()) {
+                    out.add(row);
+                }
+            }
+        } catch (Exception ignored) {
+            // A corrupt list means this phone and nothing else.
+        }
+        return out;
+    }
+
+    public void setDeclaredEnvironments(org.json.JSONArray environments) {
+        prefs.edit().putString(KEY_ENVIRONMENTS,
+            environments == null ? "[]" : environments.toString()).apply();
     }
 
     /** Installed plugin manifests, verbatim. */
