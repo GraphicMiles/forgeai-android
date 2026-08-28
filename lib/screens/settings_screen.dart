@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/luna_core.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'platform_pages.dart';
 
 /// Settings — three groups, no more.
 ///
@@ -20,6 +21,10 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   int _tab = 0;
+
+  /// The runtime pages live behind Settings rather than beside it. Null means
+  /// the three tabs; anything else is one page in front of them.
+  String? _page;
 
   late final TextEditingController _endpoint =
       TextEditingController(text: widget.core.endpoint);
@@ -46,6 +51,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final LunaCore core = widget.core;
     _syncEndpoint();
+    final String? page = _page;
+    if (page != null) {
+      return PlatformPage(
+        core: core,
+        page: page,
+        onBack: () => setState(() => _page = null),
+      );
+    }
     return Column(
       children: <Widget>[
         const ScreenTop(title: 'Settings'),
@@ -154,8 +167,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
       Note(icon: FontAwesomeIcons.fileShield, children: <InlineSpan>[
         TextSpan(text: 'Luna will not read a file larger than ${formatBytes(core.maxFileBytes)}.'),
       ]),
+
+      const SectionLabel('The runtime'),
+      Group(children: <Widget>[
+        LunaRow(
+          icon: FontAwesomeIcons.userAstronaut,
+          title: 'Agents',
+          subtitle: 'Who answers you, and what that one is allowed to touch',
+          trailing: const _Chevron(),
+          onTap: () => _open('agents'),
+        ),
+        LunaRow(
+          icon: FontAwesomeIcons.bookOpen,
+          title: 'Skills',
+          subtitle: 'The knowledge Luna is given, and when',
+          trailing: const _Chevron(),
+          onTap: () => _open('skills'),
+        ),
+        LunaRow(
+          icon: FontAwesomeIcons.puzzlePiece,
+          title: 'Plugins',
+          subtitle: 'Signed documents that add skills, agents and workflows',
+          trailing: const _Chevron(),
+          onTap: () => _open('plugins'),
+        ),
+        LunaRow(
+          icon: FontAwesomeIcons.diagramProject,
+          title: 'Workflows',
+          subtitle: 'Jobs whose steps are known in advance',
+          trailing: const _Chevron(),
+          onTap: () => _open('workflows'),
+        ),
+      ]),
     ];
   }
+
+  void _open(String page) => setState(() => _page = page);
 
   /// Two taps and a number. Smaller than a slider, and it says what it means.
   Widget _stepper({
@@ -260,6 +307,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? 'On — the next message starts straight away, and the memory stays used'
               : 'Off — memory is handed back after every job, and each one reloads',
           trailing: LunaSwitch(value: core.keepWarm, onChanged: core.setKeepWarm),
+        ),
+      ]),
+
+      const SectionLabel('Beyond this phone'),
+      Group(children: <Widget>[
+        LunaRow(
+          icon: FontAwesomeIcons.server,
+          title: 'Machines',
+          subtitle: 'Where work can run, and what is wrong with each',
+          trailing: const _Chevron(),
+          onTap: () => _open('machines'),
+        ),
+        LunaRow(
+          icon: FontAwesomeIcons.heartPulse,
+          title: 'Provider health',
+          subtitle: 'Which models have been answering and which are resting',
+          trailing: const _Chevron(),
+          onTap: () => _open('health'),
         ),
       ]),
 
@@ -419,6 +484,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (mounted) setState(() {});
                     },
                   ),
+          ),
+          LunaRow(
+            icon: FontAwesomeIcons.brain,
+            title: 'What Luna remembers',
+            subtitle: 'Kept between jobs, and how to make her forget it',
+            trailing: const _Chevron(),
+            onTap: () => _open('memory'),
           ),
           LunaRow(
             icon: FontAwesomeIcons.triangleExclamation,
@@ -584,5 +656,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+}
+
+/// The mark that says a row leads somewhere. Nothing else in the app drills
+/// down, so it exists once, here.
+class _Chevron extends StatelessWidget {
+  const _Chevron();
+
+  @override
+  Widget build(BuildContext context) {
+    return Glyph(FontAwesomeIcons.chevronRight, size: 11, color: LunaTheme.ink4);
   }
 }

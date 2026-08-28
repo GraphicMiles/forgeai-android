@@ -522,6 +522,89 @@ class LunaCore extends ChangeNotifier {
     await _channel.invokeMethod<void>('answerQuestion', <String, dynamic>{'id': id, 'text': text});
   }
 
+  // --- the platform layer ---------------------------------------------------
+  //
+  // Everything installed rather than built in: plugins, the agents and skills
+  // they bring, workflows, what Luna remembers and where work can run. Each of
+  // these is read on demand rather than held in the snapshot, because none of
+  // them changes between one message and the next.
+
+  Future<List<Map<String, dynamic>>> plugins() async {
+    return _decodeList(await _channel.invokeMethod<String>('plugins'));
+  }
+
+  /// Installs one. Returns an empty string on success, or why it was refused.
+  Future<String> installPlugin(String manifestJson) async {
+    final String refusal = await _channel.invokeMethod<String>(
+            'installPlugin', <String, dynamic>{'manifest': manifestJson}) ??
+        '';
+    if (refusal.isEmpty) await refresh();
+    return refusal;
+  }
+
+  Future<bool> removePlugin(String id) async {
+    final bool gone =
+        await _channel.invokeMethod<bool>('removePlugin', <String, dynamic>{'id': id}) ?? false;
+    if (gone) await refresh();
+    return gone;
+  }
+
+  Future<List<Map<String, dynamic>>> agents() async {
+    return _decodeList(await _channel.invokeMethod<String>('agents'));
+  }
+
+  Future<String> activeAgent() async {
+    return await _channel.invokeMethod<String>('activeAgent') ?? 'luna';
+  }
+
+  Future<bool> activateAgent(String id) async {
+    return await _channel.invokeMethod<bool>('activateAgent', <String, dynamic>{'id': id}) ??
+        false;
+  }
+
+  Future<List<Map<String, dynamic>>> skills() async {
+    return _decodeList(await _channel.invokeMethod<String>('skills'));
+  }
+
+  Future<List<Map<String, dynamic>>> setSkillsDisabled(List<String> ids) async {
+    return _decodeList(await _channel
+        .invokeMethod<String>('setSkillsDisabled', <String, dynamic>{'ids': ids}));
+  }
+
+  Future<List<Map<String, dynamic>>> workflows() async {
+    return _decodeList(await _channel.invokeMethod<String>('workflows'));
+  }
+
+  /// Starts one. False when a job is already running or the id is unknown.
+  Future<bool> runWorkflow(String id, [Map<String, dynamic>? input]) async {
+    return await _channel.invokeMethod<bool>('runWorkflow', <String, dynamic>{
+          'id': id,
+          'input': jsonEncode(input ?? <String, dynamic>{}),
+        }) ??
+        false;
+  }
+
+  Future<List<Map<String, dynamic>>> memory() async {
+    return _decodeList(await _channel.invokeMethod<String>('memory'));
+  }
+
+  Future<int> forgetMemory(String kind) async {
+    return await _channel.invokeMethod<int>('forgetMemory', <String, dynamic>{'kind': kind}) ?? 0;
+  }
+
+  Future<List<Map<String, dynamic>>> remember(String kind, String text) async {
+    return _decodeList(await _channel
+        .invokeMethod<String>('remember', <String, dynamic>{'kind': kind, 'text': text}));
+  }
+
+  Future<List<Map<String, dynamic>>> environments() async {
+    return _decodeList(await _channel.invokeMethod<String>('environments'));
+  }
+
+  Future<List<Map<String, dynamic>>> inferenceHealth() async {
+    return _decodeList(await _channel.invokeMethod<String>('inferenceHealth'));
+  }
+
   // --- more than one chat ---------------------------------------------------
 
   Future<void> loadChats() async {

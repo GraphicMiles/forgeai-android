@@ -820,3 +820,88 @@ four seconds.**
 - `ToolPolicy` remains a decision function rather than the capability-based
   policy engine the plan describes; the capabilities exist, the engine that
   reasons over them does not.
+- There were no screens for any of it. That one is answered in §18.
+
+---
+
+## 18. The runtime, made visible
+
+Ten phases built a platform nobody could see. Everything below Settings existed
+only as method calls: plugins installed themselves at launch, skills went into
+prompts, workflows waited to be started by an id nothing displayed. This section
+closes that gap without adding a screen.
+
+### Where it lives
+
+The four-screen rule holds. The runtime is a **drill-down inside Settings**, one
+page in front of the three tabs, reached from rows that say what they lead to:
+
+| Tab | Row | Page |
+| --- | --- | --- |
+| Agent | Agents | who answers, and what that one may touch |
+| Agent | Skills | the knowledge Luna is given, with a switch each |
+| Agent | Plugins | what is installed, what it may ask for, and how to add more |
+| Agent | Workflows | jobs whose steps are known in advance, with **Run** |
+| Connections | Machines | where work can run, and what is wrong with each |
+| Connections | Provider health | who has been answering, who is resting |
+| Data | What Luna remembers | five kinds, counts, and a way to forget each |
+
+`lib/screens/platform_pages.dart` holds all seven. They are built from the same
+`SectionLabel` / `Group` / `LunaRow` / `PillButton` / `Note` vocabulary as the
+rest of Settings, read their data when they open — none of it changes between
+one message and the next — and say what happened exactly once, in a snackbar.
+
+`LunaRow` gained `subtitleLines`, because a row that has to explain what a
+workflow does cannot do it in one line. One by default: a settings list reads as
+a list only while the rows are the same height.
+
+### The door
+
+Fifteen new cases in `LunaBridge`, all in `handleBlocking` rather than the fast
+switch, because installing a plugin verifies an RSA signature and reading memory
+touches a file. Nothing new was added to `AgentEngine`: every one of these
+catalogues already existed and had no caller.
+
+```
+plugins · installPlugin · removePlugin
+agents · activeAgent · activateAgent
+skills · setSkillsDisabled
+workflows · runWorkflow
+memory · forgetMemory · remember
+environments · inferenceHealth
+```
+
+### Something to test it with
+
+Three example plugins ship inside the APK, signed, in `assets/plugins/`:
+
+| Plugin | Carries | Shows off |
+| --- | --- | --- |
+| `example.tidy` | a naming skill, a folder-survey workflow | triggers, `requires: workspace`, a `tool` → `llm` → `end` chain |
+| `example.reviewer` | a review skill, a read-only agent | an agent that subtracts tools — it cannot write, rename or delete |
+| `example.standup` | a three-question workflow | `human_input`, a `condition`, a `transform`, and `{{templating}}` |
+
+**Settings → Agent → Plugins → Install the examples** installs all three with no
+setup at all, and **From your folder** installs any `*.lunapkg.json` sitting at
+the top of the SAF folder you granted. Both go through the ordinary verifier: no
+developer switch, no unsigned exception.
+
+The packager is `tools/package/PluginPackager.java`, driven by
+`scripts/luna-package.sh`. It is Java on purpose — it calls the app's own
+`PluginManifest.canonicalContent()` and `PluginVerifier`, so what is hashed at
+build time is by construction what is checked on the device. A reimplementation
+in a scripting language would be a second definition of the truth, and the day
+the two disagreed every plugin everywhere would stop installing. No private key
+is in the repository: one is generated on first use, and a signature is checked
+against the public key the package carries.
+
+`ExamplesTest` (50 checks) holds the shipped examples to the strictest reading
+of the rules — empty trust list, unsigned disallowed — installs all three into
+real registries, checks every skill, agent and workflow loads and that the
+reviewer really cannot write, and checks that changing a version, rewording an
+instruction, stripping the signature or adding a capability each breaks the
+digest.
+
+**The suite is now 613 checks across 13 files.** `docs/PLUGINS.md` is the
+author's side of all this: what a plugin is, how to write one, how to sign it,
+and what it still cannot do.

@@ -1,0 +1,53 @@
+{
+  "skills": [{
+    "always": true,
+    "instructions": "Review code by reading it, not by guessing from filenames. Report in this order: what the file does in one sentence, then anything that is actually broken, then anything risky, then small things. Quote the line you mean. Never suggest a rewrite of code you have not read. If you find nothing wrong, say so plainly rather than inventing work.",
+    "name": "How to review",
+    "description": "What a review should contain.",
+    "id": "example.reviewer.style",
+    "tools": [
+      "read_file",
+      "search_code",
+      "list_files"
+    ],
+    "requires": ["workspace"],
+    "order": 35
+  }],
+  "capabilities": ["filesystem.read"],
+  "author": "Luna examples",
+  "format": 1,
+  "name": "Code reviewer",
+  "description": "An agent that only reads. It reviews code in the granted folder and reports, and it cannot change anything.",
+  "id": "example.reviewer",
+  "workflows": [],
+  "version": "1.0.0",
+  "signing": {
+    "signature": "VtW3oBsmRUuScspHGrlAL+EkpV+lUQ/MuPtz/T91H2Ve0kK9F+928PiTgNCODDO8zIqsfeqkuzC3U7kTPbnnw3MtYckcrSrRbmh9W5M0fi1CWyrmAIgPpsfRUvmsd15yau0gc1s2ShutXEfDJmUWickQJaMQZnqHconnaeoZsUeJ/AFmlz+MXMYysQFvpZOFm26ApJEhYuh0waI6COnIS61eRpJZjGLxhTwJx2VRFeU42znJteHbfEZ+QosJ796GY6XK0R1oyH3VSqtljQRXmAdMFHBcq4r8KLj7Y2qkNGef5x4990H0LG6pYdYI4TNO3LOm7awZ/xjMNLo1oUC1scZWlwhQ3Cg0iHhqcRHwp+i3fOwn8OhQKdwgEY4cdmR6Pp7OksHIDggv3imWQ92t9CkAjfkF/QtnV2PYRyk4DDIFiO2eNU7MbiXDky396JZrraifEa1ojr0evczlM3Ify++hxqP0M1iPcNk4qyjWuR4aT9NDkCvKnYiBAkkbiaJT",
+    "digest": "6b94ec0258b3833fe3e7206babde365ccdf40c99b010eb896dd105d715d81ac1",
+    "publicKey": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAhT3kzVtNAkgCzCY+sI//izUs+jdv/wBwgCNJYMXEAiyllBX5QIIp7ikk45yzRWiSTsZ/og8vsHp79Ux5BjIf74QAIDv2FhONDW2WclwGvZwrOpiQdITtCC18kuKckqXuzc48iLDhFSejVN05nMoqRge+PpP7K4dy7rCbigLCS5/p0kSOZFv/tMoE8cn4SIDytIOKENhjmOPv52GQWa5/UWCViYXi0qXtYT3TQf4wjwhSznX5qyxBWLsJojYCQ8dIjpHieK3HZbBOvn9ViyO58OLysjCYmnpCixpRylJH1YG8muwgGAuSkHwAVKiMMVhS9APUVifikYkb8EuHlzod1hEcKq5pepYsF5XbNmXfjex3rS8O+gM87UsUwc7XP5PCxPgJpsHKK6hMmy/1BW7Hfy5V3U8eu6T1M5lJG3V/lGzexWsgjHTYGftDAm4RI53Kl+PSLrNmzL+bXHmrgwO4MCc6L8eabPefeOvGnpXNIPLucvG0k95uQjXiQzNmAASpAgMBAAE="
+  },
+  "agents": [{
+    "skills": [
+      "core.identity",
+      "core.restraint",
+      "core.files",
+      "core.reporting",
+      "example.reviewer.style"
+    ],
+    "instructions": "You are a code reviewer. You read and you report. You never propose to run anything, and you have no tools that change a file, so do not offer to fix things yourself \u2014 describe the fix and let the person make it.",
+    "author": "Luna examples",
+    "name": "Reviewer",
+    "description": "Reads code and reports. Cannot write, rename or delete.",
+    "maxSteps": 12,
+    "id": "example.reviewer",
+    "version": "1.0.0",
+    "tools": [
+      "list_files",
+      "read_file",
+      "search_code",
+      "ask_user",
+      "respond"
+    ],
+    "maxSeconds": 300
+  }]
+}

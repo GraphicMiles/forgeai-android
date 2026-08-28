@@ -378,6 +378,47 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
 
     private Object handleBlocking(MethodCall call) throws Exception {
         switch (call.method) {
+            // --- the platform layer ------------------------------------------
+            //
+            // Everything installed rather than built in. None of it is fast:
+            // installing a plugin verifies a signature, and reading memory
+            // touches a file, so all of it belongs on the worker.
+            case "plugins":
+                return agent.pluginCatalogue().toString();
+            case "installPlugin": {
+                String refusal = agent.installPlugin(parseObject(argString(call, "manifest")));
+                return refusal == null ? "" : refusal;
+            }
+            case "removePlugin":
+                return agent.removePlugin(argString(call, "id"));
+            case "agents":
+                return agent.agentCatalogue().toString();
+            case "activeAgent":
+                return agent.activeAgentId();
+            case "activateAgent":
+                return agent.activateAgent(argString(call, "id"));
+            case "skills":
+                return agent.skillCatalogue().toString();
+            case "setSkillsDisabled":
+                agent.setSkillsDisabled(argList(call, "ids"));
+                return agent.skillCatalogue().toString();
+            case "workflows":
+                return agent.workflowCatalogue().toString();
+            case "runWorkflow":
+                return agent.startWorkflow(argString(call, "id"),
+                    parseObject(argString(call, "input")));
+            case "memory":
+                return agent.memoryCatalogue().toString();
+            case "forgetMemory":
+                return agent.forgetMemory(argString(call, "kind"));
+            case "remember":
+                agent.remember(argString(call, "kind"), argString(call, "text"), 80);
+                return agent.memoryCatalogue().toString();
+            case "environments":
+                return agent.environmentCatalogue().toString();
+            case "inferenceHealth":
+                return agent.inferenceHealth().toString();
+
             case "deviceCapacity":
                 return DeviceCapacity.read(activity);
             case "listFolder":
@@ -656,6 +697,28 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
             return ((Number) value).doubleValue();
         }
         return fallback;
+    }
+
+    /** A JSON object that arrived as text. Never throws; an empty one instead. */
+    private static JSONObject parseObject(String raw) {
+        try {
+            return new JSONObject(raw);
+        } catch (Exception notJson) {
+            return new JSONObject();
+        }
+    }
+
+    private static List<String> argList(MethodCall call, String name) {
+        List<String> out = new ArrayList<>();
+        Object value = call.argument(name);
+        if (value instanceof List) {
+            for (Object item : (List<?>) value) {
+                if (item != null) {
+                    out.add(String.valueOf(item));
+                }
+            }
+        }
+        return out;
     }
 
     private static String argString(MethodCall call, String name) {

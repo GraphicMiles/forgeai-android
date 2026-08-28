@@ -1,0 +1,90 @@
+{
+  "format": 1,
+  "id": "example.standup",
+  "name": "Daily standup",
+  "version": "1.0.0",
+  "author": "Luna examples",
+  "description": "A workflow that asks you three questions and writes the answer up as a standup note.",
+  "capabilities": [
+    "user.ask"
+  ],
+  "skills": [],
+  "agents": [],
+  "workflows": [
+    {
+      "id": "example.standup.note",
+      "name": "Write my standup",
+      "description": "Three questions, then one tidy paragraph you can paste anywhere.",
+      "version": "1.0.0",
+      "start": "yesterday",
+      "maxSteps": 10,
+      "nodes": [
+        {
+          "id": "yesterday",
+          "type": "human_input",
+          "config": {
+            "question": "What did you finish since the last standup?",
+            "as": "yesterday",
+            "required": true
+          },
+          "next": "today"
+        },
+        {
+          "id": "today",
+          "type": "human_input",
+          "config": {
+            "question": "What are you doing today?",
+            "as": "today",
+            "required": true
+          },
+          "next": "blocked"
+        },
+        {
+          "id": "blocked",
+          "type": "human_input",
+          "config": {
+            "question": "Anything blocking you? Say no if not.",
+            "as": "blocked",
+            "required": false
+          },
+          "next": "stuck"
+        },
+        {
+          "id": "stuck",
+          "type": "condition",
+          "config": {
+            "when": "blocked contains no"
+          },
+          "whenTrue": "clear",
+          "whenFalse": "write"
+        },
+        {
+          "id": "clear",
+          "type": "transform",
+          "config": {
+            "op": "trim",
+            "value": "nothing is blocking me",
+            "as": "blocked"
+          },
+          "next": "write"
+        },
+        {
+          "id": "write",
+          "type": "llm",
+          "config": {
+            "prompt": "Write a standup note of at most four sentences, in the first person, plainly. Done: {{yesterday}}. Today: {{today}}. Blocked: {{blocked}}. Do not add anything that was not said.",
+            "as": "note"
+          },
+          "next": "done"
+        },
+        {
+          "id": "done",
+          "type": "end",
+          "config": {
+            "message": "{{note}}"
+          }
+        }
+      ]
+    }
+  ]
+}

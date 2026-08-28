@@ -50,3 +50,4 @@ java -cp "$json:$platform:$work/classes" ai.luna.app.MemoryTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.RouterTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.EnvironmentTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.SubAgentTest
+java -Dluna.root="$root" -cp "$json:$platform:$work/classes" ai.luna.app.ExamplesTest
