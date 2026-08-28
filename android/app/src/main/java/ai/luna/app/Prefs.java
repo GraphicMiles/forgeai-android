@@ -47,6 +47,8 @@ public final class Prefs {
     private static final String KEY_SKILLS_OFF = "skills_off";
     private static final String KEY_AGENT = "active_agent";
     private static final String KEY_AGENTS = "installed_agents";
+    private static final String KEY_PLUGINS = "installed_plugins";
+    private static final String KEY_UNSIGNED = "allow_unsigned_plugins";
 
     private final SharedPreferences prefs;
 
@@ -68,6 +70,34 @@ public final class Prefs {
 
     public boolean unattended() {
         return MODE_AUTO.equals(executionMode());
+    }
+
+    /** Installed plugin manifests, verbatim. */
+    public org.json.JSONArray installedPlugins() {
+        try {
+            return new org.json.JSONArray(prefs.getString(KEY_PLUGINS, "[]"));
+        } catch (Exception ignored) {
+            return new org.json.JSONArray();
+        }
+    }
+
+    public void setInstalledPlugins(org.json.JSONArray manifests) {
+        prefs.edit().putString(KEY_PLUGINS, manifests == null ? "[]" : manifests.toString()).apply();
+    }
+
+    /**
+     * Whether a plugin nobody signed may be installed.
+     *
+     * <p>Off, and it stays off unless somebody developing a plugin turns it on.
+     * An unsigned plugin is not dangerous in the way running code is dangerous,
+     * but it is anonymous, and anonymous knowledge is worth refusing by default.
+     */
+    public boolean allowUnsignedPlugins() {
+        return prefs.getBoolean(KEY_UNSIGNED, false);
+    }
+
+    public void setAllowUnsignedPlugins(boolean allow) {
+        prefs.edit().putBoolean(KEY_UNSIGNED, allow).apply();
     }
 
     /** Which agent is running. Luna until somebody installs another. */

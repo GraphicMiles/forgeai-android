@@ -502,3 +502,56 @@ that shrink but never grow, and a greedy definition asking for a shell and a
 deployment on a phone and receiving neither.
 
 Suite total: **309 checks across six files.**
+
+---
+
+## 11. Phase 5 — delivered
+
+Plugins, declarative only. A plugin is a document, never a program: it carries
+skills, agents and (from Phase 6) workflows, and nothing that executes. The
+worst an installed plugin can do is tell the model something — and the model can
+only act through tools the environment already allowed.
+
+### The manifest
+
+`PluginManifest`: format, id, name, version, author, description, the
+capabilities its contents may ask for, the documents themselves, and a `signing`
+block of digest, signature and public key. `canonicalContent()` rebuilds the
+content in a fixed shape before hashing, so whitespace and key order cannot
+change a plugin's identity.
+
+### The verifier
+
+`PluginVerifier` fails closed, in order, with a sentence a person can act on:
+
+1. format is one this runtime understands;
+2. the id is lower-case dotted, 3–64 characters, and is not `core*` or `luna`;
+3. it has a version and carries something, and not more than 200 documents;
+4. every capability exists **and** is grantable to a plugin — `credential.export`
+   and `plugin.manage` are refused here, permanently;
+5. every document it defines is named after it (`acme.invoices.filing`), so a
+   plugin cannot redefine `core.identity` or claim an agent called `luna`;
+6. no agent may claim `builtIn`;
+7. the content matches its own SHA-256;
+8. the signature verifies (`SHA256withRSA` over the digest) and, when the device
+   keeps a trust list, belongs to a key on it.
+
+Unsigned plugins are refused unless `Prefs.allowUnsignedPlugins` is on — a
+developer setting. An unsigned plugin is not dangerous the way running code is
+dangerous, but it is anonymous, and anonymous knowledge is worth refusing.
+
+### Installing
+
+`PluginManager` verifies, then feeds the contents into the *same* registries the
+built-ins use: skills to `SkillRegistry` credited to the plugin id, agents to
+`AgentRegistry`. There is one code path for knowledge, one for agents, and a
+plugin's skill is resolved, narrowed and budgeted exactly like Luna's own.
+Manifests persist through a `Store` (`PrefsPluginStore`) and are **verified
+again on restore** — what a device trusts can change between one run and the
+next, and a phone that stops allowing unsigned plugins stops loading the ones it
+accepted while it did.
+
+Guarded by `PluginsTest` (44 checks) with a real RSA keypair generated in the
+test: shape, tampering after signing, forged signatures, a signature from the
+wrong key, trust lists, namespace squatting, ungrantable capabilities, double
+installs, and a restore that refuses what the tightened rules no longer accept.

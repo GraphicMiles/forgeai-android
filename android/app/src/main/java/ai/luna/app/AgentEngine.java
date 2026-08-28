@@ -11,6 +11,8 @@ import ai.luna.contracts.ToolProvider;
 import ai.luna.contracts.ToolResult;
 import ai.luna.runtime.AgentManager;
 import ai.luna.runtime.AgentRegistry;
+import ai.luna.runtime.PluginManager;
+import ai.luna.runtime.PluginVerifier;
 import ai.luna.runtime.SkillRegistry;
 import ai.luna.runtime.SkillResolver;
 import ai.luna.runtime.SystemPrompt;
@@ -82,6 +84,9 @@ public final class AgentEngine {
 
     /** Which agent is running, and what that narrows this turn to. */
     private final AgentManager agentManager;
+
+    /** Installed plugins: knowledge and agents from outside this build. */
+    private final PluginManager pluginManager;
 
     /** Assembles the system prompt from the skills and the available tools. */
     private final SystemPrompt prompt;
@@ -157,6 +162,14 @@ public final class AgentEngine {
         skills.register(new CoreSkills());
         skills.disable(prefs.disabledSkills());
         agents.register(LunaAgent.DEFINITION);
+        // Plugins load before the agent manager exists, so an agent that
+        // arrived in one can be the active agent on the very first turn.
+        this.pluginManager = new PluginManager(
+            new PluginVerifier().allowUnsigned(prefs.allowUnsignedPlugins()),
+            skills, agents, new PrefsPluginStore(prefs));
+        for (String refused : pluginManager.restore()) {
+            errors.warn("plugins", "not loaded — " + refused);
+        }
         for (JSONObject installed : prefs.installedAgents()) {
             agents.registerJson(installed);
         }
@@ -1103,6 +1116,25 @@ public final class AgentEngine {
         }
         return prompt.build(toolContext(), lastUserText,
             workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), modelPersona);
+    }
+
+    /** Everything installed from outside this build. */
+    public JSONArray pluginCatalogue() {
+        return pluginManager.describe();
+    }
+
+    /** Installs a plugin. Returns null on success, or why it was refused. */
+    public String installPlugin(JSONObject manifest) {
+        String refusal = pluginManager.install(manifest);
+        errors.note("plugins", refusal == null
+            ? "installed " + manifest.optString("id", "?")
+            : "refused " + manifest.optString("id", "?") + " — " + refusal);
+        return refusal;
+    }
+
+    /** Removes one. Its knowledge is gone from the next run onwards. */
+    public boolean removePlugin(String id) {
+        return pluginManager.remove(id);
     }
 
     /** Every agent installed, as data. Luna is one of them. */
