@@ -4,12 +4,20 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'debug_log.dart';
+
 /// The Dart side of the seam. Java owns the device; this class owns nothing but
 /// a mirror of it, kept in sync by one method channel and one event stream.
 class LunaCore extends ChangeNotifier {
   LunaCore() {
-    _events.receiveBroadcastStream().listen(_onEvent, onError: (Object _) {});
+    _events.receiveBroadcastStream().listen(_onEvent, onError: (Object error) {
+      debug.fail('events', '$error');
+    });
   }
+
+  /// What the app is doing, in text, for the debug panel. Its own notifier:
+  /// see DebugLog for why.
+  final DebugLog debug = DebugLog();
 
   static const MethodChannel _channel = MethodChannel('ai.luna.app/core');
   static const EventChannel _events = EventChannel('ai.luna.app/events');
@@ -195,8 +203,30 @@ class LunaCore extends ChangeNotifier {
       device = await _map('deviceCapacity');
     } catch (error) {
       lastError = '$error';
+      debug.fail('load', '$error');
     }
     ready = true;
+    notifyListeners();
+    unawaited(pullLog());
+  }
+
+  /// The lines Java wrote before Dart was listening.
+  Future<void> pullLog() async {
+    try {
+      debug.seed(await _channel.invokeMethod<String>('debugLog'));
+    } catch (error) {
+      debug.fail('debugLog', '$error');
+    }
+  }
+
+  Future<void> clearLog() async {
+    try {
+      await _channel.invokeMethod<void>('clearDebugLog');
+    } catch (error) {
+      debug.fail('clearDebugLog', '$error');
+    }
+    debug.clear();
+    errorCount = 0;
     notifyListeners();
   }
 
@@ -263,6 +293,11 @@ class LunaCore extends ChangeNotifier {
     if (raw is! String) return;
     final Map<String, dynamic> event = jsonDecode(raw) as Map<String, dynamic>;
     final String type = (event['type'] as String?) ?? '';
+    if (type == 'log') {
+      // Straight to the panel and nowhere else: no screen state depends on it.
+      debug.fromJava(event['line']);
+      return;
+    }
     switch (type) {
       case 'run_started':
         running = true;
@@ -884,6 +919,7 @@ class LunaCore extends ChangeNotifier {
       lastError = null;
     } on PlatformException catch (error) {
       lastError = error.message ?? error.code;
+      debug.fail(method, error.message ?? error.code);
       notifyListeners();
       rethrow;
     }

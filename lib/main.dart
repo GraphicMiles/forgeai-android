@@ -9,6 +9,7 @@ import 'screens/models_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme.dart';
 import 'widgets/common.dart';
+import 'widgets/debug_panel.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,17 @@ class _LunaAppState extends State<LunaApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // A widget that throws should say so where the user can read it, not only
+    // in a console nobody has attached.
+    final FlutterExceptionHandler? previous = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      _core.debug.fail('flutter', details.exceptionAsString());
+      if (previous != null) previous(details);
+    };
+    WidgetsBinding.instance.platformDispatcher.onError = (Object error, StackTrace stack) {
+      _core.debug.fail('dart', '$error');
+      return false;
+    };
     _core.addListener(_syncTheme);
     _core.load();
     _syncTheme();
@@ -167,16 +179,19 @@ class _ShellState extends State<Shell> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: LunaTheme.paper,
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            Expanded(child: IndexedStack(index: _tab, children: screens)),
-            _tabBar(),
-          ],
+    return DebugOverlay(
+      core: core,
+      child: Scaffold(
+        backgroundColor: LunaTheme.paper,
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: <Widget>[
+              Expanded(child: IndexedStack(index: _tab, children: screens)),
+              _tabBar(),
+            ],
+          ),
         ),
       ),
     );

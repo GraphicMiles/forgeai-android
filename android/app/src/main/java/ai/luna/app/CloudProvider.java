@@ -234,10 +234,14 @@ public final class CloudProvider {
             }
             int code = connection.getResponseCode();
             if (code >= 200 && code < 300) {
+                ErrorLog.tapNote("probe", code + " " + config.model + " answers");
                 return null;
             }
-            return explain(config, code, readAll(connection.getErrorStream()));
+            String failed = readAll(connection.getErrorStream());
+            ErrorLog.tapFail("probe", code + " " + config.model + " " + trim(failed, 300));
+            return explain(config, code, failed);
         } catch (Exception error) {
+            ErrorLog.tapFail("probe", String.valueOf(error));
             return "Could not reach the provider: " + message(error);
         } finally {
             if (connection != null) {
@@ -521,8 +525,11 @@ public final class CloudProvider {
 
             int code = connection.getResponseCode();
             if (code >= 400) {
-                return new Reply("", explain(config, code, readAll(connection.getErrorStream())));
+                String body2 = readAll(connection.getErrorStream());
+                ErrorLog.tapFail("http", "chat " + code + " " + trim(body2, 300));
+                return new Reply("", explain(config, code, body2));
             }
+            ErrorLog.tapNote("http", "chat " + code + " streaming");
 
             String contentType = connection.getContentType();
             if (contentType != null && !contentType.contains("event-stream")) {
@@ -578,6 +585,7 @@ public final class CloudProvider {
             }
             return new Reply(gathered.toString(), null);
         } catch (Exception error) {
+            ErrorLog.tapFail("http", String.valueOf(error));
             return new Reply("", "Could not reach the provider: " + message(error));
         } finally {
             WorkspaceStore.closeQuietly(reader);
@@ -592,6 +600,9 @@ public final class CloudProvider {
             address += (address.indexOf('?') >= 0 ? "&" : "?")
                 + encode(config.authName) + "=" + encode(config.apiKey);
         }
+        ErrorLog.tapNote("http", (post ? "POST " : "GET ") + ErrorLog.safeUrl(address)
+            + (config.model.isEmpty() ? "" : "  model=" + config.model)
+            + "  shape=" + config.kind);
         HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
         connection.setRequestMethod(post ? "POST" : "GET");
         connection.setConnectTimeout(20000);
