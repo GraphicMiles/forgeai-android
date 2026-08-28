@@ -1,5 +1,7 @@
 package ai.luna.app;
 
+import ai.luna.contracts.SecretProvider;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
@@ -17,7 +19,47 @@ import javax.crypto.spec.GCMParameterSpec;
  * Secrets live in the Android keystore, not in a prompt and not in plain
  * preferences. The ciphertext is stored locally; the key never leaves the chip.
  */
-public final class CredentialVault {
+public final class CredentialVault implements SecretProvider {
+
+    @Override
+    public String id() {
+        return "android.keystore";
+    }
+
+    /**
+     * One namespace per owner. The core keeps the names it always used, so
+     * nothing already stored moves; a plugin gets its id in front of the key
+     * and cannot name its way into anybody else's.
+     */
+    public static String scoped(String owner, String key) {
+        String who = owner == null ? "" : owner.trim();
+        String what = key == null ? "" : key.trim();
+        if (who.isEmpty() || who.equals(CORE)) {
+            return what;
+        }
+        return "plugin:" + who + "/" + what;
+    }
+
+    @Override
+    public void put(String owner, String key, String value) throws Exception {
+        store(scoped(owner, key), value);
+    }
+
+    @Override
+    public String get(String owner, String key) {
+        return read(scoped(owner, key));
+    }
+
+    @Override
+    public boolean has(String owner, String key) {
+        return has(scoped(owner, key));
+    }
+
+    @Override
+    public void remove(String owner, String key) {
+        clear(scoped(owner, key));
+    }
+
 
     private static final String KEYSTORE = "AndroidKeyStore";
     private static final String KEY_ALIAS = "luna_credentials";

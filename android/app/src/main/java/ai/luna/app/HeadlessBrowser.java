@@ -1,5 +1,7 @@
 package ai.luna.app;
 
+import ai.luna.contracts.BrowserProvider;
+
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Handler;
@@ -28,7 +30,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * so a page cannot be used to fetch a payload. And every load has a timeout: a
  * page that never settles fails instead of hanging the job forever.
  */
-public final class HeadlessBrowser {
+public final class HeadlessBrowser implements BrowserProvider {
+
+    /** The first browser provider: the system WebView, with no window. */
+    @Override
+    public String id() {
+        return "android.webview";
+    }
+
 
     private static final long DEFAULT_TIMEOUT_MS = 20000L;
     private static final int MAX_TEXT = 40000;
