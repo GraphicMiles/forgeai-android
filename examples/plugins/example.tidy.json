@@ -1,0 +1,76 @@
+{
+  "format": 1,
+  "id": "example.tidy",
+  "name": "Tidy folder",
+  "version": "1.0.0",
+  "author": "Luna examples",
+  "description": "Knowledge about naming and organising files, and a workflow that reads a folder and reports what is in it.",
+  "capabilities": [
+    "filesystem.read"
+  ],
+  "skills": [
+    {
+      "id": "example.tidy.naming",
+      "name": "Naming files",
+      "description": "How this person likes files named.",
+      "instructions": "When you create or rename a file, use lower case with hyphens, no spaces, and put the date first as YYYY-MM-DD when the file is dated. Never invent an extension the contents do not match. If a name already exists, say so instead of overwriting it.",
+      "tools": [
+        "write_file",
+        "rename_file",
+        "create_file"
+      ],
+      "requires": [
+        "workspace"
+      ],
+      "triggers": [
+        "rename",
+        "name",
+        "tidy",
+        "organise",
+        "organize"
+      ],
+      "order": 45
+    }
+  ],
+  "agents": [],
+  "workflows": [
+    {
+      "id": "example.tidy.survey",
+      "name": "Survey this folder",
+      "description": "Lists the granted folder and writes one paragraph about what it holds.",
+      "version": "1.0.0",
+      "start": "list",
+      "maxSteps": 8,
+      "nodes": [
+        {
+          "id": "list",
+          "type": "tool",
+          "config": {
+            "tool": "list_files",
+            "args": {
+              "path": ""
+            },
+            "as": "listing"
+          },
+          "next": "describe"
+        },
+        {
+          "id": "describe",
+          "type": "llm",
+          "config": {
+            "prompt": "Here is a folder listing:\n\n{{listing}}\n\nIn one short paragraph, say what this folder appears to be for and name the two or three files that matter most. Do not guess at contents you cannot see.",
+            "as": "summary"
+          },
+          "next": "done"
+        },
+        {
+          "id": "done",
+          "type": "end",
+          "config": {
+            "message": "{{summary}}"
+          }
+        }
+      ]
+    }
+  ]
+}

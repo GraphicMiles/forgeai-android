@@ -1,0 +1,69 @@
+{
+  "skills": [{
+    "instructions": "When you create or rename a file, use lower case with hyphens, no spaces, and put the date first as YYYY-MM-DD when the file is dated. Never invent an extension the contents do not match. If a name already exists, say so instead of overwriting it.",
+    "name": "Naming files",
+    "description": "How this person likes files named.",
+    "id": "example.tidy.naming",
+    "triggers": [
+      "rename",
+      "name",
+      "tidy",
+      "organise",
+      "organize"
+    ],
+    "tools": [
+      "write_file",
+      "rename_file",
+      "create_file"
+    ],
+    "requires": ["workspace"],
+    "order": 45
+  }],
+  "capabilities": ["filesystem.read"],
+  "author": "Luna examples",
+  "format": 1,
+  "name": "Tidy folder",
+  "description": "Knowledge about naming and organising files, and a workflow that reads a folder and reports what is in it.",
+  "id": "example.tidy",
+  "workflows": [{
+    "nodes": [
+      {
+        "next": "describe",
+        "id": "list",
+        "type": "tool",
+        "config": {
+          "args": {"path": ""},
+          "as": "listing",
+          "tool": "list_files"
+        }
+      },
+      {
+        "next": "done",
+        "id": "describe",
+        "type": "llm",
+        "config": {
+          "as": "summary",
+          "prompt": "Here is a folder listing:\n\n{{listing}}\n\nIn one short paragraph, say what this folder appears to be for and name the two or three files that matter most. Do not guess at contents you cannot see."
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "config": {"message": "{{summary}}"}
+      }
+    ],
+    "name": "Survey this folder",
+    "start": "list",
+    "description": "Lists the granted folder and writes one paragraph about what it holds.",
+    "maxSteps": 8,
+    "id": "example.tidy.survey",
+    "version": "1.0.0"
+  }],
+  "version": "1.0.0",
+  "signing": {
+    "signature": "ZTgj/Ijm2JulnRDdZUZZhyWw79bVyXkyNxo34TvERMT8UFEccxiAihCMOJDnOfL4bqLRkR+XEVn/O6Zh3pdo7LC/Z1kFpzlKriuRkyUXkIL8LRMSPdMxSspAJgSJiTSSKzZVhH7XM25SERBur2zQCuDyBmmCB81Xh5HiDIS1pr60HJkn54yUEfslN+PdmOv0Y77di3uXg2+ZtVFLFIU6HR/B4l6xhcwyV/lxfyA+vcAN39h08rRmIt8N8GOfIG8Mp0UYz5TmXQE0iuSL4RzWzAiBs29DxnGqmUiULE1eHDzX+0eEd1qWa75m1fDYu4gWw/hydip8V9F3wpspz1CL8IT5t0KcRz4eb/HG/lys887rAbReTThtYCWK7eGu+wNjUlDRupym4FSv9DF2Pxnd74faa1UY+ix23ys4xxeI/PW1nPEPImZmXe47TRyJ/kgjbSG5cn9Re4WZLpNRM2VZmngYo5ZwYEJUspP9MjuBwsYnh/mwED/DDgxV3XfVUV9V",
+    "digest": "fbff88cddfa1a1a4111a7fc9572b9e2ad4474c0ce2c0412029e55cfc334d0f1b",
+    "publicKey": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAhT3kzVtNAkgCzCY+sI//izUs+jdv/wBwgCNJYMXEAiyllBX5QIIp7ikk45yzRWiSTsZ/og8vsHp79Ux5BjIf74QAIDv2FhONDW2WclwGvZwrOpiQdITtCC18kuKckqXuzc48iLDhFSejVN05nMoqRge+PpP7K4dy7rCbigLCS5/p0kSOZFv/tMoE8cn4SIDytIOKENhjmOPv52GQWa5/UWCViYXi0qXtYT3TQf4wjwhSznX5qyxBWLsJojYCQ8dIjpHieK3HZbBOvn9ViyO58OLysjCYmnpCixpRylJH1YG8muwgGAuSkHwAVKiMMVhS9APUVifikYkb8EuHlzod1hEcKq5pepYsF5XbNmXfjex3rS8O+gM87UsUwc7XP5PCxPgJpsHKK6hMmy/1BW7Hfy5V3U8eu6T1M5lJG3V/lGzexWsgjHTYGftDAm4RI53Kl+PSLrNmzL+bXHmrgwO4MCc6L8eabPefeOvGnpXNIPLucvG0k95uQjXiQzNmAASpAgMBAAE="
+  },
+  "agents": []
+}

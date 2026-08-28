@@ -18,6 +18,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/plugins/
   fonts:
     - family: Manrope
       fonts:

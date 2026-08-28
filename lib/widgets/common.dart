@@ -250,6 +250,7 @@ class LunaRow extends StatelessWidget {
     this.muted = false,
     this.tileOnFill = false,
     this.child,
+    this.subtitleLines = 1,
   });
 
   final FaIconData? icon;
@@ -260,6 +261,11 @@ class LunaRow extends StatelessWidget {
   final bool muted;
   final bool tileOnFill;
   final Widget? child;
+
+  /// A row that has to explain itself may take a second line. One by default,
+  /// because a settings list reads as a list only while the rows are the same
+  /// height.
+  final int subtitleLines;
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +300,9 @@ class LunaRow extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
                     child: Text(subtitle!,
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: LunaTheme.rowSub),
+                        maxLines: subtitleLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: LunaTheme.rowSub),
                   ),
                 if (child != null) child!,
               ],
