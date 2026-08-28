@@ -227,8 +227,8 @@ public final class RegistryTest {
 
     private static ToolContext context(boolean folder, boolean browser) {
         return new ToolContext("luna", "core",
-            folder ? new FakeStorage() : null,
-            browser ? new FakeBrowser() : null,
+            folder ? new Fakes.FakeStorage() : null,
+            browser ? new Fakes.FakeBrowser() : null,
             null, Trace.SILENT, "android");
     }
 
@@ -336,92 +336,4 @@ public final class RegistryTest {
         }
     }
 
-    /** Storage that exists but is never actually read in these tests. */
-    private static final class FakeStorage implements ai.luna.contracts.StorageProvider {
-        @Override
-        public String id() {
-            return "test.storage";
-        }
-
-        @Override
-        public boolean hasRoot() {
-            return true;
-        }
-
-        @Override
-        public String rootState() {
-            return "ok";
-        }
-
-        @Override
-        public String rootName() {
-            return "Test";
-        }
-
-        @Override
-        public JSONArray list(String path) {
-            return new JSONArray();
-        }
-
-        @Override
-        public String readText(String path) {
-            return "";
-        }
-
-        @Override
-        public void writeText(String path, String content) {
-        }
-
-        @Override
-        public void createFile(String path) {
-        }
-
-        @Override
-        public void createFolder(String path) {
-        }
-
-        @Override
-        public void rename(String path, String newName) {
-        }
-
-        @Override
-        public void delete(String path) {
-        }
-
-        @Override
-        public JSONArray search(String needle, int limit) {
-            return new JSONArray();
-        }
-    }
-
-    private static final class FakeBrowser implements ai.luna.contracts.BrowserProvider {
-        @Override
-        public String id() {
-            return "test.browser";
-        }
-
-        @Override
-        public String open(String url, long timeoutMs) {
-            return "";
-        }
-
-        @Override
-        public String text() {
-            return "";
-        }
-
-        @Override
-        public String currentUrl() {
-            return "";
-        }
-
-        @Override
-        public String currentTitle() {
-            return "";
-        }
-
-        @Override
-        public void close() {
-        }
-    }
 }

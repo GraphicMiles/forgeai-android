@@ -44,6 +44,8 @@ public final class Prefs {
     private static final String KEY_BUDGET_SECONDS = "budget_seconds";
     private static final String KEY_BUDGET_CLOUD = "budget_cloud_calls";
 
+    private static final String KEY_SKILLS_OFF = "skills_off";
+
     private final SharedPreferences prefs;
 
     public Prefs(Context context) {
@@ -64,6 +66,40 @@ public final class Prefs {
 
     public boolean unattended() {
         return MODE_AUTO.equals(executionMode());
+    }
+
+    /**
+     * Skills the person has switched off.
+     *
+     * <p>Stored as one comma-separated string: this is a short list of ids, and
+     * a set of them does not deserve its own store.
+     */
+    public java.util.List<String> disabledSkills() {
+        String raw = prefs.getString(KEY_SKILLS_OFF, "");
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String part : raw.split(",")) {
+            String id = part.trim();
+            if (!id.isEmpty()) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    public void setDisabledSkills(java.util.List<String> ids) {
+        StringBuilder joined = new StringBuilder();
+        if (ids != null) {
+            for (String id : ids) {
+                if (id == null || id.trim().isEmpty()) {
+                    continue;
+                }
+                if (joined.length() > 0) {
+                    joined.append(',');
+                }
+                joined.append(id.trim());
+            }
+        }
+        prefs.edit().putString(KEY_SKILLS_OFF, joined.toString()).apply();
     }
 
     /**
