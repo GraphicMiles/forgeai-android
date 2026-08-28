@@ -555,3 +555,64 @@ Guarded by `PluginsTest` (44 checks) with a real RSA keypair generated in the
 test: shape, tampering after signing, forged signatures, a signature from the
 wrong key, trust lists, namespace squatting, ungrantable capabilities, double
 installs, and a restore that refuses what the tightened rules no longer accept.
+
+---
+
+## 12. Phase 6 — delivered
+
+Workflows: a job written down as steps instead of hoped for in a prompt. An
+agent loop is a good way to handle a request nobody anticipated and a poor way
+to do the same thing every Monday.
+
+### The twelve kinds of step
+
+`llm`, `tool`, `condition`, `loop`, `parallel`, `approval`, `human_input`,
+`sub_agent`, `transform`, `validate`, `wait`, `end` — all of `WorkflowDefinition`
+is data, so a workflow can arrive in a plugin.
+
+Templating is `{{name}}`, filled from what the run knows. Conditions are
+deliberately tiny — `key is value`, `not`, `contains`, `present`, `empty`, `>`,
+`<` — and are split *before* filling, so `{{answer}} present` with nothing known
+asks whether an empty thing is present rather than mistaking the word "present"
+for the whole expression. `transform` has seven operations and no expression
+language: a scripting language inside a workflow is a second product, and the
+plan says not to build one.
+
+`parallel` means independent, not simultaneous. A phone has one tool runner and
+one model; running branches at once would mean two copies of a 3B model in
+memory. The contract the node makes — these branches do not depend on each
+other, and all of them must finish — is the part an author actually relies on.
+
+### Refusing early
+
+`WorkflowDefinition.problem()` is checked at registration and again before a run
+starts: dangling targets, unknown step kinds, a tool step with no tool, a
+condition with nothing to decide. A broken workflow fails **as a workflow**,
+before it has changed anybody's files.
+
+### The seam
+
+`WorkflowHost` is the only route out: think, tool, approve, ask, sub-agent,
+pause, stopped, event. `AgentEngine.EngineHost` implements it against machinery
+that already existed — the tool registry with its watchdog, `RunGuards`,
+`ToolPolicy`, the approval wait, the question wait — so **a workflow gets no
+power the chat loop does not have**. `requestApproval` grew an overload that
+takes the question as text, because a person should not be able to tell whether
+a tool or a workflow is asking.
+
+`askOnce` is a single model call with no transcript and no tool list: the two
+existing paths (loaded local model, configured provider), streaming tokens to
+the same chat.
+
+### The trace
+
+`WorkflowRun` is the structured record the plan asks for: every step with its
+node id, kind, outcome and time, plus the variables. `WorkflowRun.resume` reads
+one back and `run(workflow, input, fromNode)` starts from it — replay from a
+checkpoint, working today rather than aspirational.
+
+Budgets cannot be escaped through a loop: every pass costs from the same total,
+so a loop with `max: 100` inside a workflow with `maxSteps: 5` stops at five.
+
+Guarded by `WorkflowTest` (68 checks) against a recording host — no model, no
+phone, no person, no clock.
