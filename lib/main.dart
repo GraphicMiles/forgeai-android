@@ -46,7 +46,7 @@ class _LunaAppState extends State<LunaApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // A widget that throws should say so where the user can read it, not only
     // in a console nobody has attached.
-    final FlutterExceptionHandler? previous = FlutterError.onError;
+    final void Function(FlutterErrorDetails)? previous = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
       _core.debug.fail('flutter', details.exceptionAsString());
       if (previous != null) previous(details);
