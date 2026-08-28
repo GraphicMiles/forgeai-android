@@ -390,3 +390,62 @@ Guarded by `RegistryTest` (43 checks): registration, ownership, availability
 with and without a folder or browser, a read-only capability grant, missing
 arguments, a provider that throws, a provider that returns nothing, timeouts,
 prompt lines, and an impostor plugin that tries to claim `delete_file`.
+
+---
+
+## 9. Phase 3 — delivered
+
+Luna's competence left the engine. `AgentEngine.systemPrompt` was 55 lines of
+English; it is now six lines that ask for a prompt.
+
+### A skill is data
+
+`SkillDefinition` — id, name, description, the instructions themselves, the
+tools it talks about, the resources it needs (`requires`) or must not have
+(`unless`), the words that bring it in (`triggers`), whether it is `always` on,
+and where it sits in the order. It round-trips through JSON, because a plugin
+ships knowledge as JSON and nothing else. There is no code in a skill; that is
+what makes installing one safe.
+
+### The seven Luna ships with
+
+`ai.luna.builtin.CoreSkills`, each one a paragraph that used to be an `append`:
+
+| Skill | Order | Condition |
+| --- | --- | --- |
+| `core.identity` — who and where she is | 0 | always |
+| `core.restraint` — most messages need no tool | 10 | always |
+| `core.files` — read before you write, relative paths | 30 | needs a folder |
+| `core.no-folder` — say so and ask, don't waste a step | 30 | *unless* a folder |
+| `core.web` — never invent an address | 40 | needs a browser |
+| `core.asking` — stop when a guess would be expensive | 50 | needs `ask_user` |
+| `core.reporting` — one tool per reply, no unsupported claims | 90 | always |
+
+`core.small-talk` is held apart: it replaces the prompt rather than joining it,
+so a greeting turn contains no tool list at all.
+
+### Choosing
+
+`SkillResolver` drops a skill when the resources are missing, when none of the
+tools it discusses are available, or when the turn is plainly about something
+else — then stops adding once the character budget is spent. An `always` skill
+is never cut; the core rules survive any amount of installed knowledge.
+
+`SystemPrompt` assembles the result in a fixed order: identity, then the
+situation (folder and mode, the only part that changes every run), then the
+remaining skills, then the tool lines from `ToolRegistry`, then the model's own
+persona.
+
+### What this buys
+
+Teaching Luna something no longer means editing Java. A plugin that knows how a
+particular kind of project is laid out ships a JSON skill, it appears when the
+message is about it, and it disappears on a phone with no folder granted.
+Skills can be switched off (`Prefs.disabledSkills`), which means a person can
+see and control everything their agent has been told.
+
+Guarded by `SkillsTest` (49 checks): registration and ownership, JSON round
+trips, the folder / no-folder pair being mutually exclusive, resolution with
+and without resources, prompt order, the greeting prompt carrying no tools, an
+installed plugin skill appearing only when relevant, an impostor failing to
+overwrite it, and the budget cutting a chatty skill before a core one.

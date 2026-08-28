@@ -1,10 +1,15 @@
 package ai.luna.app;
 
 import ai.luna.builtin.Builtins;
+import ai.luna.builtin.CoreSkills;
+import ai.luna.contracts.SkillDefinition;
 import ai.luna.contracts.ToolContext;
 import ai.luna.contracts.ToolDefinition;
 import ai.luna.contracts.ToolProvider;
 import ai.luna.contracts.ToolResult;
+import ai.luna.runtime.SkillRegistry;
+import ai.luna.runtime.SkillResolver;
+import ai.luna.runtime.SystemPrompt;
 import ai.luna.runtime.ToolRegistry;
 
 import android.content.Context;
@@ -64,6 +69,15 @@ public final class AgentEngine {
 
     /** Where those tools run. Today the phone; the interface says "today". */
     private final AndroidExecution environment;
+
+    /** What Luna knows. Text, not code, and none of it lives in this file. */
+    private final SkillRegistry skills = new SkillRegistry();
+
+    /** Assembles the system prompt from the skills and the available tools. */
+    private final SystemPrompt prompt;
+
+    /** The message this turn is about, for deciding which skills apply. */
+    private volatile String lastUserText = "";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -130,6 +144,9 @@ public final class AgentEngine {
         // The environment decides what is even offerable here: no shell on a
         // phone, so no tool that wants one is ever put in front of the model.
         tools.grant(environment.capabilities());
+        skills.register(new CoreSkills());
+        skills.disable(prefs.disabledSkills());
+        this.prompt = new SystemPrompt(tools, skills, new SkillResolver());
         this.chatId = prefs.activeChatId();
         if (this.chatId.isEmpty()) {
             this.chatId = "chat-" + System.currentTimeMillis();
@@ -480,6 +497,7 @@ public final class AgentEngine {
         waitedMillis.set(0L);
         livePrompt = null;
         conversationOnly = SmallTalk.matches(userText);
+        lastUserText = userText == null ? "" : userText;
         long started = System.currentTimeMillis();
         RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
         guards.begin();
@@ -1061,64 +1079,23 @@ public final class AgentEngine {
     // --- prompt --------------------------------------------------------------
 
     private String systemPrompt(String modelPersona) {
-        boolean folder = workspace.hasRoot();
-        StringBuilder out = new StringBuilder();
         if (conversationOnly) {
-            // No tool list at all. There is nothing here to be tempted by.
-            out.append("You are Luna, a local agent living on the user's Android phone. ");
-            out.append("The person is greeting you or asking about you. Reply in one or two warm, ");
-            out.append("plain sentences and offer to help with something on the phone: reading and ");
-            out.append("writing files in a folder they grant, or looking something up on the web. ");
-            out.append("Do not write JSON. Do not mention tools. Do not invent anything you have ");
-            out.append("done, because you have done nothing yet.\n");
-            if (modelPersona != null && !modelPersona.isEmpty()) {
-                out.append('\n').append(modelPersona).append('\n');
-            }
-            return out.toString();
+            // One skill, no tool list. A model shown no tools cannot call one.
+            return prompt.conversational(CoreSkills.SMALL_TALK, modelPersona);
         }
-        out.append("You are Luna, a local utility agent that runs natively on the user's Android phone. ");
-        out.append("You are not a chat window with tools bolted on: the device is your workplace.\n\n");
-        out.append("Folder granted: ").append(folder ? workspace.rootName() : "none yet").append('\n');
-        out.append("Mode: ").append(prefs.unattended() ? "unattended" : "ask before acting").append("\n\n");
+        return prompt.build(toolContext(), lastUserText,
+            workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), modelPersona);
+    }
 
-        // First rule, before the tool list, because the tool list is the thing
-        // that tempts a small model into using one. A greeting that opens a
-        // browser is the failure this paragraph exists to prevent.
-        out.append("Most messages need no tool. A greeting, a question about you, a question you can ");
-        out.append("already answer, anything conversational — reply in plain sentences straight away. ");
-        out.append("Reach for a tool only when the answer depends on something on this device or on ");
-        out.append("the web, and then take the smallest step that gets it.\n\n");
+    /** Every skill this agent has, as data, for the UI and for a manifest. */
+    public JSONArray skillCatalogue() {
+        return skills.describe();
+    }
 
-        // The list is asked for, not written here. A tool whose folder or
-        // browser is missing never appears, and a tool that arrives with a
-        // plugin appears without this file being touched.
-        out.append("To use a tool, reply with one JSON object and nothing else:\n");
-        for (String line : tools.promptLines(toolContext())) {
-            out.append(line).append('\n');
-        }
-        out.append("For respond you can also just write the sentences.\n\n");
-
-        if (!folder) {
-            // A tool that cannot work is worse than a tool that does not exist:
-            // it costs a turn, a refusal, and the person's confidence.
-            out.append("No folder has been granted yet, so the file tools are not available and calling ");
-            out.append("one only wastes a step. If the job needs files, say so in one sentence and ask ");
-            out.append("for a folder. Everything else you can still answer normally.\n\n");
-        }
-
-        out.append("Never invent a web address. Open a page only when the person gave you one, or\n");
-        out.append("when you are certain of the real site. example.com is not a real site.\n\n");
-        out.append("open_page then read_page is how you read the web; the browser has no window and\n");
-        out.append("forgets everything when the job ends. ask_user stops and waits for a real answer, so\n");
-        out.append("use it when a guess would be expensive.\n\n");
-        out.append("Rules: read before you write. One tool per reply. Paths are relative to the granted ");
-        out.append("folder. When the work is done, reply in plain sentences — no JSON — and say what you ");
-        out.append("changed. Never claim you did something a tool result does not show. Write the way a ");
-        out.append("careful person speaks: no tool names, no field names, no JSON in your sentences.\n");
-        if (modelPersona != null && !modelPersona.isEmpty()) {
-            out.append('\n').append(modelPersona).append('\n');
-        }
-        return out.toString();
+    /** Turns a skill off. The person decides what their agent is told. */
+    public void setSkillsDisabled(java.util.List<String> ids) {
+        prefs.setDisabledSkills(ids);
+        skills.disable(ids);
     }
 
     /** ChatML, which every model in the catalogue was trained on. */
