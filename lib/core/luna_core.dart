@@ -94,9 +94,19 @@ class LunaCore extends ChangeNotifier {
 
   bool get canCarryOn {
     if (running || messages.isEmpty) return false;
-    final Map<String, dynamic> last = messages.last;
-    if (last['role'] != 'assistant') return false;
-    final String meta = '${last['meta'] ?? ''}';
+    // The last thing Luna said, not the last thing in the list: a tool result
+    // is recorded as a message too, and one of those on the end used to hide
+    // the way back into the job.
+    Map<String, dynamic>? spoken;
+    for (final Map<String, dynamic> message in messages.reversed) {
+      final String role = '${message['role'] ?? ''}';
+      if (role == 'assistant' || role == 'user') {
+        spoken = message;
+        break;
+      }
+    }
+    if (spoken == null || spoken['role'] != 'assistant') return false;
+    final String meta = '${spoken['meta'] ?? ''}';
     return meta == 'stopped' || meta == 'interrupted' || _stoppedByYou;
   }
 

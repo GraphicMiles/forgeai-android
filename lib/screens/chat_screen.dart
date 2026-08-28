@@ -84,14 +84,15 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  /// The list is reversed, so the bottom of the thread is offset zero. Pin
-  /// there only if you were already there: scrolling back to reread something
-  /// should not be undone by the next token.
+  /// Follow the newest words, unless you have scrolled up to reread something.
+  /// Being dragged back to the bottom mid-sentence is worse than missing a
+  /// line, so this only acts when you were already near the end.
   void _pinToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      if (_scroll.offset <= 140) {
-        _scroll.jumpTo(0);
+      final double end = _scroll.position.maxScrollExtent;
+      if (end - _scroll.offset <= 160) {
+        _scroll.jumpTo(end);
       }
     });
   }
@@ -288,12 +289,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         Expanded(
-          // Reversed, so a short thread sits on the composer instead of
-          // floating at the top of an empty screen, and a long one always
-          // opens on the newest words.
+          // A chat reads downward: the first thing said is at the top, and
+          // each new turn is added under the last one.
           child: SingleChildScrollView(
             controller: _scroll,
-            reverse: true,
             padding: const EdgeInsets.only(bottom: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -538,7 +537,6 @@ class _ChatScreenState extends State<ChatScreen> {
       running: core.running,
       waiting: core.waitingOnYou,
       label: _activeLabel(core),
-      onStop: core.stop,
       elapsed: core.running ? core.workElapsed : core.runElapsed,
     ));
   }
@@ -599,12 +597,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     margin: const EdgeInsets.only(top: 9),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     constraints: const BoxConstraints(maxHeight: 120),
-                    decoration: const BoxDecoration(
-                        color: Color(0xFF17171A), borderRadius: LunaTheme.rField),
+                    decoration: BoxDecoration(
+                        color: LunaTheme.inkCell, borderRadius: LunaTheme.rField),
                     child: SingleChildScrollView(
                       child: Text(preview,
-                          style: LunaTheme.monoStyle(
-                              size: 11, color: const Color(0xFFE4E4E8))),
+                          style: LunaTheme.monoStyle(size: 11, color: LunaTheme.onInk)),
                     ),
                   ),
                 const SizedBox(height: 11),
@@ -623,7 +620,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       label: 'Skip',
                       icon: FontAwesomeIcons.xmark,
                       background: LunaTheme.inkButton,
-                      foreground: const Color(0xFFE4E4E8),
+                      foreground: LunaTheme.onInk,
                       onTap: () => core.approve('${approval['id']}', false),
                     ),
                   ],
@@ -701,7 +698,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 label: 'Skip',
                 icon: FontAwesomeIcons.xmark,
                 background: LunaTheme.inkButton,
-                foreground: const Color(0xFFE4E4E8),
+                foreground: LunaTheme.onInk,
                 onTap: () {
                   core.answerQuestion('${question['id']}', '');
                   _answer.clear();

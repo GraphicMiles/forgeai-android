@@ -71,7 +71,9 @@ class _ShimmerLabelState extends State<ShimmerLabel> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final TextStyle style =
         LunaTheme.text(size: widget.size, weight: widget.weight, color: LunaTheme.ink2);
-    if (!widget.active) return Text(widget.text, style: style);
+    if (!widget.active) {
+      return Text(widget.text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
     return AnimatedBuilder(
       animation: _sweep,
       builder: (BuildContext context, Widget? child) {
@@ -86,7 +88,10 @@ class _ShimmerLabelState extends State<ShimmerLabel> with SingleTickerProviderSt
           child: child,
         );
       },
-      child: Text(widget.text, style: style.copyWith(color: LunaTheme.ink)),
+      child: Text(widget.text,
+          style: style.copyWith(color: LunaTheme.ink),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis),
     );
   }
 }
@@ -217,7 +222,6 @@ class AgentTrace extends StatefulWidget {
     required this.elapsed,
     this.label = 'Thinking',
     this.waiting = false,
-    this.onStop,
   });
 
   final List<TraceStep> steps;
@@ -230,9 +234,6 @@ class AgentTrace extends StatefulWidget {
 
   /// Parked on your answer. Not the same as working, and never says so.
   final bool waiting;
-
-  /// Only offered while the run is live, and only here.
-  final VoidCallback? onStop;
 
   @override
   State<AgentTrace> createState() => _AgentTraceState();
@@ -303,30 +304,6 @@ class _AgentTraceState extends State<AgentTrace> {
                 ),
               ),
             ),
-            if (widget.running && widget.onStop != null) ...<Widget>[
-              const Spacer(),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: widget.onStop,
-                child: Semantics(
-                  button: true,
-                  label: 'Stop the job',
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Glyph(FontAwesomeIcons.stop, size: 9.5, color: LunaTheme.ink3),
-                        const SizedBox(width: 5),
-                        Text('Stop',
-                            style: LunaTheme.text(
-                                size: 11.5, weight: 600, color: LunaTheme.ink2)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
         AnimatedSize(
