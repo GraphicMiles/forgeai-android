@@ -709,7 +709,13 @@ public final class AgentEngine {
         // one that was never stored just returns empty anyway.
         String key = cloud.optBoolean("local") ? "" : vault.read("cloud:" + cloud.optString("id"));
         CloudProvider.Config config = new CloudProvider.Config(
-            cloud.optString("baseUrl"), key, cloud.optString("model"));
+            cloud.optString("kind"),
+            cloud.optString("baseUrl"),
+            key,
+            cloud.optString("model"),
+            cloud.optString("authStyle"),
+            cloud.optString("authName"),
+            cloud.optJSONObject("headers"));
         CloudProvider.Reply reply = CloudProvider.chatStreaming(config, cloudMessages(), 1024,
             new CloudProvider.TokenSink() {
                 @Override
@@ -867,6 +873,8 @@ public final class AgentEngine {
             out.put("label", model + " on your computer");
             out.put("baseUrl", endpoint + "/v1");
             out.put("model", model);
+            out.put("kind", CloudProvider.OPENAI);
+            out.put("authStyle", CloudProvider.AUTH_NONE);
             out.put("local", true);
         } catch (JSONException error) {
             return null;

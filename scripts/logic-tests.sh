@@ -36,3 +36,4 @@ javac --release 11 -encoding UTF-8 -nowarn \
   "$root"/tools/tests/ai/luna/app/*.java
 
 java -cp "$json:$platform:$work/classes" ai.luna.app.MemoryRecoveryTest
+java -cp "$json:$platform:$work/classes" ai.luna.app.ProviderConfigTest

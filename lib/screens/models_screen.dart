@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/luna_core.dart';
+import '../core/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -555,9 +556,10 @@ class _ModelsScreenState extends State<ModelsScreen> {
           icon: FontAwesomeIcons.key,
           title: 'No keys yet',
           body:
-              'Add an OpenAI-compatible endpoint and key. Luna stores it in the device keystore, not in a file.',
+              'OpenAI, Anthropic, Gemini, Groq, OpenRouter, or any endpoint you name yourself. '
+              'The key is kept in the device keystore, never in a file.',
           action: PillButton(
-            label: 'Add a key',
+            label: 'Add a provider',
             icon: FontAwesomeIcons.plus,
             small: true,
             onTap: () => _keySheet(core),
@@ -572,10 +574,13 @@ class _ModelsScreenState extends State<ModelsScreen> {
         Group(
           children: core.cloudProviders.map((Map<String, dynamic> provider) {
             final String id = 'cloud:${provider['id']}';
+            final ProviderPreset preset = ProviderPreset.match(
+                '${provider['kind'] ?? 'openai'}', '${provider['baseUrl'] ?? ''}');
+            final String model = '${provider['model'] ?? ''}';
             return LunaRow(
-              icon: FontAwesomeIcons.cloud,
+              icon: preset.icon,
               title: '${provider['label']}',
-              subtitle: '${provider['model']}',
+              subtitle: model.isEmpty ? 'No model chosen yet' : model,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -612,6 +617,15 @@ class _ModelsScreenState extends State<ModelsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Group(children: <Widget>[
+            LunaRow(
+              icon: FontAwesomeIcons.sliders,
+              title: 'Edit the connection',
+              subtitle: 'Address, key, shape, headers and model',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _providerEditor(core, existing: provider);
+              },
+            ),
             LunaRow(
               icon: FontAwesomeIcons.arrowsRotate,
               title: 'Check models',
@@ -689,106 +703,302 @@ class _ModelsScreenState extends State<ModelsScreen> {
     );
   }
 
+  /// Picking what you are connecting to, before asking for a key.
+  ///
+  /// A preset fills in the wire shape and the address; nothing it fills in is
+  /// locked afterwards. "Something else" starts blank, which is the same
+  /// screen with nothing pre-typed.
   Future<void> _keySheet(LunaCore core) async {
-    final TextEditingController label = TextEditingController();
-    final TextEditingController baseUrl =
-        TextEditingController(text: 'https://api.openai.com/v1');
-    final TextEditingController apiKey = TextEditingController();
-    final TextEditingController model = TextEditingController();
     await showLunaSheet<void>(
       context: context,
-      title: 'Add a key',
+      title: 'What are you connecting to?',
+      builder: (BuildContext sheetContext) => Group(
+        children: ProviderPreset.all
+            .map((ProviderPreset preset) => LunaRow(
+                  icon: preset.icon,
+                  title: preset.name,
+                  subtitle: preset.note,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _providerEditor(core, preset: preset);
+                  },
+                ))
+            .toList(),
+      ),
+    );
+  }
+
+  /// The whole connection, in one sheet: what shape it speaks, where it lives,
+  /// how the key is attached, and which model. Used for a new provider and for
+  /// editing a saved one.
+  Future<void> _providerEditor(
+    LunaCore core, {
+    ProviderPreset? preset,
+    Map<String, dynamic>? existing,
+  }) async {
+    final bool editing = existing != null;
+    // One non-null map to read from. Dart will not promote `existing` through
+    // a bool, and every read below would otherwise need its own null check.
+    final Map<String, dynamic> row = existing ?? <String, dynamic>{};
+    final ProviderPreset base = preset ??
+        ProviderPreset.match('${row['kind'] ?? 'openai'}', '${row['baseUrl'] ?? ''}');
+
+    final TextEditingController label = TextEditingController(
+        text: editing ? '${row['label'] ?? ''}' : base.name);
+    final TextEditingController baseUrl = TextEditingController(
+        text: editing ? '${row['baseUrl'] ?? ''}' : base.baseUrl);
+    final TextEditingController apiKey = TextEditingController();
+    final TextEditingController model =
+        TextEditingController(text: editing ? '${row['model'] ?? ''}' : '');
+    final TextEditingController authName = TextEditingController(
+        text: editing ? '${row['authName'] ?? ''}' : '');
+    final Map<String, dynamic> savedHeaders =
+        (row['headers'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final TextEditingController headers =
+        TextEditingController(text: writeHeaders(savedHeaders));
+
+    String kind = editing ? '${row['kind'] ?? 'openai'}' : base.kind;
+    String authStyle = editing
+        ? '${row['authStyle'] ?? defaultAuthStyle(kind)}'
+        : defaultAuthStyle(base.kind);
+    if (authName.text.isEmpty) authName.text = defaultAuthName(kind, authStyle);
+    bool advanced = false;
+
+    await showLunaSheet<void>(
+      context: context,
+      title: editing ? 'Edit ${row['label']}' : 'Connect to ${base.name}',
       builder: (BuildContext sheetContext) => StatefulBuilder(
-        builder: (BuildContext inner, StateSetter refresh) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            LunaField(label: 'Name', controller: label, hint: 'Work key', autofocus: true),
-            LunaField(label: 'Base address', controller: baseUrl, mono: true),
-            LunaField(
-                label: 'Key',
-                controller: apiKey,
+        builder: (BuildContext inner, StateSetter refresh) {
+          void say(String message) {
+            ScaffoldMessenger.of(inner).showSnackBar(SnackBar(
+              backgroundColor: LunaTheme.ink,
+              content: Text(message,
+                  style: LunaTheme.text(size: 13, color: LunaTheme.onInk)),
+            ));
+          }
+
+          Future<List<String>> ask() => core.providerModels(
+                id: editing ? '${row['id']}' : '',
+                baseUrl: baseUrl.text.trim(),
+                apiKey: apiKey.text.trim(),
+                kind: kind,
+                authStyle: authStyle,
+                authName: authName.text.trim(),
+                headers: parseHeaders(headers.text),
+              );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              LunaField(
+                  label: 'Name',
+                  controller: label,
+                  hint: 'Work key',
+                  autofocus: !editing),
+              LunaField(
+                label: 'Base address',
+                controller: baseUrl,
                 mono: true,
-                obscure: true,
-                help: 'Kept in the device keystore. It never appears in a file.'),
-            LunaField(
-                label: 'Model',
-                controller: model,
-                mono: true,
-                hint: 'Check the list rather than typing it'),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
-              child: Row(
-                children: <Widget>[
-                  PillButton(
-                    label: 'Check models',
-                    icon: FontAwesomeIcons.arrowsRotate,
-                    soft: true,
-                    onTap: () async {
-                      List<String> found = <String>[];
-                      String? failure;
-                      try {
-                        found = await core.providerModels(
-                          baseUrl: baseUrl.text.trim(),
-                          apiKey: apiKey.text.trim(),
-                        );
-                      } catch (error) {
-                        failure = '$error';
-                      }
-                      if (!inner.mounted) return;
-                      if (failure != null) {
-                        ScaffoldMessenger.of(inner).showSnackBar(SnackBar(
-                          backgroundColor: LunaTheme.ink,
-                          content: Text(failure,
-                              style: LunaTheme.text(size: 13, color: LunaTheme.onInk)),
-                        ));
-                        return;
-                      }
-                      if (found.isNotEmpty) {
-                        refresh(() => model.text = found.first);
-                      }
-                      await showLunaSheet<void>(
-                        context: inner,
-                        title: 'It serves ${found.length}',
-                        builder: (BuildContext listContext) => Group(
-                          children: found
-                              .map((String name) => LunaRow(
-                                    icon: FontAwesomeIcons.microchip,
-                                    title: name,
-                                    onTap: () {
-                                      refresh(() => model.text = name);
-                                      Navigator.of(listContext).pop();
-                                    },
-                                  ))
-                              .toList(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  PillButton(
-                    label: 'Save',
-                    icon: FontAwesomeIcons.check,
-                    onTap: () async {
-                      Navigator.of(sheetContext).pop();
-                      await core.addCloudProvider(
-                        label: label.text.trim().isEmpty ? 'Cloud model' : label.text.trim(),
-                        baseUrl: baseUrl.text.trim(),
-                        apiKey: apiKey.text.trim(),
-                        model: model.text.trim(),
-                      );
-                    },
-                  ),
-                ],
+                hint: 'https://…/v1',
+                help: kind == 'gemini'
+                    ? 'Gemini speaks its own shape. Luna handles that for you.'
+                    : kind == 'anthropic'
+                        ? 'Anthropic speaks its own shape. Luna handles that for you.'
+                        : null,
               ),
-            ),
-          ],
-        ),
+              if (authStyle != 'none')
+                LunaField(
+                  label: 'Key',
+                  controller: apiKey,
+                  mono: true,
+                  obscure: true,
+                  hint: editing
+                      ? 'Saved — type to replace it'
+                      : (base.keyHint.isEmpty ? 'Paste your key' : base.keyHint),
+                  help: 'Kept in the device keystore. It never appears in a file.',
+                ),
+              LunaField(
+                  label: 'Model',
+                  controller: model,
+                  mono: true,
+                  hint: 'Check the list rather than typing it'),
+
+              // Everything below is for the endpoint nobody has heard of yet.
+              LunaRow(
+                icon: FontAwesomeIcons.sliders,
+                title: 'Advanced',
+                subtitle: '${kindName(kind)} · ${authStyleName(authStyle)}'
+                    '${parseHeaders(headers.text).isEmpty ? '' : ' · custom headers'}',
+                trailing: Glyph(
+                    advanced ? FontAwesomeIcons.chevronUp : FontAwesomeIcons.chevronDown,
+                    size: 10,
+                    color: LunaTheme.ink3),
+                onTap: () => refresh(() => advanced = !advanced),
+              ),
+              if (advanced) ...<Widget>[
+                const SectionLabel('Request shape'),
+                Segmented(
+                  items: kProviderKindNames,
+                  index: kProviderKinds.indexOf(kind) < 0
+                      ? 0
+                      : kProviderKinds.indexOf(kind),
+                  onChanged: (int index) => refresh(() {
+                    kind = kProviderKinds[index];
+                    authStyle = defaultAuthStyle(kind);
+                    authName.text = defaultAuthName(kind, authStyle);
+                    if (!editing) {
+                      final ProviderPreset suggested = ProviderPreset.match(kind, '');
+                      if (baseUrl.text.trim().isEmpty) {
+                        baseUrl.text = suggested.baseUrl;
+                      }
+                    }
+                  }),
+                ),
+                const SizedBox(height: 10),
+                const SectionLabel('How the key is sent'),
+                Segmented(
+                  items: kAuthStyleNames,
+                  index: kAuthStyles.indexOf(authStyle) < 0
+                      ? 0
+                      : kAuthStyles.indexOf(authStyle),
+                  onChanged: (int index) => refresh(() {
+                    authStyle = kAuthStyles[index];
+                    authName.text = defaultAuthName(kind, authStyle);
+                  }),
+                ),
+                const SizedBox(height: 10),
+                if (authStyle == 'bearer' || authStyle == 'header')
+                  LunaField(label: 'Header name', controller: authName, mono: true),
+                if (authStyle == 'query')
+                  LunaField(label: 'Query parameter', controller: authName, mono: true),
+                LunaField(
+                  label: 'Extra headers',
+                  controller: headers,
+                  mono: true,
+                  maxLines: 4,
+                  hint: 'X-Title: Luna',
+                  help: 'One per line, written as Name: value.',
+                ),
+              ],
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                child: Row(
+                  children: <Widget>[
+                    PillButton(
+                      label: 'Check models',
+                      icon: FontAwesomeIcons.arrowsRotate,
+                      soft: true,
+                      onTap: () async {
+                        final String? bad =
+                            await core.checkEndpoint(baseUrl.text.trim());
+                        if (!inner.mounted) return;
+                        if (bad != null && bad.isNotEmpty) {
+                          say(bad);
+                          return;
+                        }
+                        List<String> found = <String>[];
+                        String? failure;
+                        try {
+                          found = await ask();
+                        } catch (error) {
+                          failure = '$error'.replaceFirst(
+                              RegExp(r'^PlatformException\([^,]*,\s*'), '');
+                        }
+                        if (!inner.mounted) return;
+                        if (failure != null) {
+                          say(failure.replaceAll(RegExp(r',\s*null,\s*null\)$'), ''));
+                          return;
+                        }
+                        if (found.isEmpty) {
+                          say('That key can see no models.');
+                          return;
+                        }
+                        refresh(() => model.text = found.first);
+                        await showLunaSheet<void>(
+                          context: inner,
+                          title: 'It serves ${found.length}',
+                          builder: (BuildContext listContext) => Group(
+                            children: found
+                                .map((String name) => LunaRow(
+                                      icon: FontAwesomeIcons.microchip,
+                                      title: name,
+                                      onTap: () {
+                                        refresh(() => model.text = name);
+                                        Navigator.of(listContext).pop();
+                                      },
+                                    ))
+                                .toList(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    PillButton(
+                      label: 'Save',
+                      icon: FontAwesomeIcons.check,
+                      onTap: () async {
+                        final String? bad =
+                            await core.checkEndpoint(baseUrl.text.trim());
+                        if (!inner.mounted) return;
+                        if (bad != null && bad.isNotEmpty) {
+                          say(bad);
+                          return;
+                        }
+                        if (model.text.trim().isEmpty) {
+                          say('Pick a model — tap Check models.');
+                          return;
+                        }
+                        if (!editing &&
+                            authStyle != 'none' &&
+                            apiKey.text.trim().isEmpty) {
+                          say('This provider needs a key.');
+                          return;
+                        }
+                        Navigator.of(sheetContext).pop();
+                        if (editing) {
+                          await core.updateCloudProvider(
+                            id: '${row['id']}',
+                            label: label.text.trim(),
+                            model: model.text.trim(),
+                            apiKey: apiKey.text.trim(),
+                            kind: kind,
+                            baseUrl: baseUrl.text.trim(),
+                            authStyle: authStyle,
+                            authName: authName.text.trim(),
+                            headers: parseHeaders(headers.text),
+                          );
+                        } else {
+                          await core.addCloudProvider(
+                            label: label.text.trim().isEmpty
+                                ? base.name
+                                : label.text.trim(),
+                            baseUrl: baseUrl.text.trim(),
+                            apiKey: apiKey.text.trim(),
+                            model: model.text.trim(),
+                            kind: kind,
+                            authStyle: authStyle,
+                            authName: authName.text.trim(),
+                            headers: parseHeaders(headers.text),
+                          );
+                        }
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
     label.dispose();
     baseUrl.dispose();
     apiKey.dispose();
     model.dispose();
+    authName.dispose();
+    headers.dispose();
   }
 
   /// Nothing that cannot be undone happens without one of these.

@@ -649,29 +649,57 @@ class LunaCore extends ChangeNotifier {
     required String baseUrl,
     required String apiKey,
     required String model,
+    String kind = 'openai',
+    String authStyle = '',
+    String authName = '',
+    Map<String, String> headers = const <String, String>{},
   }) async {
     await _invoke('addCloudProvider', <String, dynamic>{
       'label': label,
       'baseUrl': baseUrl,
       'apiKey': apiKey,
       'model': model,
+      'kind': kind,
+      'authStyle': authStyle,
+      'authName': authName,
+      'headers': headers,
     });
     await refresh();
   }
 
+  /// Every field is optional: an empty string leaves that part alone, so the
+  /// model picker can set a model without knowing about headers.
   Future<void> updateCloudProvider({
     required String id,
     String label = '',
     String model = '',
     String apiKey = '',
+    String kind = '',
+    String baseUrl = '',
+    String authStyle = '',
+    String authName = '',
+    Map<String, String>? headers,
   }) async {
-    await _invoke('updateCloudProvider', <String, dynamic>{
+    final Map<String, dynamic> args = <String, dynamic>{
       'id': id,
       'label': label,
       'model': model,
       'apiKey': apiKey,
-    });
+      'kind': kind,
+      'baseUrl': baseUrl,
+      'authStyle': authStyle,
+      'authName': authName,
+    };
+    if (headers != null) args['headers'] = headers;
+    await _invoke('updateCloudProvider', args);
     await refresh();
+  }
+
+  /// Why this address cannot be used, or null when it can. Answered by the
+  /// same rule the engine applies, so the sheet and the run never disagree.
+  Future<String?> checkEndpoint(String baseUrl) async {
+    return _channel.invokeMethod<String>(
+        'checkEndpoint', <String, dynamic>{'baseUrl': baseUrl});
   }
 
   /// What the provider says it serves today. Throws with the provider's own words.
@@ -679,11 +707,19 @@ class LunaCore extends ChangeNotifier {
     String id = '',
     String baseUrl = '',
     String apiKey = '',
+    String kind = 'openai',
+    String authStyle = '',
+    String authName = '',
+    Map<String, String> headers = const <String, String>{},
   }) async {
     final String? raw = await _channel.invokeMethod<String>('providerModels', <String, dynamic>{
       'id': id,
       'baseUrl': baseUrl,
       'apiKey': apiKey,
+      'kind': kind,
+      'authStyle': authStyle,
+      'authName': authName,
+      'headers': headers,
     });
     if (raw == null || raw.isEmpty) return <String>[];
     final Object? parsed = jsonDecode(raw);

@@ -641,6 +641,7 @@ class LunaField extends StatelessWidget {
     this.onSubmitted,
     this.onChanged,
     this.obscure = false,
+    this.maxLines = 1,
   });
 
   final String label;
@@ -652,6 +653,9 @@ class LunaField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
   final bool obscure;
+
+  /// More than one for a field that holds a list, like extra headers.
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -671,6 +675,8 @@ class LunaField extends StatelessWidget {
               onSubmitted: onSubmitted,
               onChanged: onChanged,
               obscureText: obscure,
+              minLines: 1,
+              maxLines: obscure ? 1 : maxLines,
               cursorColor: LunaTheme.ink,
               cursorWidth: 1.6,
               style: mono

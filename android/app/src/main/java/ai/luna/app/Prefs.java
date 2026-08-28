@@ -235,7 +235,7 @@ public final class Prefs {
         for (int index = 0; index < all.length(); index++) {
             JSONObject item = all.optJSONObject(index);
             if (item != null && item.optString("id").equals(id)) {
-                return item;
+                return withDefaults(item);
             }
         }
         return null;
@@ -407,6 +407,9 @@ public final class Prefs {
         if (rewrite) {
             prefs.edit().putString(KEY_CLOUD, all.toString()).apply();
         }
+        for (int index = 0; index < all.length(); index++) {
+            withDefaults(all.optJSONObject(index));
+        }
         return all;
     }
 
@@ -418,6 +421,35 @@ public final class Prefs {
         }
     }
 
+    /**
+     * Fills in the fields a row from an older build does not have. Every
+     * provider stored before Luna spoke three shapes was OpenAI-shaped, which
+     * is exactly what the defaults say, so the upgrade is silent.
+     */
+    public static JSONObject withDefaults(JSONObject row) {
+        if (row == null) {
+            return null;
+        }
+        try {
+            String kind = CloudProvider.normaliseKind(row.optString("kind", ""));
+            row.put("kind", kind);
+            String style = row.optString("authStyle", "");
+            if (style.isEmpty()) {
+                style = CloudProvider.defaultAuthStyle(kind);
+            }
+            row.put("authStyle", style);
+            if (row.optString("authName", "").isEmpty()) {
+                row.put("authName", CloudProvider.defaultAuthName(kind, style));
+            }
+            if (row.optJSONObject("headers") == null) {
+                row.put("headers", new JSONObject());
+            }
+        } catch (JSONException ignored) {
+            // The row is still usable; the defaults resolve again at call time.
+        }
+        return row;
+    }
+
     public void addCloudProvider(JSONObject provider) {
         JSONArray next = raw();
         provider.remove("apiKey");
@@ -426,19 +458,47 @@ public final class Prefs {
     }
 
     public void updateCloudProvider(String id, String label, String model) {
+        updateCloudProvider(id, label, model, null, null, null, null, null);
+    }
+
+    /**
+     * Change any part of a provider. Every argument is optional: null means
+     * "leave this as it was", so the model picker can set a model without
+     * knowing anything about headers.
+     */
+    public void updateCloudProvider(String id, String label, String model, String kind,
+                                    String baseUrl, String authStyle, String authName,
+                                    JSONObject headers) {
         try {
             JSONArray all = raw();
             for (int index = 0; index < all.length(); index++) {
                 JSONObject item = all.optJSONObject(index);
-                if (item != null && item.optString("id").equals(id)) {
-                    if (label != null && !label.isEmpty()) {
-                        item.put("label", label);
-                    }
-                    if (model != null && !model.isEmpty()) {
-                        item.put("model", model);
-                    }
-                    item.put("checkedAt", System.currentTimeMillis());
+                if (item == null || !item.optString("id").equals(id)) {
+                    continue;
                 }
+                if (label != null && !label.isEmpty()) {
+                    item.put("label", label);
+                }
+                if (model != null && !model.isEmpty()) {
+                    item.put("model", model);
+                }
+                if (kind != null && !kind.isEmpty()) {
+                    item.put("kind", CloudProvider.normaliseKind(kind));
+                }
+                if (baseUrl != null && !baseUrl.isEmpty()) {
+                    item.put("baseUrl", EndpointPolicy.tidy(baseUrl));
+                }
+                if (authStyle != null && !authStyle.isEmpty()) {
+                    item.put("authStyle", authStyle);
+                }
+                if (authName != null && !authName.isEmpty()) {
+                    item.put("authName", authName);
+                }
+                if (headers != null) {
+                    item.put("headers", headers);
+                }
+                item.put("checkedAt", System.currentTimeMillis());
+                withDefaults(item);
             }
             prefs.edit().putString(KEY_CLOUD, all.toString()).apply();
         } catch (JSONException ignored) {
@@ -463,7 +523,7 @@ public final class Prefs {
         for (int index = 0; index < all.length(); index++) {
             JSONObject item = all.optJSONObject(index);
             if (item != null && item.optString("id").equals(id)) {
-                return item;
+                return withDefaults(item);
             }
         }
         return null;
