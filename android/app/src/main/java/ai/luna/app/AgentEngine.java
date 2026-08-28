@@ -3,7 +3,9 @@ package ai.luna.app;
 import ai.luna.builtin.Builtins;
 import ai.luna.builtin.CoreSkills;
 import ai.luna.builtin.LunaAgent;
+import ai.luna.contracts.AgentBudget;
 import ai.luna.contracts.AgentDefinition;
+import ai.luna.contracts.AgentResult;
 import ai.luna.contracts.MemoryKind;
 import ai.luna.contracts.SkillDefinition;
 import ai.luna.contracts.ToolContext;
@@ -20,6 +22,7 @@ import ai.luna.runtime.MemoryRegistry;
 import ai.luna.runtime.PluginManager;
 import ai.luna.runtime.PluginVerifier;
 import ai.luna.runtime.SkillRegistry;
+import ai.luna.runtime.SubAgentSpawner;
 import ai.luna.runtime.SkillResolver;
 import ai.luna.runtime.SystemPrompt;
 import ai.luna.runtime.ToolRegistry;
@@ -109,6 +112,9 @@ public final class AgentEngine {
 
     /** Which brain answers, and the sentence that justifies it. */
     private final InferenceRouter router = new InferenceRouter();
+
+    /** Handing a piece of work to a narrower agent, under the same budget. */
+    private final SubAgentSpawner spawner;
 
     /** Assembles the system prompt from the skills and the available tools. */
     private final SystemPrompt prompt;
@@ -205,6 +211,12 @@ public final class AgentEngine {
         this.agentManager = new AgentManager(agents, tools, skills);
         agentManager.activate(prefs.activeAgentId());
         this.prompt = new SystemPrompt(tools, skills, new SkillResolver(), agentManager);
+        this.spawner = new SubAgentSpawner(agents, new SubAgentSpawner.Runner() {
+            @Override
+            public AgentResult run(SubAgentSpawner.SubAgentContext child) {
+                return consult(child);
+            }
+        });
         this.chatId = prefs.activeChatId();
         if (this.chatId.isEmpty()) {
             this.chatId = "chat-" + System.currentTimeMillis();
@@ -1298,6 +1310,45 @@ public final class AgentEngine {
             memory.recallLines(lastUserText, agentManager.activeId(), 5));
     }
 
+    /** What is left of this run, in the shape a child can be given a share of. */
+    private AgentBudget budgetLeft(RunGuards guards) {
+        int steps = Math.max(0, agentManager.steps(prefs.budgetSteps())
+            - guards.toolCallCount());
+        int seconds = Math.max(0, agentManager.seconds(prefs.budgetSeconds())
+            - (int) (guards.elapsedMillis() / 1000L));
+        return new AgentBudget(steps, seconds, prefs.budgetCloudCalls(), 1);
+    }
+
+    /**
+     * A child agent, asked for its opinion under its own definition.
+     *
+     * <p>It gets its own system prompt — its skills, its narrowed tool list —
+     * and one model call. It does not get to run tools yet: the chat loop is
+     * still the only thing that can, and giving a child a second copy of it
+     * before that loop is extracted would be two loops that can disagree about
+     * what a run has already spent.
+     */
+    private AgentResult consult(SubAgentSpawner.SubAgentContext child) {
+        String previous = agentManager.activeId();
+        try {
+            agentManager.activate(child.agent.id);
+            String system = prompt.build(toolContext(), child.task,
+                workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), null,
+                memory.recallLines(child.task, child.agent.id, 3));
+            String answer = askOnce(system + "\n\n" + child.task, activeLocalModel(),
+                activeCloudProvider(), new RunGuards(child.budget.steps, child.budget.seconds,
+                    child.budget.cloudCalls));
+            if (answer == null || answer.trim().isEmpty()) {
+                return AgentResult.refused(child.agent.id,
+                    child.agent.name + " had nothing to add.");
+            }
+            return AgentResult.of(child.agent.id, ReadableText.clean(answer, 1200),
+                new AgentBudget(1, 0, 1, 0));
+        } finally {
+            agentManager.activate(previous);
+        }
+    }
+
     /** What Luna remembers, by kind, for the screen that shows it. */
     public JSONArray memoryCatalogue() {
         return memory.describe(agentManager.activeId());
@@ -1477,10 +1528,10 @@ public final class AgentEngine {
 
         @Override
         public String subAgent(String agentId, String task) {
-            // Sub-agents arrive with their own phase. Until then a workflow
-            // that asks for one is told plainly, rather than quietly doing the
-            // work itself and pretending somebody else did it.
-            return "No other agent is available to do that yet.";
+            AgentResult result = spawner.spawn(agentManager.active(), agentId, task,
+                budgetLeft(guards), environments.capabilities());
+            emitStep("sub_agent", agentId, result.ok ? "done" : "denied");
+            return result.observation();
         }
 
         @Override
