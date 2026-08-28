@@ -505,25 +505,23 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       final bool refused = state == 'denied' ||
           state == 'declined' ||
-          state == 'refused' ||
           state == 'blocked' ||
+          state == 'no_folder' ||
+          state == 'invented' ||
           state == 'unfinished';
       final String name = path.isEmpty ? '' : path.split('/').last;
-      final String detail = state == 'held'
-          ? 'waiting for you to allow it'
-          : state == 'declined'
-              ? 'you skipped this one'
-              : state == 'refused'
-                  ? 'your rules say never for this'
-                  : state == 'denied'
-                      ? (tool == 'load_model' ? 'the model would not load' : 'not allowed')
-                      : state == 'replayed'
-                          ? 'already read this run'
-                          : state == 'blocked'
-                              ? 'over the limit for one job'
-                              : state == 'unfinished'
-                                  ? 'took too long and was dropped'
-                                  : name;
+      final Map<String, String> reasons = <String, String>{
+        'held': 'waiting for you to allow it',
+        'declined': 'you skipped this one',
+        'replayed': 'already read this run',
+        'blocked': 'over the limit for one job',
+        'no_folder': 'there is no folder to work in',
+        'invented': 'that address is not a real site',
+        'unfinished': 'took too long and was dropped',
+      };
+      final String detail = state == 'denied'
+          ? (tool == 'load_model' ? 'the model would not load' : 'not allowed')
+          : (reasons[state] ?? name);
       final String label = refused
           ? (_refusedLabels[tool] ?? _stepLabels[tool] ?? tool)
           : (state == 'running' || state == 'held')

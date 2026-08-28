@@ -27,7 +27,6 @@ class LunaCore extends ChangeNotifier {
   bool running = false;
   String workspaceState = 'none';
   List<Map<String, dynamic>> grants = <Map<String, dynamic>>[];
-  Map<String, String> toolRules = <String, String>{};
   bool wifiOnly = false;
   bool batteryGuard = true;
   bool keepWarm = true;
@@ -143,9 +142,6 @@ class LunaCore extends ChangeNotifier {
 
   bool get unattended => executionMode == 'auto';
 
-  /// ask, always or never. A tool with no rule follows the global switch.
-  String ruleFor(String tool) => toolRules[tool] ?? 'ask';
-
   bool get workspaceRevoked => workspaceState == 'revoked';
 
   Map<String, dynamic>? get activeCatalogModel {
@@ -223,7 +219,6 @@ class LunaCore extends ChangeNotifier {
     lastBackup = backup == null ? null : jsonDecode(backup) as Map<String, dynamic>;
     workspaceState = (snapshot['workspaceState'] as String?) ?? 'none';
     grants = _decodeList(snapshot['grants'] as String?);
-    toolRules = _decodeStringMap(snapshot['toolRules'] as String?);
     wifiOnly = (snapshot['wifiOnly'] as bool?) ?? false;
     batteryGuard = (snapshot['batteryGuard'] as bool?) ?? true;
     keepWarm = (snapshot['keepWarm'] as bool?) ?? true;
@@ -761,23 +756,6 @@ class LunaCore extends ChangeNotifier {
 
   // --- rules, limits and comfort ---------------------------------------------
 
-  Future<void> setToolRule(String tool, String rule) async {
-    toolRules = Map<String, String>.from(toolRules);
-    if (rule == 'ask') {
-      toolRules.remove(tool);
-    } else {
-      toolRules[tool] = rule;
-    }
-    notifyListeners();
-    await _invoke('setToolRule', <String, dynamic>{'tool': tool, 'rule': rule});
-  }
-
-  Future<void> cycleToolRule(String tool) {
-    const List<String> order = <String>['ask', 'always', 'never'];
-    final int next = (order.indexOf(ruleFor(tool)) + 1) % order.length;
-    return setToolRule(tool, order[next]);
-  }
-
   Future<void> setBudget({int? steps, int? seconds, int? cloudCalls}) async {
     budgetSteps = steps ?? budgetSteps;
     budgetSeconds = seconds ?? budgetSeconds;
@@ -895,10 +873,6 @@ class LunaCore extends ChangeNotifier {
     final Object? parsed = jsonDecode(raw);
     if (parsed is! Map) return <String, dynamic>{};
     return parsed.map((Object? key, Object? value) => MapEntry<String, dynamic>('$key', value));
-  }
-
-  static Map<String, String> _decodeStringMap(String? raw) {
-    return _decodeMap(raw).map((String key, dynamic value) => MapEntry<String, String>(key, '$value'));
   }
 
   static List<String> _stringList(Object? raw) {

@@ -27,6 +27,7 @@ public final class ProviderConfigTest {
         words();
         greetings();
         invented();
+        gate();
 
         System.out.println(failures == 0 ? "ALL PASS" : failures + " FAILED");
         if (failures > 0) {
@@ -193,6 +194,20 @@ public final class ProviderConfigTest {
             NetworkTargets.placeholderReason("") != null);
         check("the refusal names the placeholder",
             NetworkTargets.placeholderReason("https://example.com").contains("example.com"));
+    }
+
+    private static void gate() {
+        check("a key file is sensitive", ToolPolicy.isSensitive("keys/id_rsa"));
+        check("an env file is sensitive", ToolPolicy.isSensitive("app/.env"));
+        check("a keystore is sensitive", ToolPolicy.isSensitive("upload.keystore"));
+        check("anything called password is sensitive",
+            ToolPolicy.isSensitive("notes/passwords.txt"));
+        check("an ordinary note is not", !ToolPolicy.isSensitive("notes/shopping.md"));
+        check("an empty path is not", !ToolPolicy.isSensitive(""));
+        check("writing changes things", ToolPolicy.isMutating("write_file"));
+        check("deleting changes things", ToolPolicy.isMutating("delete_file"));
+        check("opening a page leaves the device", ToolPolicy.isMutating("open_page"));
+        check("listing a folder does not", !ToolPolicy.isMutating("list_files"));
     }
 
     private static JSONObject turn(String role, String content) {

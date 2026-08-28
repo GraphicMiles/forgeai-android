@@ -193,7 +193,7 @@ class TraceStep {
 
   final String label;
 
-  /// running, held, done, replayed, blocked, declined, refused, unfinished.
+  /// running, held, done, replayed, blocked, declined, unfinished.
   final String state;
   final String detail;
 
@@ -201,8 +201,9 @@ class TraceStep {
   bool get isRefused =>
       state == 'denied' ||
       state == 'declined' ||
-      state == 'refused' ||
       state == 'blocked' ||
+      state == 'no_folder' ||
+      state == 'invented' ||
       state == 'unfinished';
   bool get isRunning => state == 'running';
   bool get isHeld => state == 'held';
