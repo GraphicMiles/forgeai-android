@@ -660,3 +660,44 @@ Every run ends with `memory.endOfRun()`, which clears working memory. A note
 about a job that has finished is not a fact about the person.
 
 Guarded by `MemoryTest` (37 checks).
+
+---
+
+## 14. Phase 8 — delivered
+
+`InferenceRouter`: which brain answers, and the sentence that justifies it.
+
+The old rule was "use the local model, fall back to the cloud if it will not
+load". That is fine until the questions differ — a document that does not fit in
+a 2k window, a private file that must not leave the phone, a provider that has
+been returning errors for ten minutes.
+
+### The order
+
+1. what the person or the agent explicitly chose, if it is usable and healthy;
+2. anything **local** that fits, because the device is free and private;
+3. a remote provider — but only if the work is allowed to leave;
+4. a resting provider as a last resort, saying openly that it has been failing.
+
+Privacy is a hard stop, not a preference: a `private` job that no local model can
+take is refused rather than sent, and so is any job when the person has not
+turned failover on.
+
+### Explaining itself
+
+Every `Route` carries a reason: *"Qwen 1.5B runs on the phone, so the work stays
+here"*, *"Groq answered, because this is bigger than the phone's model can
+hold"*, *"That has to stay on the phone, and no model here can take a job this
+size."* "It failed over" is not an explanation; these are. The reason is what
+the failover event and the debug panel now show.
+
+### Health
+
+`failed(id)` rests a provider for two minutes; `worked(id)` wakes it immediately.
+`AgentEngine` reports both outcomes from the paths that already existed — a local
+generate failure, a cloud error, a successful reply — and `inferenceHealth()`
+exposes the tally.
+
+Guarded by `RouterTest` (28 checks): the ordinary case, size, privacy in both
+directions, preferences that can and cannot be honoured, cooldown and recovery,
+last-resort use of a failing provider, and a reason on every single decision.
