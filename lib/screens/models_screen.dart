@@ -839,9 +839,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
                 const SectionLabel('Request shape'),
                 Segmented(
                   items: kProviderKindNames,
-                  index: kProviderKinds.indexOf(kind) < 0
-                      ? 0
-                      : kProviderKinds.indexOf(kind),
+                  index: kindIndex(kind),
                   onChanged: (int index) => refresh(() {
                     kind = kProviderKinds[index];
                     authStyle = defaultAuthStyle(kind);
@@ -858,9 +856,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
                 const SectionLabel('How the key is sent'),
                 Segmented(
                   items: kAuthStyleNames,
-                  index: kAuthStyles.indexOf(authStyle) < 0
-                      ? 0
-                      : kAuthStyles.indexOf(authStyle),
+                  index: authStyleIndex(authStyle),
                   onChanged: (int index) => refresh(() {
                     authStyle = kAuthStyles[index];
                     authName.text = defaultAuthName(kind, authStyle);
