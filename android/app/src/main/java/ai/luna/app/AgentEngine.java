@@ -13,6 +13,7 @@ import ai.luna.contracts.ToolResult;
 import ai.luna.contracts.WorkflowDefinition;
 import ai.luna.runtime.AgentManager;
 import ai.luna.runtime.AgentRegistry;
+import ai.luna.runtime.EnvironmentRegistry;
 import ai.luna.runtime.EphemeralMemory;
 import ai.luna.runtime.InferenceRouter;
 import ai.luna.runtime.MemoryRegistry;
@@ -84,6 +85,9 @@ public final class AgentEngine {
 
     /** Where those tools run. Today the phone; the interface says "today". */
     private final AndroidExecution environment;
+
+    /** Everywhere they could run. The phone is the first entry, not the only kind. */
+    private final EnvironmentRegistry environments = new EnvironmentRegistry();
 
     /** What Luna knows. Text, not code, and none of it lives in this file. */
     private final SkillRegistry skills = new SkillRegistry();
@@ -171,12 +175,16 @@ public final class AgentEngine {
         this.browser = browser;
         this.events = events;
         this.environment = new AndroidExecution(workspace, browser, vault);
+        environments.register(environment);
+        for (JSONObject declared : prefs.declaredEnvironments()) {
+            environments.register(ai.luna.builtin.DeclaredEnvironment.fromJson(declared));
+        }
         for (ToolProvider provider : Builtins.all()) {
             tools.register(provider);
         }
         // The environment decides what is even offerable here: no shell on a
         // phone, so no tool that wants one is ever put in front of the model.
-        tools.grant(environment.capabilities());
+        tools.grant(environments.capabilities());
         skills.register(new CoreSkills());
         skills.disable(prefs.disabledSkills());
         router.register(new LocalInference(runtime, models));
@@ -647,8 +655,10 @@ public final class AgentEngine {
                 }
 
                 if (!agentManager.canUse(tool)) {
-                    appendObservation(tool, "That tool does not exist. Use one of: "
-                        + agentManager.toolIds(env) + ".");
+                    String elsewhere = environments.elsewhere(tools.definition(tool));
+                    appendObservation(tool, elsewhere.isEmpty()
+                        ? "That tool does not exist. Use one of: " + agentManager.toolIds(env) + "."
+                        : elsewhere);
                     continue;
                 }
 
@@ -1782,8 +1792,12 @@ public final class AgentEngine {
 
     /** Who is running, where, and with what in front of them. */
     private ToolContext toolContext() {
-        return new ToolContext(agentManager.activeId(), "core", workspace, browser, vault, errors,
-            environment.platform());
+        return environments.contextFor(agentManager.activeId(), errors);
+    }
+
+    /** Everywhere work could run, and what is wrong with each. */
+    public JSONArray environmentCatalogue() {
+        return environments.describe();
     }
 
     /** What the UI lists, straight from the definitions. */

@@ -701,3 +701,36 @@ exposes the tally.
 Guarded by `RouterTest` (28 checks): the ordinary case, size, privacy in both
 directions, preferences that can and cannot be honoured, cooldown and recovery,
 last-resort use of a failing provider, and a reason on every single decision.
+
+---
+
+## 15. Phase 9 — delivered
+
+`EnvironmentRegistry`: everywhere a tool could run, with the phone as the first
+entry rather than the only kind.
+
+A laptop on the network, a VPS over SSH and a Docker container are all the same
+shape of thing — a platform name, a set of capabilities, somewhere to put files,
+maybe a browser, somewhere secrets live. `DeclaredEnvironment` is one that has
+been *described* but not reached: it answers `available() == false` and gives a
+sentence saying so.
+
+That honesty is the feature. The registry plans around a machine that could run
+a shell without anything pretending a shell has run:
+
+- `activate(id)` refuses an environment that is not reachable — an agent
+  stranded somewhere absent cannot even tell you why;
+- `where(tool)` finds an environment whose platform and capabilities suit the
+  tool;
+- `elsewhere(tool)` produces *"shell_exec cannot run on this phone, but The
+  build box could do it"* — but only when the box is actually connected, so
+  Luna never dangles a machine that is offline.
+
+`ToolContext` is now built by the registry from the active environment, and the
+tool registry is granted **the active environment's** capabilities rather than
+the phone's directly. The day a transport exists, `AndroidExecution` stops being
+the only implementation and nothing above it changes.
+
+`Prefs.declaredEnvironments` stores the machines a person has added.
+
+Guarded by `EnvironmentTest` (25 checks).
