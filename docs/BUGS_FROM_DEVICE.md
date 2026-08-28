@@ -47,3 +47,59 @@ labelled "Last run", cleared when a new job starts, and given in words a second)
 
 Still open: 7 (imported model duplicating the catalogue entry), 8 (titles
 truncating mid-word in Your own files).
+
+---
+
+## Second device run — 28 August, 00:51 ("hi")
+
+Eighteen findings, in the order they hurt. All eighteen are addressed by the
+"self-healing pipeline" change described under each one.
+
+1. **A held tool showed no approval card.** The row said "Opening a page —
+   waiting on you" and nothing asked anything. The job could only end in Stop.
+   The whole approval chain was read end to end and every link was correct, so
+   the event was lost in transit. Fixed by redundancy rather than repair: the
+   question is now announced on three channels — the `approval` event, a copy
+   carried on the held step row, and a `pendingPrompt` key in the snapshot —
+   plus a re-emit every two seconds while it is still unanswered. Any one of
+   the three draws the card.
+2. **The header, the row and the working line disagreed.** There is now one
+   status line: the trace header. The working line is deleted.
+3. **The clock counted the time you spent deciding.** Waiting is banked
+   separately and subtracted; `run_done` carries `workMs`.
+4. **"Thought for 58.9s" was false and over-precise.** It uses `workMs` and
+   whole seconds.
+5. **"Opened a page" in the past tense beside a cross.** Refused steps now read
+   "Did not open a page".
+6. **"not allowed" was ambiguous.** Three different sentences: "you skipped
+   this one", "your rules say never for this", "over the limit for one job".
+7. **"Stopped." was one word above the trace.** It reads "I stopped there." and
+   the trace is rendered above the answer, where the record belongs.
+8. **"hi" loaded the model and called `open_page` with no folder.** The prompt
+   now opens with the rule that most messages need no tool, and file tools are
+   omitted entirely when no folder is granted — and refused before approval if
+   one is somehow called.
+9. **"Loaded the model" was a step.** Hidden once it succeeds; still shown when
+   it fails.
+10. **Two Stop buttons.** One, in the trace header.
+11. **"Thinking" twice.** Once.
+12. **The header was fainter than the rows.** Same weight, mark leading.
+13. **The rail overshot the last row.** It measures the rows.
+14. **The detail column was stranded at the right edge.** It is a second line
+    under the label.
+15. **The thread was top-aligned in a void.** Bottom-anchored.
+16. **No Carry on after a stop.** Pressing Stop is remembered on the Dart side
+    as well as in the engine's note, so the way back in cannot be lost.
+17. **The paperclip.** It picks a real file from the granted folder.
+18. **Two Luna marks.** The screen header no longer carries one; the trace
+    header does.
+
+### Smoothing done at the same time
+
+- Every tool call runs under a 90-second watchdog on its own thread. A timeout
+  is a step that says "took too long and was dropped" plus an instruction to
+  try a smaller piece, not a hung job.
+- Every wait polls in 500 ms hops, so Stop is instant.
+- A reply that is malformed JSON earns exactly one correction, then is answered
+  plainly. It is never printed at you as though it were the answer.
+- Token events are coalesced into one repaint every 60 ms.

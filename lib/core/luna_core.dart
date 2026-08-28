@@ -77,20 +77,32 @@ class LunaCore extends ChangeNotifier {
   DateTime? _gateSince;
   int _gateMillis = 0;
 
-  bool get waitingOnYou => pendingApproval != null || pendingQuestion != null;
+  /// Parked on a person. True if the card is up — and also true if a step
+  /// says it is being held, so a lost event can never make waiting look like
+  /// working.
+  bool get waitingOnYou =>
+      pendingApproval != null ||
+      pendingQuestion != null ||
+      steps.any((Map<String, String> step) => step['state'] == 'held');
 
   /// A job that was stopped, cut short by a limit, or killed with the app can
   /// be picked up. Everything it already did is in the transcript.
+  /// Set the moment you press Stop, cleared the moment you ask for anything
+  /// else. The engine's own note is authoritative when it survives the round
+  /// trip; this is here so a lost note cannot lose you the way back in.
+  bool _stoppedByYou = false;
+
   bool get canCarryOn {
     if (running || messages.isEmpty) return false;
     final Map<String, dynamic> last = messages.last;
     if (last['role'] != 'assistant') return false;
     final String meta = '${last['meta'] ?? ''}';
-    return meta == 'stopped' || meta == 'interrupted';
+    return meta == 'stopped' || meta == 'interrupted' || _stoppedByYou;
   }
 
   Future<void> carryOn() async {
     if (running) return;
+    _stoppedByYou = false;
     running = true;
     thinking = true;
     notifyListeners();
@@ -216,6 +228,21 @@ class LunaCore extends ChangeNotifier {
     chats = _decodeList(snapshot['chats'] as String?);
     activeChatId = (snapshot['activeChatId'] as String?) ?? '';
     errorCount = (snapshot['errorCount'] as int?) ?? 0;
+    final String prompt = (snapshot['pendingPrompt'] as String?) ?? '';
+    if (prompt.isEmpty) {
+      if (!running) {
+        pendingApproval = null;
+        pendingQuestion = null;
+      }
+    } else {
+      final Map<String, dynamic> live = jsonDecode(prompt) as Map<String, dynamic>;
+      if (live['question'] != null) {
+        pendingQuestion = live;
+      } else {
+        pendingApproval = live;
+      }
+      _openGate();
+    }
   }
 
   Future<void> refresh() async {
@@ -276,6 +303,22 @@ class LunaCore extends ChangeNotifier {
       case 'step':
         final String tool = (event['tool'] as String?) ?? '';
         final String state = (event['state'] as String?) ?? '';
+        if (state == 'held') {
+          _openGate();
+          thinking = false;
+          final bool isQuestion = event['question'] != null;
+          if (isQuestion && pendingQuestion == null) {
+            pendingQuestion = event;
+          } else if (!isQuestion && pendingApproval == null) {
+            if (event['headline'] != null) {
+              // The approval event went missing. The row carried a copy.
+              pendingApproval = event;
+            } else {
+              // Neither arrived intact: ask the engine what it is waiting on.
+              unawaited(refresh());
+            }
+          }
+        }
         final int existing = steps.indexWhere((Map<String, String> step) =>
             step['tool'] == tool && step['path'] == (event['path'] as String? ?? ''));
         if (existing >= 0) {
@@ -336,13 +379,24 @@ class LunaCore extends ChangeNotifier {
         sharedFile = (event['name'] as String?) ?? '';
         unawaited(refresh());
         break;
+      case 'prompt_cleared':
+        _closeGate();
+        pendingApproval = null;
+        pendingQuestion = null;
+        for (final Map<String, String> step in steps) {
+          if (step['state'] == 'held') step['state'] = 'running';
+        }
+        break;
       case 'run_done':
         // Nothing is left spinning. A step that never resolved says so.
         for (final Map<String, String> step in steps) {
           if (step['state'] == 'running') step['state'] = 'unfinished';
         }
         _closeGate();
-        runElapsed = workElapsed;
+        final num? workMs = event['workMs'] as num?;
+        runElapsed = workMs == null
+            ? workElapsed
+            : Duration(milliseconds: workMs.toInt());
         running = false;
         thinking = false;
         streaming = '';
@@ -353,7 +407,33 @@ class LunaCore extends ChangeNotifier {
       default:
         break;
     }
-    notifyListeners();
+    // Tokens arrive faster than a screen can usefully redraw. Coalescing them
+    // into one rebuild every 60ms is the difference between a smooth line of
+    // text and a stutter; every other event still lands immediately.
+    if (type == 'token') {
+      _notifySoon();
+    } else {
+      _coalesce?.cancel();
+      _coalesce = null;
+      notifyListeners();
+    }
+  }
+
+  Timer? _coalesce;
+
+  @override
+  void dispose() {
+    _coalesce?.cancel();
+    _coalesce = null;
+    super.dispose();
+  }
+
+  void _notifySoon() {
+    if (_coalesce != null) return;
+    _coalesce = Timer(const Duration(milliseconds: 60), () {
+      _coalesce = null;
+      notifyListeners();
+    });
   }
 
   Future<void> _reloadMessages() async {
@@ -366,6 +446,7 @@ class LunaCore extends ChangeNotifier {
 
   Future<void> send(String text) async {
     if (text.trim().isEmpty || running) return;
+    _stoppedByYou = false;
     messages = List<Map<String, dynamic>>.from(messages)
       ..add(<String, dynamic>{
         'role': 'user',
@@ -378,7 +459,10 @@ class LunaCore extends ChangeNotifier {
     await _channel.invokeMethod<void>('sendMessage', <String, dynamic>{'text': text.trim()});
   }
 
-  Future<void> stop() => _invoke('stopAgent');
+  Future<void> stop() {
+    _stoppedByYou = true;
+    return _invoke('stopAgent');
+  }
 
   Future<void> approve(String id, bool approved) async {
     _closeGate();
@@ -430,6 +514,7 @@ class LunaCore extends ChangeNotifier {
 
   Future<void> startNewChat() async {
     await _channel.invokeMethod<String>('newChat');
+    _stoppedByYou = false;
     messages = <Map<String, dynamic>>[];
     steps = <Map<String, String>>[];
     streaming = '';
@@ -438,6 +523,7 @@ class LunaCore extends ChangeNotifier {
 
   Future<void> newChat() async {
     await _invoke('clearChat');
+    _stoppedByYou = false;
     messages = <Map<String, dynamic>>[];
     steps = <Map<String, String>>[];
     streaming = '';

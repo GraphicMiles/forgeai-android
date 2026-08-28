@@ -483,6 +483,9 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         out.put("downloadState", prefs.downloadState().toString());
         out.put("errorCount", errors.entries().length());
         out.put("chats", agent.chatIndex().toString());
+        // Whatever Luna is waiting on, in the snapshot as well as the stream.
+        org.json.JSONObject prompt = agent.pendingPrompt();
+        out.put("pendingPrompt", prompt == null ? "" : prompt.toString());
         out.put("activeChatId", agent.activeChatId());
         JSONObject backup = workspace.lastBackup();
         out.put("lastBackup", backup == null ? null : backup.toString());
