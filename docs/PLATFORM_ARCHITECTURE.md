@@ -734,3 +734,89 @@ the only implementation and nothing above it changes.
 `Prefs.declaredEnvironments` stores the machines a person has added.
 
 Guarded by `EnvironmentTest` (25 checks).
+
+---
+
+## 16. Phase 10 — delivered
+
+Sub-agents: handing a piece of work to a narrower agent, under the same budget.
+
+This is the feature most likely to eat a battery, a cloud bill and a person's
+trust at once, so most of `SubAgentSpawner` is refusals. A spawn survives six
+questions before anything runs:
+
+1. does the child exist;
+2. is spawning allowed here at all (`agent.spawn`, from the environment);
+3. is there depth left — a child of a child of a child is a runaway;
+4. is this a loop — an agent spawning itself, or **any ancestor above it**;
+5. is there budget left to give away;
+6. does the child stay inside the parent's tools.
+
+Number six is the security one. Without it a locked-down agent could reach
+anything by asking a wider one to fetch it, which is how privilege escalation
+reads in every system that has ever had it. A narrow agent asking for Luna
+herself is told: *"Luna wants every tool, which Narrow does not have to give."*
+
+### Budgets as a value
+
+`AgentBudget` is what `RunGuards` was hiding: steps, seconds, cloud calls and
+depth, as something that can be handed down. It only ever narrows —
+`forChild` gives a **third** of what is left and one level less depth, because
+the parent still has to finish the job and tell somebody about it. A child's own
+`maxSteps` narrows it further; nothing widens it.
+
+`AgentResult` carries the summary the parent can put in its own answer, what the
+child actually spent, and the refusal when there is one. A child that throws is
+a failed child, not a failed run; a child that returns nothing is refused rather
+than believed.
+
+### What a child can do today
+
+It gets its own system prompt — its skills, its narrowed tool list, its own
+recalled memories — and one model call. It cannot run tools yet: the chat loop
+is still the only thing that can, and giving a child a second copy of that loop
+before it is extracted would mean two loops disagreeing about what a run has
+already spent. The seam (`SubAgentSpawner.Runner`) is where the extracted loop
+will go.
+
+Workflows reach this through the `sub_agent` node, which now spawns for real.
+
+Guarded by `SubAgentTest` (43 checks).
+
+---
+
+## 17. Where the platform stands
+
+| Phase | State |
+| --- | --- |
+| 1 — contracts | delivered |
+| 2 — tool registry, built-ins as plugins | delivered |
+| 3 — skills | delivered |
+| 4 — agents, Luna as one of them | delivered |
+| 5 — plugins, declarative and signed | delivered |
+| 6 — workflows | delivered |
+| 7 — memory | delivered |
+| 8 — inference router | delivered |
+| 9 — environments | delivered |
+| 10 — sub-agents | delivered |
+| 11 — registry / marketplace | **not started, deliberately** |
+
+Phase 11 stays where the plan put it: last, and after everything above has been
+used in anger. Nothing about a marketplace is hard except deciding what is worth
+publishing, and that answer comes from living with the parts, not from building
+a shop for them.
+
+**The suite: 563 checks across 12 files, all passing on a plain JVM in about
+four seconds.**
+
+### Still hardcoded, and honest about it
+
+- The chat turn loop is a method rather than a runnable object, which is why a
+  sub-agent can think but not act.
+- `Prefs` is still one store with eleven domains in it.
+- `LunaBridge` is still the only door between Dart and Java.
+- Environments other than the phone are declared, never reached: there is no
+  transport yet.
+- `ToolPolicy` remains a decision function rather than the capability-based
+  policy engine the plan describes; the capabilities exist, the engine that
+  reasons over them does not.
