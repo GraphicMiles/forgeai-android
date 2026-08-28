@@ -608,8 +608,10 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         out.put("cloudProviders", prefs.cloudProviders(vault).toString());
         out.put("running", agent.isRunning());
         out.put("hasToken", vault.has("github"));
-        out.put("readOnlyTools", new ArrayList<>(ToolPolicy.READ_ONLY));
-        out.put("mutatingTools", new ArrayList<>(ToolPolicy.MUTATING));
+        // From the registry, so an installed plugin's tools show up here
+        // without anybody editing a list.
+        out.put("readOnlyTools", new ArrayList<>(agent.toolIds(false)));
+        out.put("mutatingTools", new ArrayList<>(agent.toolIds(true)));
         out.put("maxFileBytes", WorkspaceStore.MAX_BYTES);
         out.put("wifiOnly", prefs.wifiOnly());
         out.put("batteryGuard", prefs.batteryGuard());

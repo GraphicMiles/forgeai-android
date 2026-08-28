@@ -1,9 +1,12 @@
 package ai.luna.app;
 
+import ai.luna.builtin.Builtins;
 import ai.luna.contracts.Capability;
 import ai.luna.contracts.RiskLevel;
 import ai.luna.contracts.ToolDefinition;
+import ai.luna.contracts.ToolProvider;
 import ai.luna.contracts.ToolResult;
+import ai.luna.runtime.ToolRegistry;
 
 import org.json.JSONObject;
 
@@ -72,14 +75,22 @@ public final class ContractsTest {
     // --- definitions ----------------------------------------------------------
 
     private static void definitions() {
-        BuiltinTools tools = new BuiltinTools();
-        List<ToolDefinition> all = tools.definitions();
-        check("the built-ins are all described", all.size() == BuiltinTools.ids().size());
-        check("every one is credited to core", everyOneOwnedBy(all, "core"));
+        ToolRegistry tools = builtins();
+        List<ToolDefinition> all = tools.all();
+        check("the built-ins are all described", all.size() == Builtins.ids().size());
+        check("every one is credited to a core provider", everyOneOwnedByCore(all));
         check("every one declares a capability or is respond", everyOneDeclares(all));
         check("every declared capability is real", everyCapabilityIsReal(all));
-        check("the provider owns read_file", tools.owns("read_file"));
-        check("the provider does not own a stranger", !tools.owns("deploy.vercel"));
+        check("the registry knows read_file", tools.has("read_file"));
+        check("the registry does not know a stranger", !tools.has("deploy.vercel"));
+        check("files belong to the filesystem provider",
+            tools.ownerOf("read_file").equals("core.filesystem"));
+        check("pages belong to the browser provider",
+            tools.ownerOf("open_page").equals("core.browser"));
+        check("github is its own provider",
+            tools.ownerOf("github_file").equals("core.github"));
+        check("asking a person belongs to the user provider",
+            tools.ownerOf("ask_user").equals("core.user"));
 
         ToolDefinition read = tools.definition("read_file");
         check("read_file needs a workspace", read.requires.contains("workspace"));
@@ -97,20 +108,29 @@ public final class ContractsTest {
         check("asking a person may take ten minutes", ask.timeoutMs == 600000L);
 
         check("a built-in has a dotted platform name",
-            BuiltinTools.canonical("read_file").equals("filesystem.read"));
+            Builtins.canonical("read_file").equals("filesystem.read"));
         check("an unknown id is left alone",
-            BuiltinTools.canonical("acme.deploy").equals("acme.deploy"));
+            Builtins.canonical("acme.deploy").equals("acme.deploy"));
         check("every built-in has a canonical name", everyOneIsRenamed());
         check("the canonical names are unique", canonicalNamesAreUnique());
     }
 
-    private static boolean everyOneOwnedBy(List<ToolDefinition> all, String owner) {
+    /** Every built-in provider is called core.something. */
+    private static boolean everyOneOwnedByCore(List<ToolDefinition> all) {
         for (ToolDefinition definition : all) {
-            if (!owner.equals(definition.providerId)) {
+            if (!definition.providerId.startsWith("core.")) {
                 return false;
             }
         }
         return true;
+    }
+
+    static ToolRegistry builtins() {
+        ToolRegistry registry = new ToolRegistry();
+        for (ToolProvider provider : Builtins.all()) {
+            registry.register(provider);
+        }
+        return registry;
     }
 
     private static boolean everyOneDeclares(List<ToolDefinition> all) {
@@ -134,8 +154,8 @@ public final class ContractsTest {
     }
 
     private static boolean everyOneIsRenamed() {
-        for (String id : BuiltinTools.ids()) {
-            String canonical = BuiltinTools.canonical(id);
+        for (String id : Builtins.ids()) {
+            String canonical = Builtins.canonical(id);
             if (canonical.equals(id) || canonical.indexOf('.') < 0) {
                 return false;
             }
@@ -145,8 +165,8 @@ public final class ContractsTest {
 
     private static boolean canonicalNamesAreUnique() {
         Set<String> seen = new HashSet<>();
-        for (String id : BuiltinTools.ids()) {
-            if (!seen.add(BuiltinTools.canonical(id))) {
+        for (String id : Builtins.ids()) {
+            if (!seen.add(Builtins.canonical(id))) {
                 return false;
             }
         }
@@ -161,9 +181,9 @@ public final class ContractsTest {
      * person tapping Allow.
      */
     private static void agreementWithPolicy() {
-        BuiltinTools tools = new BuiltinTools();
+        ToolRegistry tools = builtins();
         boolean agreed = true;
-        for (ToolDefinition definition : tools.definitions()) {
+        for (ToolDefinition definition : tools.all()) {
             if (definition.mutating() != ToolPolicy.isMutating(definition.id)) {
                 agreed = false;
                 System.out.println("  disagreement on " + definition.id);
@@ -172,7 +192,7 @@ public final class ContractsTest {
         check("risk and the permission gate agree on every tool", agreed);
 
         boolean folders = true;
-        for (ToolDefinition definition : tools.definitions()) {
+        for (ToolDefinition definition : tools.all()) {
             if (definition.requires.contains("workspace") != ToolPolicy.needsFolder(definition.id)) {
                 folders = false;
                 System.out.println("  folder disagreement on " + definition.id);
@@ -181,21 +201,21 @@ public final class ContractsTest {
         check("the folder requirement agrees too", folders);
 
         boolean known = true;
-        for (ToolDefinition definition : tools.definitions()) {
+        for (ToolDefinition definition : tools.all()) {
             if (!ToolPolicy.isKnown(definition.id)) {
                 known = false;
             }
         }
         check("every described tool is one the engine knows", known);
         check("every tool the engine knows is described",
-            tools.definitions().size()
+            tools.all().size()
                 == ToolPolicy.READ_ONLY.size() + ToolPolicy.MUTATING.size());
     }
 
     // --- data in, data out ----------------------------------------------------
 
     private static void serialisation() {
-        BuiltinTools tools = new BuiltinTools();
+        ToolRegistry tools = builtins();
         try {
             JSONObject json = tools.definition("write_file").toJson();
             check("the id survives json", json.optString("id").equals("write_file"));

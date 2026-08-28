@@ -1,5 +1,12 @@
 package ai.luna.app;
 
+import ai.luna.builtin.Builtins;
+import ai.luna.contracts.ToolContext;
+import ai.luna.contracts.ToolDefinition;
+import ai.luna.contracts.ToolProvider;
+import ai.luna.contracts.ToolResult;
+import ai.luna.runtime.ToolRegistry;
+
 import android.content.Context;
 
 import org.json.JSONArray;
@@ -51,6 +58,12 @@ public final class AgentEngine {
     private final CredentialVault vault;
     private final ErrorLog errors;
     private final HeadlessBrowser browser;
+
+    /** Everything this runtime can do. Asked, never assumed. */
+    private final ToolRegistry tools = new ToolRegistry();
+
+    /** Where those tools run. Today the phone; the interface says "today". */
+    private final AndroidExecution environment;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -110,6 +123,13 @@ public final class AgentEngine {
         this.errors = errors;
         this.browser = browser;
         this.events = events;
+        this.environment = new AndroidExecution(workspace, browser, vault);
+        for (ToolProvider provider : Builtins.all()) {
+            tools.register(provider);
+        }
+        // The environment decides what is even offerable here: no shell on a
+        // phone, so no tool that wants one is ever put in front of the model.
+        tools.grant(environment.capabilities());
         this.chatId = prefs.activeChatId();
         if (this.chatId.isEmpty()) {
             this.chatId = "chat-" + System.currentTimeMillis();
@@ -463,7 +483,7 @@ public final class AgentEngine {
         long started = System.currentTimeMillis();
         RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
         guards.begin();
-        Tools.Env env = new Tools.Env(workspace, browser, vault, errors);
+        ToolContext env = toolContext();
         emit("run_started", new JSONObject());
 
         try {
@@ -553,9 +573,9 @@ public final class AgentEngine {
                     break;
                 }
 
-                if (!ToolPolicy.isKnown(tool)) {
+                if (!tools.has(tool)) {
                     appendObservation(tool, "That tool does not exist. Use one of: "
-                        + ToolPolicy.READ_ONLY + " " + ToolPolicy.MUTATING);
+                        + tools.availableIds(env) + ".");
                     continue;
                 }
 
@@ -573,9 +593,9 @@ public final class AgentEngine {
                 }
 
                 String path = args.optString("path", args.optString("url", ""));
-                boolean mutating = ToolPolicy.isMutating(tool);
+                boolean mutating = tools.mutating(tool);
 
-                if (ToolPolicy.needsFolder(tool) && !workspace.hasRoot()) {
+                if (tools.needsFolder(tool) && !workspace.hasRoot()) {
                     // Asking the person to approve something that cannot work
                     // is a way of blaming them for it.
                     emitStep(tool, path, "no_folder");
@@ -627,15 +647,16 @@ public final class AgentEngine {
                 }
 
                 emitStep(tool, path, "running");
-                String observation = runToolWithWatchdog(env, tool, args);
-                if (observation == null) {
+                ToolResult result = tools.run(env, tool, args, watchdog());
+                if (result.timedOut) {
                     emitStep(tool, path, "unfinished");
-                    appendObservation(tool, "That took longer than a minute and a half, so it was "
-                        + "abandoned. Try a smaller piece of the same job, or a different way in.");
+                    appendObservation(tool, result.observation
+                        + " Try a smaller piece of the same job, or a different way in.");
                     continue;
                 }
+                String observation = result.observation;
                 guards.record(tool, args, observation);
-                emitStep(tool, path, "done");
+                emitStep(tool, path, result.ok ? "done" : "failed");
                 appendObservation(tool, observation);
             }
 
@@ -1068,22 +1089,14 @@ public final class AgentEngine {
         out.append("Reach for a tool only when the answer depends on something on this device or on ");
         out.append("the web, and then take the smallest step that gets it.\n\n");
 
+        // The list is asked for, not written here. A tool whose folder or
+        // browser is missing never appears, and a tool that arrives with a
+        // plugin appears without this file being touched.
         out.append("To use a tool, reply with one JSON object and nothing else:\n");
-        if (folder) {
-            out.append("{\"tool\":\"list_files\",\"args\":{\"path\":\"\"}}\n");
-            out.append("{\"tool\":\"read_file\",\"args\":{\"path\":\"notes.md\"}}\n");
-            out.append("{\"tool\":\"search_code\",\"args\":{\"query\":\"TODO\"}}\n");
-            out.append("{\"tool\":\"write_file\",\"args\":{\"path\":\"notes.md\",\"content\":\"...\"}}\n");
-            out.append("{\"tool\":\"create_file\",\"args\":{\"path\":\"a.txt\"}}\n");
-            out.append("{\"tool\":\"create_folder\",\"args\":{\"path\":\"notes\"}}\n");
-            out.append("{\"tool\":\"delete_file\",\"args\":{\"path\":\"old.txt\"}}\n");
-            out.append("{\"tool\":\"rename_file\",\"args\":{\"path\":\"a.txt\",\"newName\":\"b.txt\"}}\n");
+        for (String line : tools.promptLines(toolContext())) {
+            out.append(line).append('\n');
         }
-        out.append("{\"tool\":\"open_page\",\"args\":{\"url\":\"example.com/page\"}}\n");
-        out.append("{\"tool\":\"read_page\",\"args\":{}}\n");
-        out.append("{\"tool\":\"github_file\",\"args\":{\"repo\":\"owner/name\",\"path\":\"README.md\"}}\n");
-        out.append("{\"tool\":\"ask_user\",\"args\":{\"question\":\"Which folder did you mean?\"}}\n");
-        out.append("{\"tool\":\"respond\",\"args\":{\"text\":\"...\"}}  — or just write the sentences.\n\n");
+        out.append("For respond you can also just write the sentences.\n\n");
 
         if (!folder) {
             // A tool that cannot work is worse than a tool that does not exist:
@@ -1308,28 +1321,51 @@ public final class AgentEngine {
      * system call that blocks cannot freeze the turn — the loop takes the
      * timeout as a failed step and carries on with what it knows.
      */
-    private String runToolWithWatchdog(final Tools.Env env, final String tool, final JSONObject args) {
-        java.util.concurrent.Future<String> pending = toolRunner.submit(
-            new java.util.concurrent.Callable<String>() {
-                @Override
-                public String call() {
-                    return Tools.run(env, tool, args);
+    private ToolRegistry.Watchdog watchdog() {
+        return new ToolRegistry.Watchdog() {
+            @Override
+            public ToolResult call(final ToolRegistry.Job job, long timeoutMs) {
+                java.util.concurrent.Future<ToolResult> pending = toolRunner.submit(
+                    new java.util.concurrent.Callable<ToolResult>() {
+                        @Override
+                        public ToolResult call() {
+                            return job.run();
+                        }
+                    });
+                try {
+                    return pending.get(timeoutMs <= 0 ? TOOL_TIMEOUT_MS : timeoutMs,
+                        TimeUnit.MILLISECONDS);
+                } catch (java.util.concurrent.TimeoutException timeout) {
+                    pending.cancel(true);
+                    errors.record("tool", "timed out after " + timeoutMs + "ms");
+                    return null;
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    pending.cancel(true);
+                    return null;
+                } catch (java.util.concurrent.ExecutionException failure) {
+                    errors.record("tool", String.valueOf(failure.getCause()));
+                    return ToolResult.failed(
+                        ReadableText.clean(String.valueOf(failure.getCause()), 160));
                 }
-            });
-        try {
-            return pending.get(TOOL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (java.util.concurrent.TimeoutException timeout) {
-            pending.cancel(true);
-            errors.record("tool:" + tool, timeout);
-            return null;
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            pending.cancel(true);
-            return null;
-        } catch (java.util.concurrent.ExecutionException failure) {
-            errors.record("tool:" + tool, failure);
-            return "That did not work: " + ReadableText.clean(String.valueOf(failure.getCause()), 160);
-        }
+            }
+        };
+    }
+
+    /** Who is running, where, and with what in front of them. */
+    private ToolContext toolContext() {
+        return new ToolContext("luna", "core", workspace, browser, vault, errors,
+            environment.platform());
+    }
+
+    /** What the UI lists, straight from the definitions. */
+    public java.util.List<String> toolIds(boolean mutating) {
+        return tools.idsByRisk(mutating);
+    }
+
+    /** Every tool the runtime can reach, as data. */
+    public JSONArray toolCatalogue() {
+        return tools.describe();
     }
 
     /** The live question, for a UI that has just woken up or missed an event. */

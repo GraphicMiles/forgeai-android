@@ -508,6 +508,7 @@ class _ChatScreenState extends State<ChatScreen> {
           state == 'blocked' ||
           state == 'no_folder' ||
           state == 'invented' ||
+          state == 'failed' ||
           state == 'unfinished';
       final String name = path.isEmpty ? '' : path.split('/').last;
       final Map<String, String> reasons = <String, String>{
@@ -518,6 +519,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'no_folder': 'there is no folder to work in',
         'invented': 'that address is not a real site',
         'unfinished': 'took too long and was dropped',
+        'failed': 'it did not work',
       };
       final String detail = state == 'denied'
           ? (tool == 'load_model' ? 'the model would not load' : 'not allowed')

@@ -193,7 +193,7 @@ class TraceStep {
 
   final String label;
 
-  /// running, held, done, replayed, blocked, declined, unfinished.
+  /// running, held, done, replayed, blocked, declined, failed, unfinished.
   final String state;
   final String detail;
 
@@ -204,6 +204,7 @@ class TraceStep {
       state == 'blocked' ||
       state == 'no_folder' ||
       state == 'invented' ||
+      state == 'failed' ||
       state == 'unfinished';
   bool get isRunning => state == 'running';
   bool get isHeld => state == 'held';
