@@ -700,6 +700,33 @@ class LunaCore extends ChangeNotifier {
     await refresh();
   }
 
+  /// One real request to the model, right now. Empty when it answers,
+  /// otherwise the provider's reason. A model is never saved on the strength
+  /// of appearing in a list: being listed and being usable are different
+  /// facts, and only the second one matters at three in the morning.
+  Future<String> probeModel({
+    String id = '',
+    String baseUrl = '',
+    String apiKey = '',
+    String model = '',
+    String kind = 'openai',
+    String authStyle = '',
+    String authName = '',
+    Map<String, String> headers = const <String, String>{},
+  }) async {
+    final String? raw = await _channel.invokeMethod<String>('probeModel', <String, dynamic>{
+      'id': id,
+      'baseUrl': baseUrl,
+      'apiKey': apiKey,
+      'model': model,
+      'kind': kind,
+      'authStyle': authStyle,
+      'authName': authName,
+      'headers': headers,
+    });
+    return raw ?? '';
+  }
+
   /// Why this address cannot be used, or null when it can. Answered by the
   /// same rule the engine applies, so the sheet and the run never disagree.
   Future<String?> checkEndpoint(String baseUrl) async {

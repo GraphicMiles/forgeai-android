@@ -362,6 +362,8 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 return EndpointPolicy.reason(argString(call, "baseUrl"));
             case "providerModels":
                 return providerModels(call);
+            case "probeModel":
+                return probeModel(call);
             case "exportChat":
                 return agent.exportChat();
             case "exportSettings":
@@ -394,23 +396,28 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
      * Ask a provider what it serves. This is the fix for a list baked into the
      * app: a model that has been retired stops appearing here.
      */
-    private String providerModels(MethodCall call) throws Exception {
+    /**
+     * The provider a call is talking about: what is on screen, filled in from
+     * what was saved. What is on screen wins — someone editing a provider is
+     * asking "does this new key work", not "does the old one still work".
+     */
+    private CloudProvider.Config configFrom(MethodCall call) throws Exception {
         String id = argString(call, "id");
         String baseUrl = argString(call, "baseUrl");
         String key = argString(call, "apiKey");
         String kind = argString(call, "kind");
         String authStyle = argString(call, "authStyle");
         String authName = argString(call, "authName");
+        String model = argString(call, "model");
         JSONObject headers = headersOf(call);
         if (!id.isEmpty()) {
             JSONObject saved = prefs.cloudProvider(id);
             if (saved != null) {
-                // What is on screen wins. Someone editing a provider is asking
-                // "does this new key work", not "does the old one still work".
                 baseUrl = firstOf(baseUrl, saved.optString("baseUrl"));
                 kind = firstOf(kind, saved.optString("kind"));
                 authStyle = firstOf(authStyle, saved.optString("authStyle"));
                 authName = firstOf(authName, saved.optString("authName"));
+                model = firstOf(model, saved.optString("model"));
                 if (headers.length() == 0 && saved.optJSONObject("headers") != null) {
                     headers = saved.optJSONObject("headers");
                 }
@@ -419,14 +426,33 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 }
             }
         }
+        return new CloudProvider.Config(kind, baseUrl, key, model, authStyle, authName, headers);
+    }
+
+    /**
+     * Ask a provider what it serves. This is the fix for a list baked into the
+     * app: a model that has been retired stops appearing here.
+     */
+    private String providerModels(MethodCall call) throws Exception {
         try {
-            JSONArray list = CloudProvider.listModels(new CloudProvider.Config(
-                kind, baseUrl, key, "", authStyle, authName, headers));
-            return list.toString();
+            return CloudProvider.listModels(configFrom(call).withModel("")).toString();
         } catch (Exception error) {
             errors.record("provider models", error);
             throw error;
         }
+    }
+
+    /**
+     * One real request to the model, right now. Empty when it answers,
+     * otherwise the reason it cannot be used — so a model is never saved on the
+     * strength of appearing in a list.
+     */
+    private String probeModel(MethodCall call) throws Exception {
+        String verdict = CloudProvider.probe(configFrom(call));
+        if (verdict != null) {
+            errors.record("provider probe", verdict);
+        }
+        return verdict == null ? "" : verdict;
     }
 
     private static Intent pickFileIntent(String mime) {

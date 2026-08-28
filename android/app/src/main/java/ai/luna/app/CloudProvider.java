@@ -183,63 +183,111 @@ public final class CloudProvider {
             return new Reply("", problem);
         }
         try {
-            if (ANTHROPIC.equals(config.kind)) {
-                return anthropicChat(config, messages, maxTokens, sink, cancellation);
+            Wire wire = wireFor(config, messages, maxTokens, true);
+            if (wire.body.optJSONArray("messages") != null
+                && wire.body.optJSONArray("messages").length() == 0) {
+                return new Reply("", "There was nothing to send.");
             }
-            if (GEMINI.equals(config.kind)) {
-                return geminiChat(config, messages, maxTokens, sink, cancellation);
+            if (wire.body.optJSONArray("contents") != null
+                && wire.body.optJSONArray("contents").length() == 0) {
+                return new Reply("", "There was nothing to send.");
             }
-            return openAiChat(config, messages, maxTokens, sink, cancellation);
+            HttpURLConnection connection = open(config, wire.url, true);
+            return readStream(config, connection, wire.body, sink, cancellation,
+                framesFor(config), wholeFor(config));
         } catch (Exception error) {
             return new Reply("", "Could not reach the provider: " + message(error));
         }
     }
 
-    private static Reply openAiChat(Config config, List<JSONObject> messages, int maxTokens,
-                                    TokenSink sink, Cancellation cancellation) throws Exception {
+    /**
+     * Is this model actually usable by this key, right now?
+     *
+     * <p>Being in the /models list is not the same as being usable: a provider
+     * will happily list a model your key has no entitlement for, and the first
+     * you hear of it is a 404 in the middle of a job. So nothing is saved on
+     * the strength of a listing — one real request is sent, asking for a single
+     * token, and the answer to that is the truth.
+     */
+    public static String probe(Config config) {
+        String problem = config.problem(true);
+        if (problem != null) {
+            return problem;
+        }
+        HttpURLConnection connection = null;
+        try {
+            List<JSONObject> messages = new ArrayList<>();
+            JSONObject hello = new JSONObject();
+            hello.put("role", "user");
+            hello.put("content", "Hi");
+            messages.add(hello);
+
+            Wire wire = wireFor(config, messages, 1, false);
+            connection = open(config, wire.url, true);
+            connection.setReadTimeout(30000);
+            OutputStream output = connection.getOutputStream();
+            try {
+                output.write(wire.body.toString().getBytes(StandardCharsets.UTF_8));
+                output.flush();
+            } finally {
+                WorkspaceStore.closeQuietly(output);
+            }
+            int code = connection.getResponseCode();
+            if (code >= 200 && code < 300) {
+                return null;
+            }
+            return explain(config, code, readAll(connection.getErrorStream()));
+        } catch (Exception error) {
+            return "Could not reach the provider: " + message(error);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    /** Where a request goes and what it carries. Built once, used by both the
+     * real run and the availability probe, so the two can never disagree. */
+    private static final class Wire {
+        final String url;
+        final JSONObject body;
+
+        Wire(String url, JSONObject body) {
+            this.url = url;
+            this.body = body;
+        }
+    }
+
+    private static Wire wireFor(Config config, List<JSONObject> messages, int maxTokens,
+                                boolean stream) throws Exception {
+        if (ANTHROPIC.equals(config.kind)) {
+            return anthropicWire(config, messages, maxTokens, stream);
+        }
+        if (GEMINI.equals(config.kind)) {
+            return geminiWire(config, messages, maxTokens, stream);
+        }
+        return openAiWire(config, messages, maxTokens, stream);
+    }
+
+    private static Wire openAiWire(Config config, List<JSONObject> messages, int maxTokens,
+                                   boolean stream) throws Exception {
         JSONObject body = new JSONObject();
         body.put("model", config.model);
-        body.put("stream", true);
+        body.put("stream", stream);
         body.put("max_tokens", maxTokens);
         JSONArray array = new JSONArray();
         for (JSONObject message : messages) {
             array.put(message);
         }
         body.put("messages", array);
-
-        HttpURLConnection connection = open(config, config.baseUrl + "/chat/completions", true);
-        return readStream(config, connection, body, sink, cancellation, new FrameReader() {
-            @Override
-            public String textOf(JSONObject frame) {
-                JSONArray choices = frame.optJSONArray("choices");
-                if (choices == null || choices.length() == 0) {
-                    return "";
-                }
-                JSONObject choice = choices.optJSONObject(0);
-                if (choice == null) {
-                    return "";
-                }
-                JSONObject delta = choice.optJSONObject("delta");
-                if (delta != null) {
-                    return delta.optString("content", "");
-                }
-                // Some servers stream the non-delta shape.
-                JSONObject whole = choice.optJSONObject("message");
-                return whole == null ? choice.optString("text", "") : whole.optString("content", "");
-            }
-        }, new WholeReader() {
-            @Override
-            public String textOf(JSONObject document) {
-                return firstChoice(document);
-            }
-        });
+        return new Wire(config.baseUrl + "/chat/completions", body);
     }
 
-    private static Reply anthropicChat(Config config, List<JSONObject> messages, int maxTokens,
-                                       TokenSink sink, Cancellation cancellation) throws Exception {
+    private static Wire anthropicWire(Config config, List<JSONObject> messages, int maxTokens,
+                                      boolean stream) throws Exception {
         JSONObject body = new JSONObject();
         body.put("model", config.model);
-        body.put("stream", true);
+        body.put("stream", stream);
         // Anthropic requires it, and will not guess a sensible one for you.
         body.put("max_tokens", maxTokens <= 0 ? 1024 : maxTokens);
 
@@ -266,49 +314,12 @@ public final class CloudProvider {
         if (system.length() > 0) {
             body.put("system", system.toString());
         }
-        if (turns.length() == 0) {
-            // The API rejects an empty conversation; say something rather than
-            // hand back someone else's 400.
-            return new Reply("", "There was nothing to send.");
-        }
         body.put("messages", mergeSameRole(turns));
-
-        HttpURLConnection connection = open(config, config.baseUrl + "/messages", true);
-        return readStream(config, connection, body, sink, cancellation, new FrameReader() {
-            @Override
-            public String textOf(JSONObject frame) {
-                String type = frame.optString("type", "");
-                if (type.equals("content_block_delta")) {
-                    JSONObject delta = frame.optJSONObject("delta");
-                    return delta == null ? "" : delta.optString("text", "");
-                }
-                if (type.equals("content_block_start")) {
-                    JSONObject block = frame.optJSONObject("content_block");
-                    return block == null ? "" : block.optString("text", "");
-                }
-                return "";
-            }
-        }, new WholeReader() {
-            @Override
-            public String textOf(JSONObject document) {
-                JSONArray content = document.optJSONArray("content");
-                if (content == null) {
-                    return "";
-                }
-                StringBuilder out = new StringBuilder();
-                for (int index = 0; index < content.length(); index++) {
-                    JSONObject block = content.optJSONObject(index);
-                    if (block != null) {
-                        out.append(block.optString("text", ""));
-                    }
-                }
-                return out.toString();
-            }
-        });
+        return new Wire(config.baseUrl + "/messages", body);
     }
 
-    private static Reply geminiChat(Config config, List<JSONObject> messages, int maxTokens,
-                                    TokenSink sink, Cancellation cancellation) throws Exception {
+    private static Wire geminiWire(Config config, List<JSONObject> messages, int maxTokens,
+                                   boolean stream) throws Exception {
         JSONObject body = new JSONObject();
         StringBuilder system = new StringBuilder();
         JSONArray contents = new JSONArray();
@@ -330,9 +341,6 @@ public final class CloudProvider {
             turn.put("parts", new JSONArray().put(new JSONObject().put("text", content)));
             contents.put(turn);
         }
-        if (contents.length() == 0) {
-            return new Reply("", "There was nothing to send.");
-        }
         body.put("contents", contents);
         if (system.length() > 0) {
             JSONObject instruction = new JSONObject();
@@ -343,19 +351,96 @@ public final class CloudProvider {
         generation.put("maxOutputTokens", maxTokens <= 0 ? 1024 : maxTokens);
         body.put("generationConfig", generation);
 
-        String url = config.baseUrl + "/models/" + encode(config.model) + ":streamGenerateContent?alt=sse";
-        HttpURLConnection connection = open(config, url, true);
-        return readStream(config, connection, body, sink, cancellation, new FrameReader() {
+        String action = stream ? ":streamGenerateContent?alt=sse" : ":generateContent";
+        return new Wire(config.baseUrl + "/models/" + encode(config.model) + action, body);
+    }
+
+    /** How to read one streamed frame, per shape. */
+    private static FrameReader framesFor(Config config) {
+        if (ANTHROPIC.equals(config.kind)) {
+            return new FrameReader() {
+                @Override
+                public String textOf(JSONObject frame) {
+                    String type = frame.optString("type", "");
+                    if (type.equals("content_block_delta")) {
+                        JSONObject delta = frame.optJSONObject("delta");
+                        return delta == null ? "" : delta.optString("text", "");
+                    }
+                    if (type.equals("content_block_start")) {
+                        JSONObject block = frame.optJSONObject("content_block");
+                        return block == null ? "" : block.optString("text", "");
+                    }
+                    return "";
+                }
+            };
+        }
+        if (GEMINI.equals(config.kind)) {
+            return new FrameReader() {
+                @Override
+                public String textOf(JSONObject frame) {
+                    return geminiText(frame);
+                }
+            };
+        }
+        return new FrameReader() {
             @Override
             public String textOf(JSONObject frame) {
-                return geminiText(frame);
+                JSONArray choices = frame.optJSONArray("choices");
+                if (choices == null || choices.length() == 0) {
+                    return "";
+                }
+                JSONObject choice = choices.optJSONObject(0);
+                if (choice == null) {
+                    return "";
+                }
+                JSONObject delta = choice.optJSONObject("delta");
+                if (delta != null) {
+                    return delta.optString("content", "");
+                }
+                // Some servers stream the non-delta shape.
+                JSONObject whole = choice.optJSONObject("message");
+                return whole == null
+                    ? choice.optString("text", "")
+                    : whole.optString("content", "");
             }
-        }, new WholeReader() {
+        };
+    }
+
+    /** How to read a whole non-streamed document, per shape. */
+    private static WholeReader wholeFor(Config config) {
+        if (ANTHROPIC.equals(config.kind)) {
+            return new WholeReader() {
+                @Override
+                public String textOf(JSONObject document) {
+                    JSONArray content = document.optJSONArray("content");
+                    if (content == null) {
+                        return "";
+                    }
+                    StringBuilder out = new StringBuilder();
+                    for (int index = 0; index < content.length(); index++) {
+                        JSONObject block = content.optJSONObject(index);
+                        if (block != null) {
+                            out.append(block.optString("text", ""));
+                        }
+                    }
+                    return out.toString();
+                }
+            };
+        }
+        if (GEMINI.equals(config.kind)) {
+            return new WholeReader() {
+                @Override
+                public String textOf(JSONObject document) {
+                    return geminiText(document);
+                }
+            };
+        }
+        return new WholeReader() {
             @Override
             public String textOf(JSONObject document) {
-                return geminiText(document);
+                return firstChoice(document);
             }
-        });
+        };
     }
 
     private static String geminiText(JSONObject document) {

@@ -23,9 +23,10 @@ public final class ModelCatalog {
     /** Substrings that mean "this model does not do chat". */
     private static final String[] NOT_CHAT = {
         "whisper", "tts", "speech", "voice", "audio", "transcribe", "realtime",
-        "embed", "embedding", "rerank", "moderation", "guard", "safeguard",
-        "image", "dall-e", "imagen", "veo", "stable-diffusion", "vision-encoder",
-        "sora", "clip", "search-", "-edit",
+        "orpheus", "playai", "canary", "kokoro", "bark", "musicgen",
+        "embed", "embedding", "rerank", "moderation", "guard", "safeguard", "prompt-guard",
+        "image", "dall-e", "imagen", "veo", "stable-diffusion", "sd3", "flux",
+        "vision-encoder", "sora", "clip", "search-", "-edit", "ocr",
     };
 
     private ModelCatalog() {
