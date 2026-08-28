@@ -39,6 +39,16 @@ public final class ToolPolicy {
         return !READ_ONLY_SET.contains(tool);
     }
 
+    /** Tools that need a granted folder to mean anything. */
+    public static final List<String> NEEDS_FOLDER = Arrays.asList(
+        "list_files", "read_file", "search_code", "write_file", "create_file",
+        "create_folder", "delete_file", "rename_file"
+    );
+
+    public static boolean needsFolder(String tool) {
+        return NEEDS_FOLDER.contains(tool);
+    }
+
     /** What a held tool should do this time. */
     public enum Decision { RUN, ASK, REFUSE }
 

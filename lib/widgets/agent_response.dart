@@ -178,61 +178,6 @@ class _PixelLoaderState extends State<PixelLoader> with SingleTickerProviderStat
 
 /// The line that sits under the thread while a run is in flight: what Luna is
 /// doing, how long she has been doing it, and the way out.
-class AgentWorkingLine extends StatelessWidget {
-  const AgentWorkingLine({
-    super.key,
-    required this.label,
-    required this.elapsed,
-    required this.onStop,
-    this.waiting = false,
-  });
-
-  final String label;
-  final Duration elapsed;
-
-  /// Waiting on you is not working. The clock stops and the motion stops with
-  /// it, so a paused run cannot be mistaken for a slow one.
-  final bool waiting;
-  final VoidCallback onStop;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        PixelLoader(size: 11, active: !waiting),
-        const SizedBox(width: 8),
-        Flexible(child: ShimmerLabel(text: label, active: !waiting, size: 12.5, weight: 600)),
-        const SizedBox(width: 8),
-        Text(
-          formatDuration(elapsed),
-          style: LunaTheme.monoStyle(size: 11, color: LunaTheme.ink3),
-        ),
-        const Spacer(),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onStop,
-          child: Semantics(
-            button: true,
-            label: 'Stop the job',
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Glyph(FontAwesomeIcons.stop, size: 9.5, color: LunaTheme.ink3),
-                  const SizedBox(width: 5),
-                  Text('Stop',
-                      style: LunaTheme.text(size: 11.5, weight: 600, color: LunaTheme.ink2)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// One line of the trace.
 class TraceStep {
   const TraceStep({
@@ -243,12 +188,17 @@ class TraceStep {
 
   final String label;
 
-  /// running, held, done, replayed, blocked, denied.
+  /// running, held, done, replayed, blocked, declined, refused, unfinished.
   final String state;
   final String detail;
 
   bool get isDone => state == 'done' || state == 'replayed';
-  bool get isRefused => state == 'denied' || state == 'blocked' || state == 'unfinished';
+  bool get isRefused =>
+      state == 'denied' ||
+      state == 'declined' ||
+      state == 'refused' ||
+      state == 'blocked' ||
+      state == 'unfinished';
   bool get isRunning => state == 'running';
   bool get isHeld => state == 'held';
 }
@@ -265,15 +215,24 @@ class AgentTrace extends StatefulWidget {
     required this.steps,
     required this.running,
     required this.elapsed,
+    this.label = 'Thinking',
     this.waiting = false,
+    this.onStop,
   });
 
   final List<TraceStep> steps;
   final bool running;
   final Duration elapsed;
 
+  /// What is happening right now, in the header. There is no second working
+  /// line anywhere on the screen: one turn states its state once.
+  final String label;
+
   /// Parked on your answer. Not the same as working, and never says so.
   final bool waiting;
+
+  /// Only offered while the run is live, and only here.
+  final VoidCallback? onStop;
 
   @override
   State<AgentTrace> createState() => _AgentTraceState();
@@ -286,56 +245,99 @@ class _AgentTraceState extends State<AgentTrace> {
 
   @override
   Widget build(BuildContext context) {
+    final bool live = widget.running && !widget.waiting;
     final String heading = widget.waiting
         ? 'Waiting on you'
         : widget.running
-            ? 'Thinking'
-            : 'Thought for ${formatDuration(widget.elapsed, precise: true)}';
+            ? widget.label
+            // Whole seconds. A tenth of a second is a precision the number
+            // does not have.
+            : 'Thought for ${formatDuration(widget.elapsed)}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _pinned = !_open),
-          child: Semantics(
-            button: true,
-            label: '$heading, ${widget.steps.length} steps',
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Row(
-                children: <Widget>[
-                  const Mark(size: 14),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: ShimmerLabel(
-                      text: heading,
-                      active: widget.running && !widget.waiting,
-                      size: 12.5,
-                      weight: 600,
+        Row(
+          children: <Widget>[
+            Flexible(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _pinned = !_open),
+                child: Semantics(
+                  button: true,
+                  label: '$heading, ${widget.steps.length} steps',
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Mark(size: 14),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: ShimmerLabel(
+                            text: heading,
+                            active: live,
+                            size: 12.5,
+                            weight: 600,
+                          ),
+                        ),
+                        if (widget.running) ...<Widget>[
+                          const SizedBox(width: 7),
+                          Text(
+                            formatDuration(widget.elapsed),
+                            style: LunaTheme.monoStyle(size: 11, color: LunaTheme.ink3),
+                          ),
+                        ],
+                        const SizedBox(width: 6),
+                        // Always drawn. A control that only appears on hover
+                        // does not exist on a phone.
+                        AnimatedRotation(
+                          turns: _open ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 300),
+                          curve: _ease,
+                          child: Glyph(FontAwesomeIcons.chevronDown,
+                              size: 9, color: LunaTheme.ink3),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  // Always drawn. A control that only appears on hover does
-                  // not exist on a phone.
-                  AnimatedRotation(
-                    turns: _open ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: _ease,
-                    child: Glyph(FontAwesomeIcons.chevronDown,
-                        size: 9, color: LunaTheme.ink3),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+            if (widget.running && widget.onStop != null) ...<Widget>[
+              const Spacer(),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onStop,
+                child: Semantics(
+                  button: true,
+                  label: 'Stop the job',
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Glyph(FontAwesomeIcons.stop, size: 9.5, color: LunaTheme.ink3),
+                        const SizedBox(width: 5),
+                        Text('Stop',
+                            style: LunaTheme.text(
+                                size: 11.5, weight: 600, color: LunaTheme.ink2)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         AnimatedSize(
           duration: const Duration(milliseconds: 400),
           curve: _ease,
           alignment: Alignment.topLeft,
-          child: _open
+          child: _open && widget.steps.isNotEmpty
               ? Padding(
-                  padding: const EdgeInsets.only(left: 6, top: 2),
+                  // The rail starts under the mark and stops with the last
+                  // row: it measures the steps, so it cannot outrun them.
+                  padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2),
                   child: Container(
                     padding: const EdgeInsets.only(left: 10),
                     decoration: BoxDecoration(
@@ -343,6 +345,7 @@ class _AgentTraceState extends State<AgentTrace> {
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
                       children: widget.steps.map(_row).toList(),
                     ),
                   ),
@@ -357,10 +360,11 @@ class _AgentTraceState extends State<AgentTrace> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
             width: 13,
-            height: 16,
+            height: 17,
             child: Center(
               child: step.isRunning
                   ? const PixelLoader(size: 9)
@@ -377,30 +381,35 @@ class _AgentTraceState extends State<AgentTrace> {
           ),
           const SizedBox(width: 7),
           Expanded(
-            child: Text(
-              step.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: LunaTheme.text(
-                size: 12,
-                weight: step.isDone ? 550 : 500,
-                color: step.isDone ? LunaTheme.ink : LunaTheme.ink2,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  step.label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: LunaTheme.text(
+                    size: 12,
+                    weight: step.isDone ? 550 : 500,
+                    color: step.isDone ? LunaTheme.ink : LunaTheme.ink2,
+                  ),
+                ),
+                // Under the label, not stranded at the right edge where it
+                // reads as a separate column of unrelated words.
+                if (step.detail.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text(
+                      step.detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LunaTheme.text(size: 10.5, color: LunaTheme.ink3),
+                    ),
+                  ),
+              ],
             ),
           ),
-          if (step.detail.isNotEmpty) ...<Widget>[
-            const SizedBox(width: 7),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 110),
-              child: Text(
-                step.detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: LunaTheme.text(size: 10.5, color: LunaTheme.ink3),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -516,13 +525,12 @@ class _WordState extends State<_Word> with SingleTickerProviderStateMixin {
 }
 
 /// 11.5s while it matters, 2m 04s when it is long.
-String formatDuration(Duration value, {bool precise = false}) {
+/// Whole seconds under a minute, minutes and seconds above it. Never tenths:
+/// the clock is not accurate to a tenth of a second and should not claim to be.
+String formatDuration(Duration value) {
   final int millis = value.inMilliseconds;
   if (millis < 60000) {
-    final double seconds = millis / 1000;
-    return precise && seconds < 60
-        ? '${seconds.toStringAsFixed(1)}s'
-        : '${seconds.round()}s';
+    return '${(millis / 1000).round()}s';
   }
   final int minutes = millis ~/ 60000;
   final int seconds = (millis % 60000) ~/ 1000;

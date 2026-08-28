@@ -61,10 +61,35 @@ public final class AgentEngine {
     private final BlockingQueue<Boolean> approvals = new ArrayBlockingQueue<>(1);
     private final BlockingQueue<String> answers = new ArrayBlockingQueue<>(1);
 
+    /** Tools run here, so one that hangs cannot take the loop with it. */
+    private final ExecutorService toolRunner = Executors.newSingleThreadExecutor();
+
+    /** How long any one tool gets before it is abandoned. */
+    private static final long TOOL_TIMEOUT_MS = 90_000L;
+
+    /** How often a live prompt is repeated in case the UI missed the first. */
+    private static final long PROMPT_HEARTBEAT_MS = 2_000L;
+
     private final List<JSONObject> transcript = new ArrayList<>();
     private volatile String pendingApprovalId = "";
     private volatile String pendingQuestionId = "";
     private volatile String chatId = "";
+
+    /**
+     * The question on screen right now, approval or otherwise.
+     *
+     * It exists because an event can be missed — the channel is not a queue,
+     * and a UI that was rebuilding when it arrived never sees it. Anything
+     * waiting on a person is therefore said three ways: the event, a repeat
+     * every two seconds, and this, which any snapshot can read. A job that
+     * silently waits for an answer nobody was asked for is the worst failure
+     * this app can have.
+     */
+    private volatile JSONObject livePrompt;
+
+    /** Milliseconds this run spent waiting on the person, not working. */
+    private final java.util.concurrent.atomic.AtomicLong waitedMillis =
+        new java.util.concurrent.atomic.AtomicLong(0L);
 
     public AgentEngine(Context context, Prefs prefs, WorkspaceStore workspace, ModelStore models,
                        OnDeviceRuntime runtime, CredentialVault vault, ErrorLog errors,
@@ -400,8 +425,9 @@ public final class AgentEngine {
         runtime.cancel();
         approvals.offer(Boolean.FALSE);
         answers.offer("");
+        livePrompt = null;
         if (running.getAndSet(false)) {
-            finishWithMessage("Stopped.", "stopped");
+            finishWithMessage("I stopped there.", "stopped");
         }
     }
 
@@ -424,6 +450,8 @@ public final class AgentEngine {
         running.set(true);
         stopRequested.set(false);
         finished.set(false);
+        waitedMillis.set(0L);
+        livePrompt = null;
         long started = System.currentTimeMillis();
         RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
         guards.begin();
@@ -457,9 +485,10 @@ public final class AgentEngine {
             // A run that ends because it hit a limit is a run that can be
             // picked up again, and the chat should offer that.
             boolean cutShort = false;
+            boolean repaired = false;
             while (true) {
                 if (stopRequested.get()) {
-                    finishWithMessage("Stopped.", "stopped");
+                    finishWithMessage("I stopped there.", "stopped");
                     return;
                 }
                 if (guards.elapsedMillis() > (long) prefs.budgetSeconds() * 1000L) {
@@ -476,7 +505,19 @@ public final class AgentEngine {
 
                 JSONObject call = parseToolCall(raw);
                 if (call == null) {
-                    answer = raw.trim();
+                    String trimmed = raw.trim();
+                    // A reply that opens like a tool call but does not parse is
+                    // a broken tool call, not an answer. Printing it would show
+                    // the person half a brace. One correction is offered; a
+                    // second failure is taken as prose so this cannot loop.
+                    if (!repaired && (trimmed.startsWith("{") || trimmed.startsWith("["))) {
+                        repaired = true;
+                        appendObservation("format", "That was not a complete JSON object. "
+                            + "Send exactly one object like {\"tool\":\"read_file\",\"args\":{\"path\":\"notes.md\"}}, "
+                            + "or answer in plain sentences with no JSON at all.");
+                        continue;
+                    }
+                    answer = trimmed;
                     break;
                 }
 
@@ -501,7 +542,7 @@ public final class AgentEngine {
                     String question = args.optString("question", args.optString("text", ""));
                     String reply = askUser(question);
                     if (stopRequested.get()) {
-                        finishWithMessage("Stopped.", "stopped");
+                        finishWithMessage("I stopped there.", "stopped");
                         return;
                     }
                     appendObservation(tool, reply.isEmpty()
@@ -512,6 +553,15 @@ public final class AgentEngine {
 
                 String path = args.optString("path", args.optString("url", ""));
                 boolean mutating = ToolPolicy.isMutating(tool);
+
+                if (ToolPolicy.needsFolder(tool) && !workspace.hasRoot()) {
+                    // Asking the person to approve something that cannot work
+                    // is a way of blaming them for it.
+                    emitStep(tool, path, "blocked");
+                    appendObservation(tool, "No folder is granted, so there is nothing to read or "
+                        + "write. Ask for a folder in one sentence, or answer without files.");
+                    continue;
+                }
 
                 RunGuards.Verdict verdict = guards.check(tool, args, mutating);
                 if (verdict.replay != null) {
@@ -532,7 +582,10 @@ public final class AgentEngine {
 
                 ToolPolicy.Decision decision = ToolPolicy.decide(tool, prefs);
                 if (decision == ToolPolicy.Decision.REFUSE) {
-                    emitStep(tool, path, "denied");
+                    // "refused" is your standing rule; "declined" is this one
+                    // time. The trace says which, because they mean different
+                    // things to the person reading it.
+                    emitStep(tool, path, "refused");
                     appendObservation(tool, "Your rules say never for " + tool
                         + ". It was not run. Do something else, or say what you would have needed.");
                     continue;
@@ -544,7 +597,7 @@ public final class AgentEngine {
                     emitStep(tool, path, "held");
                     boolean approved = requestApproval(tool, path, args.optString("content", ""));
                     if (!approved) {
-                        emitStep(tool, path, "denied");
+                        emitStep(tool, path, "declined");
                         appendObservation(tool, "The user declined this action. Do not retry it; "
                             + "explain what you would have done instead.");
                         continue;
@@ -552,7 +605,13 @@ public final class AgentEngine {
                 }
 
                 emitStep(tool, path, "running");
-                String observation = Tools.run(env, tool, args);
+                String observation = runToolWithWatchdog(env, tool, args);
+                if (observation == null) {
+                    emitStep(tool, path, "unfinished");
+                    appendObservation(tool, "That took longer than a minute and a half, so it was "
+                        + "abandoned. Try a smaller piece of the same job, or a different way in.");
+                    continue;
+                }
                 guards.record(tool, args, observation);
                 emitStep(tool, path, "done");
                 appendObservation(tool, observation);
@@ -569,6 +628,9 @@ public final class AgentEngine {
             try {
                 done.put("text", answer);
                 done.put("elapsedMs", System.currentTimeMillis() - started);
+                // What Luna did, with the time you spent deciding taken out.
+                done.put("workMs", Math.max(0L,
+                    System.currentTimeMillis() - started - waitedMillis.get()));
             } catch (JSONException ignored) {
                 // The event still carries meaning without the timing.
             }
@@ -828,29 +890,61 @@ public final class AgentEngine {
             event.put("consequence", ToolPolicy.consequence(tool, path));
             event.put("preview", content.length() > 600 ? content.substring(0, 600) + "…" : content);
         } catch (JSONException ignored) {
+            pendingApprovalId = "";
             return false;
         }
+        livePrompt = event;
+        // Said twice: once as the row that is now waiting, carrying the whole
+        // question, and once as the approval itself. Either one can draw the
+        // card, so losing one of them costs nothing.
+        emitStep(tool, path, "held", event);
         emit("approval", event);
 
-        try {
-            Boolean answer = approvals.poll(10, TimeUnit.MINUTES);
-            pendingApprovalId = "";
-            return answer != null && answer;
-        } catch (InterruptedException error) {
-            Thread.currentThread().interrupt();
-            pendingApprovalId = "";
-            return false;
-        }
+        Boolean answer = waitForApproval();
+        pendingApprovalId = "";
+        livePrompt = null;
+        emit("prompt_cleared", new JSONObject());
+        return answer != null && answer;
     }
 
     /**
-     * A real question. The job stops here until the person answers, the same way
-     * an approval does — a question nobody sees is worse than not asking.
+     * Waits for the tap, in short hops rather than one long sleep.
+     *
+     * Polling in half seconds is what makes Stop feel instant and lets the
+     * question be repeated while it is still unanswered. The waiting time is
+     * banked so the elapsed clock can subtract it: a person taking a minute to
+     * decide is not Luna taking a minute to think.
      */
-    private String askUser(String question) {
-        if (question == null || question.trim().isEmpty()) {
-            return "";
+    private Boolean waitForApproval() {
+        long began = System.currentTimeMillis();
+        long deadline = began + TimeUnit.MINUTES.toMillis(10);
+        long lastBeat = began;
+        try {
+            while (System.currentTimeMillis() < deadline) {
+                Boolean answer = approvals.poll(500, TimeUnit.MILLISECONDS);
+                if (answer != null) {
+                    waitedMillis.addAndGet(System.currentTimeMillis() - began);
+                    return answer;
+                }
+                if (stopRequested.get()) {
+                    waitedMillis.addAndGet(System.currentTimeMillis() - began);
+                    return Boolean.FALSE;
+                }
+                long now = System.currentTimeMillis();
+                JSONObject prompt = livePrompt;
+                if (prompt != null && now - lastBeat >= PROMPT_HEARTBEAT_MS) {
+                    lastBeat = now;
+                    emit("approval", prompt);
+                }
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
         }
+        waitedMillis.addAndGet(System.currentTimeMillis() - began);
+        return Boolean.FALSE;
+    }
+
+    private String askUser(String question) {
         String id = Long.toString(System.nanoTime());
         pendingQuestionId = id;
         answers.clear();
@@ -860,48 +954,99 @@ public final class AgentEngine {
             event.put("id", id);
             event.put("question", question.trim());
         } catch (JSONException ignored) {
+            pendingQuestionId = "";
             return "";
         }
+        livePrompt = event;
+        emitStep("ask_user", "", "held", event);
         emit("ask", event);
 
+        String answer = waitForAnswer();
+        pendingQuestionId = "";
+        livePrompt = null;
+        emit("prompt_cleared", new JSONObject());
+        return answer == null ? "" : answer.trim();
+    }
+
+    /** The same short hops as the approval wait, for the same reasons. */
+    private String waitForAnswer() {
+        long began = System.currentTimeMillis();
+        long deadline = began + TimeUnit.MINUTES.toMillis(10);
+        long lastBeat = began;
         try {
-            String answer = answers.poll(10, TimeUnit.MINUTES);
-            pendingQuestionId = "";
-            return answer == null ? "" : answer.trim();
+            while (System.currentTimeMillis() < deadline) {
+                String answer = answers.poll(500, TimeUnit.MILLISECONDS);
+                if (answer != null) {
+                    waitedMillis.addAndGet(System.currentTimeMillis() - began);
+                    return answer;
+                }
+                if (stopRequested.get()) {
+                    break;
+                }
+                long now = System.currentTimeMillis();
+                JSONObject prompt = livePrompt;
+                if (prompt != null && now - lastBeat >= PROMPT_HEARTBEAT_MS) {
+                    lastBeat = now;
+                    emit("ask", prompt);
+                }
+            }
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            pendingQuestionId = "";
-            return "";
         }
+        waitedMillis.addAndGet(System.currentTimeMillis() - began);
+        return "";
     }
 
     // --- prompt --------------------------------------------------------------
 
     private String systemPrompt(String modelPersona) {
+        boolean folder = workspace.hasRoot();
         StringBuilder out = new StringBuilder();
         out.append("You are Luna, a local utility agent that runs natively on the user's Android phone. ");
         out.append("You are not a chat window with tools bolted on: the device is your workplace.\n\n");
-        out.append("Folder granted: ").append(workspace.hasRoot() ? workspace.rootName() : "none yet").append('\n');
+        out.append("Folder granted: ").append(folder ? workspace.rootName() : "none yet").append('\n');
         out.append("Mode: ").append(prefs.unattended() ? "unattended" : "ask before acting").append("\n\n");
+
+        // First rule, before the tool list, because the tool list is the thing
+        // that tempts a small model into using one. A greeting that opens a
+        // browser is the failure this paragraph exists to prevent.
+        out.append("Most messages need no tool. A greeting, a question about you, a question you can ");
+        out.append("already answer, anything conversational — reply in plain sentences straight away. ");
+        out.append("Reach for a tool only when the answer depends on something on this device or on ");
+        out.append("the web, and then take the smallest step that gets it.\n\n");
+
         out.append("To use a tool, reply with one JSON object and nothing else:\n");
-        out.append("{\"tool\":\"list_files\",\"args\":{\"path\":\"\"}}\n");
-        out.append("{\"tool\":\"read_file\",\"args\":{\"path\":\"notes.md\"}}\n");
-        out.append("{\"tool\":\"search_code\",\"args\":{\"query\":\"TODO\"}}\n");
-        out.append("{\"tool\":\"write_file\",\"args\":{\"path\":\"notes.md\",\"content\":\"...\"}}\n");
-        out.append("{\"tool\":\"create_file\",\"args\":{\"path\":\"a.txt\"}}\n");
-        out.append("{\"tool\":\"create_folder\",\"args\":{\"path\":\"notes\"}}\n");
-        out.append("{\"tool\":\"delete_file\",\"args\":{\"path\":\"old.txt\"}}\n");
-        out.append("{\"tool\":\"rename_file\",\"args\":{\"path\":\"a.txt\",\"newName\":\"b.txt\"}}\n");
+        if (folder) {
+            out.append("{\"tool\":\"list_files\",\"args\":{\"path\":\"\"}}\n");
+            out.append("{\"tool\":\"read_file\",\"args\":{\"path\":\"notes.md\"}}\n");
+            out.append("{\"tool\":\"search_code\",\"args\":{\"query\":\"TODO\"}}\n");
+            out.append("{\"tool\":\"write_file\",\"args\":{\"path\":\"notes.md\",\"content\":\"...\"}}\n");
+            out.append("{\"tool\":\"create_file\",\"args\":{\"path\":\"a.txt\"}}\n");
+            out.append("{\"tool\":\"create_folder\",\"args\":{\"path\":\"notes\"}}\n");
+            out.append("{\"tool\":\"delete_file\",\"args\":{\"path\":\"old.txt\"}}\n");
+            out.append("{\"tool\":\"rename_file\",\"args\":{\"path\":\"a.txt\",\"newName\":\"b.txt\"}}\n");
+        }
         out.append("{\"tool\":\"open_page\",\"args\":{\"url\":\"example.com/page\"}}\n");
         out.append("{\"tool\":\"read_page\",\"args\":{}}\n");
         out.append("{\"tool\":\"github_file\",\"args\":{\"repo\":\"owner/name\",\"path\":\"README.md\"}}\n");
-        out.append("{\"tool\":\"ask_user\",\"args\":{\"question\":\"Which folder did you mean?\"}}\n\n");
-        out.append("open_page then read_page is how you read the web; the browser has no window and \n");
-        out.append("forgets everything when the job ends. ask_user stops and waits for a real answer, so \n");
+        out.append("{\"tool\":\"ask_user\",\"args\":{\"question\":\"Which folder did you mean?\"}}\n");
+        out.append("{\"tool\":\"respond\",\"args\":{\"text\":\"...\"}}  — or just write the sentences.\n\n");
+
+        if (!folder) {
+            // A tool that cannot work is worse than a tool that does not exist:
+            // it costs a turn, a refusal, and the person's confidence.
+            out.append("No folder has been granted yet, so the file tools are not available and calling ");
+            out.append("one only wastes a step. If the job needs files, say so in one sentence and ask ");
+            out.append("for a folder. Everything else you can still answer normally.\n\n");
+        }
+
+        out.append("open_page then read_page is how you read the web; the browser has no window and\n");
+        out.append("forgets everything when the job ends. ask_user stops and waits for a real answer, so\n");
         out.append("use it when a guess would be expensive.\n\n");
         out.append("Rules: read before you write. One tool per reply. Paths are relative to the granted ");
         out.append("folder. When the work is done, reply in plain sentences — no JSON — and say what you ");
-        out.append("changed. Never claim you did something a tool result does not show.\n");
+        out.append("changed. Never claim you did something a tool result does not show. Write the way a ");
+        out.append("careful person speaks: no tool names, no field names, no JSON in your sentences.\n");
         if (modelPersona != null && !modelPersona.isEmpty()) {
             out.append('\n').append(modelPersona).append('\n');
         }
@@ -1078,15 +1223,63 @@ public final class AgentEngine {
     }
 
     private void emitStep(String tool, String path, String state) {
+        emitStep(tool, path, state, null);
+    }
+
+    private void emitStep(String tool, String path, String state, JSONObject extra) {
         JSONObject event = new JSONObject();
         try {
             event.put("tool", tool);
             event.put("path", path);
             event.put("state", state);
+            if (extra != null) {
+                for (java.util.Iterator<String> keys = extra.keys(); keys.hasNext(); ) {
+                    String key = keys.next();
+                    if (!"tool".equals(key) && !"path".equals(key) && !"state".equals(key)) {
+                        event.put(key, extra.get(key));
+                    }
+                }
+            }
         } catch (JSONException ignored) {
             return;
         }
         emit("step", event);
+    }
+
+    /**
+     * Runs one tool with a time limit. Returns null when it ran out of time.
+     *
+     * The tool keeps its own thread, so a page that never loads or a file
+     * system call that blocks cannot freeze the turn — the loop takes the
+     * timeout as a failed step and carries on with what it knows.
+     */
+    private String runToolWithWatchdog(final Tools.Env env, final String tool, final JSONObject args) {
+        java.util.concurrent.Future<String> pending = toolRunner.submit(
+            new java.util.concurrent.Callable<String>() {
+                @Override
+                public String call() {
+                    return Tools.run(env, tool, args);
+                }
+            });
+        try {
+            return pending.get(TOOL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException timeout) {
+            pending.cancel(true);
+            errors.record("tool:" + tool, timeout);
+            return null;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            pending.cancel(true);
+            return null;
+        } catch (java.util.concurrent.ExecutionException failure) {
+            errors.record("tool:" + tool, failure);
+            return "That did not work: " + ReadableText.clean(String.valueOf(failure.getCause()), 160);
+        }
+    }
+
+    /** The live question, for a UI that has just woken up or missed an event. */
+    public JSONObject pendingPrompt() {
+        return livePrompt;
     }
 
     /**

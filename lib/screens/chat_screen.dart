@@ -84,10 +84,14 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  /// The list is reversed, so the bottom of the thread is offset zero. Pin
+  /// there only if you were already there: scrolling back to reread something
+  /// should not be undone by the next token.
   void _pinToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (!_scroll.hasClients) return;
+      if (_scroll.offset <= 140) {
+        _scroll.jumpTo(0);
       }
     });
   }
@@ -252,7 +256,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ScreenTop(
           title: core.messages.isEmpty ? 'New chat' : 'This job',
           small: true,
-          leading: const Mark(size: 32),
           actions: <Widget>[
             IconButtonSoft(
               icon: FontAwesomeIcons.clockRotateLeft,
@@ -285,18 +288,24 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         Expanded(
-          child: ListView(
+          // Reversed, so a short thread sits on the composer instead of
+          // floating at the top of an empty screen, and a long one always
+          // opens on the newest words.
+          child: SingleChildScrollView(
             controller: _scroll,
+            reverse: true,
             padding: const EdgeInsets.only(bottom: 8),
-            children: <Widget>[
-              if (core.messages.isEmpty && !core.running) _empty(core),
-              ..._thread(core),
-              if (core.steps.isNotEmpty) _steps(core),
-              if (core.pendingApproval != null) _approval(core),
-              if (core.pendingQuestion != null) _question(core),
-              if (core.running) _running(core),
-              if (core.canCarryOn) _carryOn(core),
-            ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (core.messages.isEmpty && !core.running) _empty(core),
+                ..._thread(core),
+                if (core.pendingApproval != null) _approval(core),
+                if (core.pendingQuestion != null) _question(core),
+                if (core.canCarryOn) _carryOn(core),
+              ],
+            ),
           ),
         ),
         _composer(core),
@@ -397,7 +406,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<Widget> _thread(LunaCore core) {
     final List<Widget> out = <Widget>[];
-    for (final Map<String, dynamic> message in core.messages) {
+    // Everything after the last thing you said is this turn: the record of
+    // the work comes first, then the answer it produced. Reading it the other
+    // way round is reading the receipt before the shop.
+    int lastUser = -1;
+    for (int i = 0; i < core.messages.length; i++) {
+      if (core.messages[i]['role'] == 'user') lastUser = i;
+    }
+    bool tracePlaced = core.steps.isEmpty && !core.running && !core.waitingOnYou;
+    for (int i = 0; i < core.messages.length; i++) {
+      final Map<String, dynamic> message = core.messages[i];
       final String role = (message['role'] as String?) ?? '';
       final String content = (message['content'] as String?) ?? '';
       if (role == 'observation' || content.isEmpty) continue;
@@ -408,9 +426,17 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: _userBubble(content),
         ));
-      } else {
-        out.add(_agentColumn(Text(content, style: LunaTheme.body)));
+        continue;
       }
+      if (!tracePlaced && i > lastUser) {
+        out.add(_steps(core));
+        tracePlaced = true;
+      }
+      out.add(_agentColumn(Text(content, style: LunaTheme.body)));
+    }
+    if (!tracePlaced) {
+      out.add(_steps(core));
+      tracePlaced = true;
     }
     if (core.streaming.isNotEmpty) {
       out.add(_agentColumn(StreamedAnswer(text: core.streaming)));
@@ -449,37 +475,82 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// What a tool is called once it has been refused. Past tense, negative,
+  /// so the words and the cross beside them say the same thing.
+  static const Map<String, String> _refusedLabels = <String, String>{
+    'list_files': 'Did not list the folder',
+    'read_file': 'Did not read a file',
+    'search_code': 'Did not search the folder',
+    'write_file': 'Did not write a file',
+    'create_file': 'Did not create a file',
+    'create_folder': 'Did not create a folder',
+    'delete_file': 'Did not delete a file',
+    'rename_file': 'Did not rename a file',
+    'open_page': 'Did not open a page',
+    'read_page': 'Did not read the page',
+    'github_file': 'Did not fetch from GitHub',
+    'ask_user': 'Did not ask you',
+    'load_model': 'Could not load the model',
+  };
+
   Widget _steps(LunaCore core) {
-    final List<TraceStep> steps = core.steps.map((Map<String, String> step) {
+    final List<TraceStep> steps = <TraceStep>[];
+    for (final Map<String, String> step in core.steps) {
       final String tool = step['tool'] ?? '';
       final String state = step['state'] ?? '';
       final String path = step['path'] ?? '';
+      // Loading the model is how Luna gets to work, not work. Once it has
+      // loaded, the row is noise; if it fails, it is the whole story.
+      if (tool == 'load_model' && (state == 'done' || state == 'replayed')) {
+        continue;
+      }
+      final bool refused = state == 'denied' ||
+          state == 'declined' ||
+          state == 'refused' ||
+          state == 'blocked' ||
+          state == 'unfinished';
+      final String name = path.isEmpty ? '' : path.split('/').last;
       final String detail = state == 'held'
-          ? 'waiting on you'
-          : state == 'replayed'
-          ? 'already read'
-          : state == 'blocked'
-              ? 'over the limit'
-              : state == 'unfinished'
-                  ? 'did not finish'
+          ? 'waiting for you to allow it'
+          : state == 'declined'
+              ? 'you skipped this one'
+              : state == 'refused'
+                  ? 'your rules say never for this'
                   : state == 'denied'
-                      ? (tool == 'load_model' ? 'would not load' : 'not allowed')
-                      : path.isEmpty
-                      ? ''
-                      : path.split('/').last;
-      final String label = state == 'running' || state == 'held' ||
-              state == 'unfinished' || (state == 'denied' && tool == 'load_model')
-          ? (_liveLabels[tool] ?? tool)
-          : (_stepLabels[tool] ?? tool);
-      return TraceStep(label: label, state: state, detail: detail);
-    }).toList();
+                      ? (tool == 'load_model' ? 'the model would not load' : 'not allowed')
+                      : state == 'replayed'
+                          ? 'already read this run'
+                          : state == 'blocked'
+                              ? 'over the limit for one job'
+                              : state == 'unfinished'
+                                  ? 'took too long and was dropped'
+                                  : name;
+      final String label = refused
+          ? (_refusedLabels[tool] ?? _stepLabels[tool] ?? tool)
+          : (state == 'running' || state == 'held')
+              ? (_liveLabels[tool] ?? tool)
+              : (_stepLabels[tool] ?? tool);
+      steps.add(TraceStep(label: label, state: state, detail: detail));
+    }
 
     return _agentColumn(AgentTrace(
       steps: steps,
       running: core.running,
       waiting: core.waitingOnYou,
+      label: _activeLabel(core),
+      onStop: core.stop,
       elapsed: core.running ? core.workElapsed : core.runElapsed,
     ));
+  }
+
+  /// One name for what is happening, used in one place.
+  String _activeLabel(LunaCore core) {
+    for (final Map<String, String> step in core.steps.reversed) {
+      if (step['state'] == 'running') {
+        return _liveLabels[step['tool']] ?? 'Working';
+      }
+    }
+    return core.thinking ? 'Thinking' : 'Working';
   }
 
   /// The one filled-black surface on this screen. It fits its words: a short
@@ -667,26 +738,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
-  }
-
-  Widget _running(LunaCore core) {
-    final Map<String, String>? live = core.steps.cast<Map<String, String>?>().lastWhere(
-          (Map<String, String>? step) => step?['state'] == 'running',
-          orElse: () => null,
-        );
-    final String label = core.waitingOnYou
-        ? 'Waiting on you'
-        : live != null
-            ? (_liveLabels[live['tool']] ?? 'Working')
-            : core.thinking
-                ? 'Thinking'
-                : 'Working';
-    return _agentColumn(AgentWorkingLine(
-      label: label,
-      elapsed: core.workElapsed,
-      waiting: core.waitingOnYou,
-      onStop: core.stop,
-    ), bottom: 4);
   }
 
   /// The way back into a job that stopped. Nothing is lost: the steps that
