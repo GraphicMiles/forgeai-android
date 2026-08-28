@@ -364,11 +364,9 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 return prefs.cloudProviders(vault).toString();
             }
             case "updateCloudProvider":
-                prefs.updateCloudProvider(argString(call, "id"), argString(call, "label"), argString(call, "model"));
-                if (!argString(call, "apiKey").isEmpty()) {
-                    vault.store("cloud:" + argString(call, "id"), argString(call, "apiKey"));
-                }
-                return prefs.cloudProviders(vault).toString();
+                return updateCloudProvider(call);
+            case "checkEndpoint":
+                return EndpointPolicy.reason(argString(call, "baseUrl"));
             case "providerModels":
                 return providerModels(call);
             case "exportChat":
@@ -407,18 +405,30 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         String id = argString(call, "id");
         String baseUrl = argString(call, "baseUrl");
         String key = argString(call, "apiKey");
+        String kind = argString(call, "kind");
+        String authStyle = argString(call, "authStyle");
+        String authName = argString(call, "authName");
+        JSONObject headers = headersOf(call);
         if (!id.isEmpty()) {
             JSONObject saved = prefs.cloudProvider(id);
             if (saved != null) {
-                baseUrl = saved.optString("baseUrl", baseUrl);
-                String stored = vault.read("cloud:" + id);
-                if (!stored.isEmpty()) {
-                    key = stored;
+                // What is on screen wins. Someone editing a provider is asking
+                // "does this new key work", not "does the old one still work".
+                baseUrl = firstOf(baseUrl, saved.optString("baseUrl"));
+                kind = firstOf(kind, saved.optString("kind"));
+                authStyle = firstOf(authStyle, saved.optString("authStyle"));
+                authName = firstOf(authName, saved.optString("authName"));
+                if (headers.length() == 0 && saved.optJSONObject("headers") != null) {
+                    headers = saved.optJSONObject("headers");
+                }
+                if (key.isEmpty()) {
+                    key = vault.read("cloud:" + id);
                 }
             }
         }
         try {
-            JSONArray list = CloudProvider.listModels(new CloudProvider.Config(baseUrl, key, ""));
+            JSONArray list = CloudProvider.listModels(new CloudProvider.Config(
+                kind, baseUrl, key, "", authStyle, authName, headers));
             return list.toString();
         } catch (Exception error) {
             errors.record("provider models", error);
@@ -439,9 +449,14 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         JSONObject provider = new JSONObject();
         provider.put("id", id);
         provider.put("label", argString(call, "label"));
-        provider.put("baseUrl", argString(call, "baseUrl"));
+        provider.put("baseUrl", EndpointPolicy.tidy(argString(call, "baseUrl")));
         provider.put("model", argString(call, "model"));
+        provider.put("kind", argString(call, "kind"));
+        provider.put("authStyle", argString(call, "authStyle"));
+        provider.put("authName", argString(call, "authName"));
+        provider.put("headers", headersOf(call));
         provider.put("checkedAt", System.currentTimeMillis());
+        Prefs.withDefaults(provider);
         prefs.addCloudProvider(provider);
         // The key goes to the keystore, never to the preferences file.
         String key = argString(call, "apiKey");
@@ -449,6 +464,50 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
             vault.store("cloud:" + id, key);
         }
         return prefs.cloudProviders(vault).toString();
+    }
+
+    /** Edit a saved provider, including its key. */
+    private String updateCloudProvider(MethodCall call) throws Exception {
+        String id = argString(call, "id");
+        prefs.updateCloudProvider(
+            id,
+            argString(call, "label"),
+            argString(call, "model"),
+            argString(call, "kind"),
+            argString(call, "baseUrl"),
+            argString(call, "authStyle"),
+            argString(call, "authName"),
+            call.hasArgument("headers") ? headersOf(call) : null);
+        String key = argString(call, "apiKey");
+        if (!key.isEmpty()) {
+            vault.store("cloud:" + id, key);
+        }
+        return prefs.cloudProviders(vault).toString();
+    }
+
+    /** The typed value if there is one, otherwise the saved one. */
+    private static String firstOf(String typed, String saved) {
+        return typed == null || typed.trim().isEmpty() ? saved : typed;
+    }
+
+    /** Extra headers arrive as a plain map from Dart. */
+    private JSONObject headersOf(MethodCall call) throws Exception {
+        JSONObject out = new JSONObject();
+        Object raw = call.argument("headers");
+        if (raw instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) raw;
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    continue;
+                }
+                String name = String.valueOf(entry.getKey()).trim();
+                String value = String.valueOf(entry.getValue()).trim();
+                if (!name.isEmpty() && !value.isEmpty()) {
+                    out.put(name, value);
+                }
+            }
+        }
+        return out;
     }
 
     /** One read of everything the UI draws, so a screen can rebuild in one call. */
