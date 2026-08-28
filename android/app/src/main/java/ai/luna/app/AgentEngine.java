@@ -9,6 +9,7 @@ import ai.luna.contracts.ToolContext;
 import ai.luna.contracts.ToolDefinition;
 import ai.luna.contracts.ToolProvider;
 import ai.luna.contracts.ToolResult;
+import ai.luna.contracts.WorkflowDefinition;
 import ai.luna.runtime.AgentManager;
 import ai.luna.runtime.AgentRegistry;
 import ai.luna.runtime.PluginManager;
@@ -17,6 +18,10 @@ import ai.luna.runtime.SkillRegistry;
 import ai.luna.runtime.SkillResolver;
 import ai.luna.runtime.SystemPrompt;
 import ai.luna.runtime.ToolRegistry;
+import ai.luna.runtime.WorkflowEngine;
+import ai.luna.runtime.WorkflowHost;
+import ai.luna.runtime.WorkflowRegistry;
+import ai.luna.runtime.WorkflowRun;
 
 import android.content.Context;
 
@@ -87,6 +92,9 @@ public final class AgentEngine {
 
     /** Installed plugins: knowledge and agents from outside this build. */
     private final PluginManager pluginManager;
+
+    /** Jobs written down as steps instead of hoped for in a prompt. */
+    private final WorkflowRegistry workflows = new WorkflowRegistry();
 
     /** Assembles the system prompt from the skills and the available tools. */
     private final SystemPrompt prompt;
@@ -166,7 +174,7 @@ public final class AgentEngine {
         // arrived in one can be the active agent on the very first turn.
         this.pluginManager = new PluginManager(
             new PluginVerifier().allowUnsigned(prefs.allowUnsignedPlugins()),
-            skills, agents, new PrefsPluginStore(prefs));
+            skills, agents, workflows, new PrefsPluginStore(prefs));
         for (String refused : pluginManager.restore()) {
             errors.warn("plugins", "not loaded — " + refused);
         }
@@ -849,6 +857,84 @@ public final class AgentEngine {
         return reply.text;
     }
 
+    /**
+     * One model call with a prompt of the caller's own, outside the chat.
+     *
+     * <p>A workflow step is not a turn in a conversation: it has no transcript
+     * behind it and no tool list in front of it. It gets the same two code
+     * paths — the loaded local model, or the configured provider — and nothing
+     * else from the chat loop.
+     */
+    private String askOnce(String instruction, ModelStore.Entry local, JSONObject cloud,
+                           RunGuards guards) {
+        emit("thinking", new JSONObject());
+        String system = "You are carrying out one step of a job. Answer the instruction directly "
+            + "and plainly. No JSON, no tool calls, no preamble.";
+        if (local != null) {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("<|im_start|>system\n").append(system).append("<|im_end|>\n");
+            prompt.append("<|im_start|>user\n").append(instruction).append("<|im_end|>\n");
+            prompt.append("<|im_start|>assistant\n");
+            OnDeviceRuntime.Result result = runtime.generate(prompt.toString(),
+                local.maxOutputTokens, local.contextTokens, DeviceCapacity.suggestedThreads(),
+                new OnDeviceRuntime.TokenSink() {
+                    @Override
+                    public void onToken(String text) {
+                        emitToken(text);
+                    }
+                });
+            return result.failure() != null ? "" : result.text;
+        }
+        if (cloud == null) {
+            return "";
+        }
+        RunGuards.Verdict allowed = guards.checkCloudCall();
+        if (!allowed.allowed) {
+            return "";
+        }
+        guards.recordCloudCall();
+        String key = cloud.optBoolean("local") ? "" : vault.read("cloud:" + cloud.optString("id"));
+        CloudProvider.Config config = new CloudProvider.Config(
+            cloud.optString("kind"), cloud.optString("baseUrl"), key, cloud.optString("model"),
+            cloud.optString("authStyle"), cloud.optString("authName"),
+            cloud.optJSONObject("headers"));
+        List<JSONObject> messages = new java.util.ArrayList<>();
+        messages.add(CloudInference.message("system", system));
+        messages.add(CloudInference.message("user", instruction));
+        CloudProvider.Reply reply = CloudProvider.chatStreaming(config, messages, 1024,
+            new CloudProvider.TokenSink() {
+                @Override
+                public void onToken(String text) {
+                    emitToken(text);
+                }
+            },
+            new CloudProvider.Cancellation() {
+                @Override
+                public boolean cancelled() {
+                    return stopRequested.get();
+                }
+            });
+        if (reply.error != null) {
+            errors.record("cloud", reply.error);
+            return "";
+        }
+        return reply.text;
+    }
+
+    /** A streamed fragment, on its way to the chat. */
+    private void emitToken(String text) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        JSONObject event = new JSONObject();
+        try {
+            event.put("text", text);
+        } catch (JSONException ignored) {
+            return;
+        }
+        emit("token", event);
+    }
+
     private boolean loadIfNeeded(ModelStore.Entry entry) {
         if (runtime.isLoaded() && entry.id.equals(runtime.loadedModelId())) {
             return true;
@@ -987,6 +1073,20 @@ public final class AgentEngine {
     // --- approval ------------------------------------------------------------
 
     private boolean requestApproval(String tool, String path, String content) {
+        return requestApproval(tool, path, ToolPolicy.describe(tool, path, content),
+            ToolPolicy.consequence(tool, path), content);
+    }
+
+    /**
+     * The same wait, with the question written by the caller.
+     *
+     * <p>A tool's question comes from {@code ToolPolicy}. A workflow's comes
+     * from the workflow. The machinery underneath — the held row, the repeated
+     * event, the ten-minute deadline, the banked waiting time — is the same,
+     * because a person should never be able to tell which one is asking.
+     */
+    private boolean requestApproval(String tool, String path, String headline, String consequence,
+                                    String content) {
         String id = Long.toString(System.nanoTime());
         pendingApprovalId = id;
         approvals.clear();
@@ -996,8 +1096,8 @@ public final class AgentEngine {
             event.put("id", id);
             event.put("tool", tool);
             event.put("path", path);
-            event.put("headline", ToolPolicy.describe(tool, path, content));
-            event.put("consequence", ToolPolicy.consequence(tool, path));
+            event.put("headline", headline);
+            event.put("consequence", consequence);
             event.put("preview", content.length() > 600 ? content.substring(0, 600) + "…" : content);
         } catch (JSONException ignored) {
             pendingApprovalId = "";
@@ -1116,6 +1216,199 @@ public final class AgentEngine {
         }
         return prompt.build(toolContext(), lastUserText,
             workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), modelPersona);
+    }
+
+    /** Every workflow installed, as data. */
+    public JSONArray workflowCatalogue() {
+        return workflows.describe();
+    }
+
+    /**
+     * Runs a workflow instead of a conversation.
+     *
+     * <p>Same worker thread, same guards, same approval and question machinery,
+     * same trace events. From the outside a workflow run and a chat turn are
+     * the same kind of thing happening; the difference is only that one of them
+     * knows its own steps in advance.
+     */
+    public boolean startWorkflow(final String id, final JSONObject input) {
+        if (running.get() || !workflows.has(id)) {
+            return false;
+        }
+        worker.execute(new Runnable() {
+            @Override
+            public void run() {
+                runWorkflowTurn(workflows.get(id), input);
+            }
+        });
+        return true;
+    }
+
+    private void runWorkflowTurn(WorkflowDefinition workflow, JSONObject input) {
+        running.set(true);
+        stopRequested.set(false);
+        finished.set(false);
+        waitedMillis.set(0L);
+        livePrompt = null;
+        long started = System.currentTimeMillis();
+        final RunGuards guards = new RunGuards(agentManager.steps(prefs.budgetSteps()),
+            agentManager.seconds(prefs.budgetSeconds()), prefs.budgetCloudCalls());
+        guards.begin();
+        final ToolContext env = toolContext();
+        emit("run_started", new JSONObject());
+        append("user", "Run: " + workflow.name, null);
+
+        try {
+            ModelStore.Entry local = activeLocalModel();
+            JSONObject cloud = activeCloudProvider();
+            if (local != null && !loadIfNeeded(local)) {
+                local = null;
+                cloud = failoverProvider();
+            }
+            WorkflowRun run = new WorkflowEngine(
+                new EngineHost(env, guards, local, cloud)).run(workflow, input);
+            JSONObject done = new JSONObject();
+            done.put("text", summarise(run));
+            done.put("elapsedMs", System.currentTimeMillis() - started);
+            done.put("workMs", System.currentTimeMillis() - started - waitedMillis.get());
+            done.put("workflow", run.toJson());
+            append("assistant", summarise(run), null);
+            emit("run_done", done);
+        } catch (Exception error) {
+            errors.record("workflow", error);
+            finishWithMessage("That workflow stopped because something went wrong. "
+                + "Settings keeps the details.");
+        } finally {
+            running.set(false);
+            pendingApprovalId = "";
+            pendingQuestionId = "";
+            browser.close();
+            if (!prefs.keepWarm()) {
+                runtime.unload();
+            }
+        }
+    }
+
+    /** One plain sentence about how a workflow run ended. */
+    private String summarise(WorkflowRun run) {
+        if (run.ok()) {
+            String message = run.message();
+            return message.isEmpty()
+                ? "Done — " + run.taken() + " steps." : message;
+        }
+        String message = run.message();
+        return message.isEmpty() ? "That workflow ended early." : message;
+    }
+
+    /**
+     * The workflow engine's window onto this device.
+     *
+     * <p>Every route out goes through something that already exists: the tool
+     * registry with its watchdog, the approval wait, the question wait, the
+     * model call. A workflow gets no power the chat loop does not have.
+     */
+    private final class EngineHost implements WorkflowHost {
+
+        private final ToolContext env;
+        private final RunGuards guards;
+        private final ModelStore.Entry local;
+        private final JSONObject cloud;
+
+        EngineHost(ToolContext env, RunGuards guards, ModelStore.Entry local, JSONObject cloud) {
+            this.env = env;
+            this.guards = guards;
+            this.local = local;
+            this.cloud = cloud;
+        }
+
+        @Override
+        public String think(String prompt) {
+            if (local == null && cloud == null) {
+                return "";
+            }
+            String answer = askOnce(prompt, local, cloud, guards);
+            return answer == null ? "" : answer;
+        }
+
+        @Override
+        public ToolResult tool(String toolId, JSONObject args) {
+            if (!agentManager.canUse(toolId)) {
+                return ToolResult.denied(toolId);
+            }
+            String path = args.optString("path", args.optString("url", ""));
+            if (tools.needsFolder(toolId) && !workspace.hasRoot()) {
+                emitStep(toolId, path, "no_folder");
+                return ToolResult.failed("No folder is granted.");
+            }
+            RunGuards.Verdict verdict = guards.check(toolId, args, tools.mutating(toolId));
+            if (verdict.replay != null) {
+                emitStep(toolId, path, "replayed");
+                return ToolResult.ok(verdict.replay);
+            }
+            if (!verdict.allowed) {
+                emitStep(toolId, path, "blocked");
+                return ToolResult.failed(verdict.reason);
+            }
+            if (ToolPolicy.decide(toolId, path, prefs) == ToolPolicy.Decision.ASK) {
+                emitStep(toolId, path, "held");
+                if (!requestApproval(toolId, path, args.optString("content", ""))) {
+                    emitStep(toolId, path, "declined");
+                    return ToolResult.denied(toolId);
+                }
+            }
+            emitStep(toolId, path, "running");
+            ToolResult result = tools.run(env, toolId, args, watchdog());
+            guards.record(toolId, args, result.observation);
+            emitStep(toolId, path, result.timedOut ? "unfinished" : (result.ok ? "done" : "failed"));
+            return result;
+        }
+
+        @Override
+        public boolean approve(String message, String consequence) {
+            emitStep("workflow", "", "held");
+            return requestApproval("workflow", "", message,
+                consequence.isEmpty() ? "This step needs your say-so." : consequence, "");
+        }
+
+        @Override
+        public String ask(String question) {
+            return askUser(question);
+        }
+
+        @Override
+        public String subAgent(String agentId, String task) {
+            // Sub-agents arrive with their own phase. Until then a workflow
+            // that asks for one is told plainly, rather than quietly doing the
+            // work itself and pretending somebody else did it.
+            return "No other agent is available to do that yet.";
+        }
+
+        @Override
+        public boolean pause(long millis) {
+            long deadline = System.currentTimeMillis() + millis;
+            while (System.currentTimeMillis() < deadline) {
+                if (stopRequested.get()) {
+                    return false;
+                }
+                try {
+                    Thread.sleep(Math.min(250L, deadline - System.currentTimeMillis()));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public boolean stopped() {
+            return stopRequested.get();
+        }
+
+        @Override
+        public void event(JSONObject event) {
+            emit("step", event);
+        }
     }
 
     /** Everything installed from outside this build. */

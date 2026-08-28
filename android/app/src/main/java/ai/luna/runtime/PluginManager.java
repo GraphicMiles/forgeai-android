@@ -33,13 +33,20 @@ public final class PluginManager {
     private final PluginVerifier verifier;
     private final SkillRegistry skills;
     private final AgentRegistry agents;
+    private final WorkflowRegistry workflows;
     private final Store store;
 
     public PluginManager(PluginVerifier verifier, SkillRegistry skills, AgentRegistry agents,
                          Store store) {
+        this(verifier, skills, agents, null, store);
+    }
+
+    public PluginManager(PluginVerifier verifier, SkillRegistry skills, AgentRegistry agents,
+                         WorkflowRegistry workflows, Store store) {
         this.verifier = verifier == null ? new PluginVerifier() : verifier;
         this.skills = skills;
         this.agents = agents;
+        this.workflows = workflows;
         this.store = store;
     }
 
@@ -98,6 +105,11 @@ public final class PluginManager {
         }
         for (JSONObject agent : manifest.agents) {
             agents.registerJson(agent);
+        }
+        for (JSONObject workflow : manifest.workflows) {
+            if (workflows != null) {
+                workflows.register(workflow);
+            }
         }
         plugins.put(manifest);
         return null;
