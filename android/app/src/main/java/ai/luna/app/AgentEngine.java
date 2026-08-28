@@ -2,11 +2,15 @@ package ai.luna.app;
 
 import ai.luna.builtin.Builtins;
 import ai.luna.builtin.CoreSkills;
+import ai.luna.builtin.LunaAgent;
+import ai.luna.contracts.AgentDefinition;
 import ai.luna.contracts.SkillDefinition;
 import ai.luna.contracts.ToolContext;
 import ai.luna.contracts.ToolDefinition;
 import ai.luna.contracts.ToolProvider;
 import ai.luna.contracts.ToolResult;
+import ai.luna.runtime.AgentManager;
+import ai.luna.runtime.AgentRegistry;
 import ai.luna.runtime.SkillRegistry;
 import ai.luna.runtime.SkillResolver;
 import ai.luna.runtime.SystemPrompt;
@@ -72,6 +76,12 @@ public final class AgentEngine {
 
     /** What Luna knows. Text, not code, and none of it lives in this file. */
     private final SkillRegistry skills = new SkillRegistry();
+
+    /** Every agent installed. Luna is the first entry, not the only kind. */
+    private final AgentRegistry agents = new AgentRegistry();
+
+    /** Which agent is running, and what that narrows this turn to. */
+    private final AgentManager agentManager;
 
     /** Assembles the system prompt from the skills and the available tools. */
     private final SystemPrompt prompt;
@@ -146,7 +156,13 @@ public final class AgentEngine {
         tools.grant(environment.capabilities());
         skills.register(new CoreSkills());
         skills.disable(prefs.disabledSkills());
-        this.prompt = new SystemPrompt(tools, skills, new SkillResolver());
+        agents.register(LunaAgent.DEFINITION);
+        for (JSONObject installed : prefs.installedAgents()) {
+            agents.registerJson(installed);
+        }
+        this.agentManager = new AgentManager(agents, tools, skills);
+        agentManager.activate(prefs.activeAgentId());
+        this.prompt = new SystemPrompt(tools, skills, new SkillResolver(), agentManager);
         this.chatId = prefs.activeChatId();
         if (this.chatId.isEmpty()) {
             this.chatId = "chat-" + System.currentTimeMillis();
@@ -499,7 +515,9 @@ public final class AgentEngine {
         conversationOnly = SmallTalk.matches(userText);
         lastUserText = userText == null ? "" : userText;
         long started = System.currentTimeMillis();
-        RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
+        // The app sets a ceiling; an agent may set itself a lower one.
+        RunGuards guards = new RunGuards(agentManager.steps(prefs.budgetSteps()),
+            agentManager.seconds(prefs.budgetSeconds()), prefs.budgetCloudCalls());
         guards.begin();
         ToolContext env = toolContext();
         emit("run_started", new JSONObject());
@@ -591,9 +609,9 @@ public final class AgentEngine {
                     break;
                 }
 
-                if (!tools.has(tool)) {
+                if (!agentManager.canUse(tool)) {
                     appendObservation(tool, "That tool does not exist. Use one of: "
-                        + tools.availableIds(env) + ".");
+                        + agentManager.toolIds(env) + ".");
                     continue;
                 }
 
@@ -1087,6 +1105,24 @@ public final class AgentEngine {
             workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), modelPersona);
     }
 
+    /** Every agent installed, as data. Luna is one of them. */
+    public JSONArray agentCatalogue() {
+        return agents.describe();
+    }
+
+    public String activeAgentId() {
+        return agentManager.activeId();
+    }
+
+    /** Switches agent between runs. An unknown id changes nothing. */
+    public boolean activateAgent(String id) {
+        if (isRunning() || !agentManager.activate(id)) {
+            return false;
+        }
+        prefs.setActiveAgentId(id);
+        return true;
+    }
+
     /** Every skill this agent has, as data, for the UI and for a manifest. */
     public JSONArray skillCatalogue() {
         return skills.describe();
@@ -1331,7 +1367,7 @@ public final class AgentEngine {
 
     /** Who is running, where, and with what in front of them. */
     private ToolContext toolContext() {
-        return new ToolContext("luna", "core", workspace, browser, vault, errors,
+        return new ToolContext(agentManager.activeId(), "core", workspace, browser, vault, errors,
             environment.platform());
     }
 

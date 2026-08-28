@@ -43,3 +43,4 @@ java -cp "$json:$platform:$work/classes" ai.luna.app.ProviderConfigTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.ContractsTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.RegistryTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.SkillsTest
+java -cp "$json:$platform:$work/classes" ai.luna.app.AgentsTest

@@ -449,3 +449,56 @@ trips, the folder / no-folder pair being mutually exclusive, resolution with
 and without resources, prompt order, the greeting prompt carrying no tools, an
 installed plugin skill appearing only when relevant, an impostor failing to
 overwrite it, and the budget cutting a chatty skill before a core one.
+
+---
+
+## 10. Phase 4 — delivered
+
+Luna is now an installed agent. The app runs *an* agent; it is no longer *the*
+agent.
+
+### An agent is data
+
+`AgentDefinition` — id, name, description, version, author, its own extra
+instructions, the skills it has, the tools it may use, a preferred model, and a
+budget in steps and seconds. `*` means "whatever the runtime offers". It
+round-trips through JSON, so an agent is a document somebody can write.
+
+`LunaAgent.DEFINITION` is that document for Luna: every skill, every tool,
+`builtIn`, version 1.0.0. Nothing about her is special any more except that she
+is registered first and is therefore the fallback.
+
+### Narrowing, never granting
+
+The rule that has to hold the moment anyone can write a definition: **an agent
+list can only subtract.** `AgentManager` intersects the agent's tool list with
+what `ToolRegistry` already decided this environment offers, so an agent that
+asks for `shell_exec` on a phone gets nothing — not a refusal at call time, but
+absence from the prompt. The same for budgets: `steps(appLimit)` returns the
+smaller of the two, never the agent's number when it is larger.
+
+| Question | Asked of |
+| --- | --- |
+| Does this tool exist and work here? | `ToolRegistry` |
+| May *this agent* use it? | `AgentManager.canUse` |
+| What goes in the prompt? | `AgentManager.promptLines` / `.skills()` |
+| How long may this run be? | `AgentManager.steps` / `.seconds` |
+
+`ToolContext` is now credited to the active agent id rather than the literal
+string "luna", which is what will later let a sub-agent's spending and refusals
+be attributed to it.
+
+### Persistence
+
+`Prefs.activeAgentId` (defaults to `luna`) and `Prefs.installedAgents`, stored
+as the JSON they arrived as rather than parsed into columns — a definition is a
+document, and a store that understood its fields would need migrating every
+time one gained a field.
+
+Guarded by `AgentsTest` (43 checks): Luna as an ordinary entry, installing from
+JSON, an agent that cannot declare itself built in, an impostor that cannot take
+Luna's id, switching, narrowing of tools and skills and prompt lines, budgets
+that shrink but never grow, and a greedy definition asking for a shell and a
+deployment on a phone and receiving neither.
+
+Suite total: **309 checks across six files.**

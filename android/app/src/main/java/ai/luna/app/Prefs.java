@@ -45,6 +45,8 @@ public final class Prefs {
     private static final String KEY_BUDGET_CLOUD = "budget_cloud_calls";
 
     private static final String KEY_SKILLS_OFF = "skills_off";
+    private static final String KEY_AGENT = "active_agent";
+    private static final String KEY_AGENTS = "installed_agents";
 
     private final SharedPreferences prefs;
 
@@ -66,6 +68,42 @@ public final class Prefs {
 
     public boolean unattended() {
         return MODE_AUTO.equals(executionMode());
+    }
+
+    /** Which agent is running. Luna until somebody installs another. */
+    public String activeAgentId() {
+        return prefs.getString(KEY_AGENT, "luna");
+    }
+
+    public void setActiveAgentId(String id) {
+        prefs.edit().putString(KEY_AGENT, id == null || id.isEmpty() ? "luna" : id).apply();
+    }
+
+    /**
+     * Agents installed alongside Luna, as the JSON they arrived as.
+     *
+     * <p>Stored verbatim rather than parsed into columns: an agent definition
+     * is a document, and a store that understands its fields would have to be
+     * migrated every time one is added.
+     */
+    public java.util.List<org.json.JSONObject> installedAgents() {
+        java.util.List<org.json.JSONObject> out = new java.util.ArrayList<>();
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(prefs.getString(KEY_AGENTS, "[]"));
+            for (int index = 0; index < array.length(); index++) {
+                org.json.JSONObject row = array.optJSONObject(index);
+                if (row != null) {
+                    out.add(row);
+                }
+            }
+        } catch (Exception ignored) {
+            // A corrupt list means no installed agents, never a crash.
+        }
+        return out;
+    }
+
+    public void setInstalledAgents(org.json.JSONArray agents) {
+        prefs.edit().putString(KEY_AGENTS, agents == null ? "[]" : agents.toString()).apply();
     }
 
     /**

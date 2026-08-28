@@ -19,10 +19,19 @@ public final class SystemPrompt {
     private final SkillRegistry skills;
     private final SkillResolver resolver;
 
+    /** When set, the prompt is built for one agent rather than the whole runtime. */
+    private final AgentManager scope;
+
     public SystemPrompt(ToolRegistry tools, SkillRegistry skills, SkillResolver resolver) {
+        this(tools, skills, resolver, null);
+    }
+
+    public SystemPrompt(ToolRegistry tools, SkillRegistry skills, SkillResolver resolver,
+                        AgentManager scope) {
         this.tools = tools;
         this.skills = skills;
         this.resolver = resolver == null ? new SkillResolver() : resolver;
+        this.scope = scope;
     }
 
     /**
@@ -42,7 +51,8 @@ public final class SystemPrompt {
      */
     public String build(ToolContext context, String message, String folderName, boolean unattended,
                         String persona) {
-        List<SkillDefinition> chosen = resolver.resolve(skills.enabled(), context, tools, message);
+        List<SkillDefinition> candidates = scope == null ? skills.enabled() : scope.skills();
+        List<SkillDefinition> chosen = resolver.resolve(candidates, context, tools, message);
 
         StringBuilder out = new StringBuilder();
         // Identity, then where the agent is standing, then everything else it
@@ -61,10 +71,16 @@ public final class SystemPrompt {
         }
 
         out.append("To use a tool, reply with one JSON object and nothing else:\n");
-        for (String line : tools.promptLines(context)) {
+        List<String> lines = scope == null ? tools.promptLines(context) : scope.promptLines(context);
+        for (String line : lines) {
             out.append(line).append('\n');
         }
         out.append("For respond you can also just write the sentences.\n");
+        if (scope != null && scope.active() != null && !scope.active().instructions.isEmpty()) {
+            // An agent's own words come after the shared knowledge, so a
+            // definition can add to Luna's rules without quietly replacing them.
+            out.append('\n').append(scope.active().instructions).append('\n');
+        }
         return withPersona(out, persona);
     }
 
