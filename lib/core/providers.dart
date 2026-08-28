@@ -198,3 +198,11 @@ String authStyleName(String style) {
   final int index = kAuthStyles.indexOf(style);
   return index < 0 ? kAuthStyleNames.first : kAuthStyleNames[index];
 }
+
+/// Which segment is lit. A shape or style the app does not know falls back to
+/// the first, rather than to a broken -1.
+int kindIndex(String kind) =>
+    kProviderKinds.contains(kind) ? kProviderKinds.indexOf(kind) : 0;
+
+int authStyleIndex(String style) =>
+    kAuthStyles.contains(style) ? kAuthStyles.indexOf(style) : 0;
