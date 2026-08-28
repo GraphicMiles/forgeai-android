@@ -616,3 +616,47 @@ so a loop with `max: 100` inside a workflow with `maxSteps: 5` stops at five.
 
 Guarded by `WorkflowTest` (68 checks) against a recording host — no model, no
 phone, no person, no clock.
+
+---
+
+## 13. Phase 7 — delivered
+
+Memory, split into the five things the transcript was being asked to be at once.
+
+| Kind | Lives | Held by |
+| --- | --- | --- |
+| `conversation` — what was said | with the chat | `EphemeralMemory` |
+| `working` — notes for the job in hand | **dies with the run, on purpose** | `EphemeralMemory` |
+| `long_term` — what the person told Luna | forever | `FileMemory` |
+| `knowledge` — how their folder is laid out | forever | `FileMemory` |
+| `execution` — what was actually done | forever | `FileMemory` |
+
+`MemoryProvider` is a contract because the right answer differs by kind and by
+device: working memory belongs in RAM, long-term memory in a file, and knowledge
+about a large folder will one day belong in something with an index.
+`FileMemory` writes one JSON file per kind under the app's own storage — not in
+the person's folder, which is theirs and not a database.
+
+### Recall, not carrying
+
+`MemoryRegistry.recall` scores rather than searches: three points per matching
+word, a fifth of the record's own importance, and a small bonus for being
+recent. Being *about the subject* outweighs being important, so a vital fact
+about photographs stays out of an answer about invoices — but a record marked 80
+or above comes back even with no match, because some things should be said
+regardless. No embeddings, no index, no second product.
+
+The five best lines go into the prompt under `You already know:`, and nothing is
+added when nothing is remembered.
+
+### Pruning and forgetting
+
+A full store drops the **least important** record, not the oldest: what somebody
+deliberately told Luna outlives what she noticed in passing. A person can forget
+one record or a whole kind, and `memoryCatalogue()` shows each kind, its
+one-sentence description, its provider and its count.
+
+Every run ends with `memory.endOfRun()`, which clears working memory. A note
+about a job that has finished is not a fact about the person.
+
+Guarded by `MemoryTest` (37 checks).

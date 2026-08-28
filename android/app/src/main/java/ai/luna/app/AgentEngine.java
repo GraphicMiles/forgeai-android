@@ -4,6 +4,7 @@ import ai.luna.builtin.Builtins;
 import ai.luna.builtin.CoreSkills;
 import ai.luna.builtin.LunaAgent;
 import ai.luna.contracts.AgentDefinition;
+import ai.luna.contracts.MemoryKind;
 import ai.luna.contracts.SkillDefinition;
 import ai.luna.contracts.ToolContext;
 import ai.luna.contracts.ToolDefinition;
@@ -12,6 +13,8 @@ import ai.luna.contracts.ToolResult;
 import ai.luna.contracts.WorkflowDefinition;
 import ai.luna.runtime.AgentManager;
 import ai.luna.runtime.AgentRegistry;
+import ai.luna.runtime.EphemeralMemory;
+import ai.luna.runtime.MemoryRegistry;
 import ai.luna.runtime.PluginManager;
 import ai.luna.runtime.PluginVerifier;
 import ai.luna.runtime.SkillRegistry;
@@ -96,6 +99,9 @@ public final class AgentEngine {
     /** Jobs written down as steps instead of hoped for in a prompt. */
     private final WorkflowRegistry workflows = new WorkflowRegistry();
 
+    /** Five kinds of remembering, only two of which outlive the run. */
+    private final MemoryRegistry memory = new MemoryRegistry();
+
     /** Assembles the system prompt from the skills and the available tools. */
     private final SystemPrompt prompt;
 
@@ -169,6 +175,8 @@ public final class AgentEngine {
         tools.grant(environment.capabilities());
         skills.register(new CoreSkills());
         skills.disable(prefs.disabledSkills());
+        memory.register(new EphemeralMemory());
+        memory.register(new FileMemory(this.context.getFilesDir(), errors));
         agents.register(LunaAgent.DEFINITION);
         // Plugins load before the agent manager exists, so an agent that
         // arrived in one can be the active agent on the very first turn.
@@ -736,6 +744,8 @@ public final class AgentEngine {
             }
             if (finished.compareAndSet(false, true)) {
                 emit("run_done", done);
+                memory.remember(MemoryKind.EXECUTION, agentManager.activeId(),
+                    "Asked: " + ReadableText.clean(lastUserText, 120), 40, "run");
             }
         } catch (Exception error) {
             errors.record("agent", error);
@@ -745,6 +755,9 @@ public final class AgentEngine {
             running.set(false);
             pendingApprovalId = "";
             pendingQuestionId = "";
+            // Working memory is meant to be lost: a note about the job that
+            // just ended is not a fact about the person.
+            memory.endOfRun(agentManager.activeId());
             // Cookies and page history belong to the job, not to the app.
             browser.close();
             if (!prefs.keepWarm()) {
@@ -1215,7 +1228,25 @@ public final class AgentEngine {
             return prompt.conversational(CoreSkills.SMALL_TALK, modelPersona);
         }
         return prompt.build(toolContext(), lastUserText,
-            workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), modelPersona);
+            workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), modelPersona,
+            memory.recallLines(lastUserText, agentManager.activeId(), 5));
+    }
+
+    /** What Luna remembers, by kind, for the screen that shows it. */
+    public JSONArray memoryCatalogue() {
+        return memory.describe(agentManager.activeId());
+    }
+
+    /** Forgets one kind. The person decides what their agent keeps. */
+    public int forgetMemory(String kind) {
+        return memory.clear(kind, agentManager.activeId());
+    }
+
+    /** Something worth keeping about the person or their folder. */
+    public void remember(String kind, String text, int importance) {
+        if (MemoryKind.isKind(kind) && text != null && !text.trim().isEmpty()) {
+            memory.remember(kind, agentManager.activeId(), text.trim(), importance);
+        }
     }
 
     /** Every workflow installed, as data. */
@@ -1274,6 +1305,8 @@ public final class AgentEngine {
             done.put("workflow", run.toJson());
             append("assistant", summarise(run), null);
             emit("run_done", done);
+            memory.remember(MemoryKind.EXECUTION, agentManager.activeId(),
+                "Ran the " + workflow.name + " workflow: " + run.status(), 45, "workflow");
         } catch (Exception error) {
             errors.record("workflow", error);
             finishWithMessage("That workflow stopped because something went wrong. "
@@ -1282,6 +1315,7 @@ public final class AgentEngine {
             running.set(false);
             pendingApprovalId = "";
             pendingQuestionId = "";
+            memory.endOfRun(agentManager.activeId());
             browser.close();
             if (!prefs.keepWarm()) {
                 runtime.unload();
