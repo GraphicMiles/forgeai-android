@@ -327,3 +327,66 @@ engine knows and vice versa, and every declared capability must be a real one.
 The built-ins already carry their dotted platform names
 (`read_file → filesystem.read`), so Phase 2 can rename without breaking a saved
 chat.
+
+---
+
+## 8. Phase 2 — delivered
+
+The tool list is no longer written anywhere in the engine. It is asked for.
+
+### The plugins that ship with the runtime
+
+`ai.luna.builtin` — four providers, each a plugin like any other, distinguished
+only by being installed before the app starts.
+
+| Provider | Tools | Capabilities | Needs |
+| --- | --- | --- | --- |
+| `core.filesystem` | list_files, read_file, search_code, write_file, create_file, create_folder, delete_file, rename_file | `filesystem.read/write/delete` | a granted folder |
+| `core.browser` | open_page, read_page | `browser.navigate/read`, `network.request` | a browser |
+| `core.github` | github_file | `github.read`, `network.request` | nothing |
+| `core.user` | ask_user, respond | `user.ask` | nothing |
+
+`BuiltinProvider` is the shared base: it credits every definition to its
+provider, answers `owns()`, names the missing resource before a call is
+attempted, and runs the call by handing a `ToolContext` to the existing
+`Tools.run`. The old `BuiltinTools` class is gone; `Builtins.all()` returns the
+four in prompt order and now also holds the legacy → dotted rename map.
+
+### The door
+
+`ai.luna.runtime.ToolRegistry`. One entry point, and everything it enforces is
+enforced for a plugin exactly as for the core:
+
+- **one owner per name** — a tool id belongs to whoever claimed it first, so an
+  installed plugin cannot quietly become `delete_file`;
+- **the platform has to match** — `runsOn(context.platform)`;
+- **every capability must be granted by the environment** — `AndroidExecution`
+  offers nine, so a tool wanting `shell.execute` is not merely refused at call
+  time, it is never shown to the model;
+- **resources must exist** — no folder, no file tools in the prompt; no
+  browser, no page tools;
+- **required arguments before approval** — a malformed call is rejected before
+  a person is asked to allow it;
+- **each tool's own clock** — `open_page` 20 s, `ask_user` 10 min, the rest 30 s,
+  instead of one 90-second rule for everything;
+- **a provider may misbehave** — a throw, a null, or a hang becomes a failed or
+  unfinished `ToolResult`, never an ended run.
+
+### What the engine gave up
+
+| Was | Now |
+| --- | --- |
+| `ToolPolicy.isKnown(tool)` | `registry.has(tool)` |
+| `ToolPolicy.isMutating` / `needsFolder` at the call site | read off the definition |
+| `Tools.Env env = new Tools.Env(...)` | `ToolContext` built from the execution environment |
+| `Tools.run(env, tool, args)` behind a fixed 90 s watchdog | `registry.run(context, tool, args, watchdog)`, the watchdog now a service given the tool's own limit |
+| 14 hardcoded example lines in the system prompt | `registry.promptLines(context)` |
+| `LunaBridge` reading `ToolPolicy.READ_ONLY` / `MUTATING` | `agent.toolIds(false/true)` |
+
+A tool result that fails now shows as `failed` in the trace, which the Dart
+timeline reads as a refusal row with "it did not work".
+
+Guarded by `RegistryTest` (43 checks): registration, ownership, availability
+with and without a folder or browser, a read-only capability grant, missing
+arguments, a provider that throws, a provider that returns nothing, timeouts,
+prompt lines, and an impostor plugin that tries to claim `delete_file`.
