@@ -46,3 +46,4 @@ java -cp "$json:$platform:$work/classes" ai.luna.app.SkillsTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.AgentsTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.PluginsTest
 java -cp "$json:$platform:$work/classes" ai.luna.app.WorkflowTest
+java -cp "$json:$platform:$work/classes" ai.luna.app.MemoryTest

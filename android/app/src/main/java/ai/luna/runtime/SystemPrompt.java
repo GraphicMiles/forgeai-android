@@ -51,6 +51,15 @@ public final class SystemPrompt {
      */
     public String build(ToolContext context, String message, String folderName, boolean unattended,
                         String persona) {
+        return build(context, message, folderName, unattended, persona, null);
+    }
+
+    /**
+     * @param memories what the agent already knows that bears on this message,
+     *                 recalled rather than carried
+     */
+    public String build(ToolContext context, String message, String folderName, boolean unattended,
+                        String persona, List<String> memories) {
         List<SkillDefinition> candidates = scope == null ? skills.enabled() : scope.skills();
         List<SkillDefinition> chosen = resolver.resolve(candidates, context, tools, message);
 
@@ -70,6 +79,15 @@ public final class SystemPrompt {
             }
         }
 
+        if (memories != null && !memories.isEmpty()) {
+            // Recalled, not carried: these are the few things that bear on what
+            // was just said, not everything the person has ever mentioned.
+            out.append("You already know:\n");
+            for (String memory : memories) {
+                out.append("- ").append(memory).append('\n');
+            }
+            out.append('\n');
+        }
         out.append("To use a tool, reply with one JSON object and nothing else:\n");
         List<String> lines = scope == null ? tools.promptLines(context) : scope.promptLines(context);
         for (String line : lines) {
