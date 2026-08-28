@@ -479,6 +479,26 @@ public final class Prefs {
         }
     }
 
+    /**
+     * Forget which model this provider was using. Called when the provider
+     * says the model is gone: leaving a dead id in place means every future
+     * job fails the same way, with the same 404, until somebody notices.
+     */
+    public void clearCloudModel(String id) {
+        try {
+            JSONArray all = raw();
+            for (int index = 0; index < all.length(); index++) {
+                JSONObject item = all.optJSONObject(index);
+                if (item != null && item.optString("id").equals(id)) {
+                    item.put("model", "");
+                }
+            }
+            prefs.edit().putString(KEY_CLOUD, all.toString()).apply();
+        } catch (JSONException ignored) {
+            // The next run will report the same thing, which is no worse.
+        }
+    }
+
     public void removeCloudProvider(String id) {
         JSONArray current = raw();
         JSONArray next = new JSONArray();

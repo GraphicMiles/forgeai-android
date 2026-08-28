@@ -657,14 +657,15 @@ class _ModelsScreenState extends State<ModelsScreen> {
     );
   }
 
-  /// The provider's own list, not one baked into the app.
+  /// The provider's own list, not one baked into the app — and nothing is
+  /// kept until it has answered once.
   Future<void> _pickModel(LunaCore core, Map<String, dynamic> provider) async {
     List<String> models = <String>[];
     String? failure;
     try {
       models = await core.providerModels(id: '${provider['id']}');
     } catch (error) {
-      failure = '$error';
+      failure = _plainError(error);
     }
     if (!mounted) return;
     await showLunaSheet<void>(
@@ -678,29 +679,72 @@ class _ModelsScreenState extends State<ModelsScreen> {
                 style: LunaTheme.text(size: 13, color: LunaTheme.ink2, height: 1.5)),
           );
         }
-        return Group(
-          children: models
-              .map((String name) => LunaRow(
-                    icon: FontAwesomeIcons.microchip,
-                    title: name,
-                    subtitle: name == '${provider['model']}' ? 'In use' : null,
-                    trailing: name == '${provider['model']}'
-                        ? null
-                        : PillButton(
-                            label: 'Pick',
-                            small: true,
-                            soft: true,
-                            onTap: () async {
-                              Navigator.of(sheetContext).pop();
-                              await core.updateCloudProvider(
-                                  id: '${provider['id']}', model: name);
-                            },
-                          ),
-                  ))
-              .toList(),
+        String checking = '';
+        return StatefulBuilder(
+          builder: (BuildContext inner, StateSetter refresh) => Group(
+              children: models
+                  .map((String name) => LunaRow(
+                        icon: FontAwesomeIcons.microchip,
+                        title: name,
+                        subtitle: name == '${provider['model']}' ? 'In use' : null,
+                        trailing: name == '${provider['model']}'
+                            ? null
+                            : PillButton(
+                                label: checking == name ? 'Checking' : 'Pick',
+                                small: true,
+                                soft: true,
+                                onTap: () async {
+                                  refresh(() => checking = name);
+                                  final String problem = await core.probeModel(
+                                    id: '${provider['id']}',
+                                    model: name,
+                                  );
+                                  if (!inner.mounted) return;
+                                  refresh(() => checking = '');
+                                  if (problem.isNotEmpty) {
+                                    _say(inner, problem);
+                                    return;
+                                  }
+                                  Navigator.of(sheetContext).pop();
+                                  await core.updateCloudProvider(
+                                      id: '${provider['id']}', model: name);
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                      ))
+                  .toList(),
+          ),
         );
       },
     );
+  }
+
+  void _say(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      backgroundColor: LunaTheme.ink,
+      duration: const Duration(seconds: 5),
+      content: Text(message,
+          style: LunaTheme.text(size: 13, color: LunaTheme.onInk, height: 1.4)),
+    ));
+  }
+
+  /// A platform exception announces itself twice before it says anything
+  /// useful. Only the sentence the provider actually wrote is worth showing.
+  String _plainError(Object error) {
+    String text = '$error';
+    const String marker = 'PlatformException(';
+    if (text.startsWith(marker)) {
+      text = text.substring(marker.length);
+      final int comma = text.indexOf(',');
+      if (comma >= 0) text = text.substring(comma + 1);
+      if (text.endsWith(')')) text = text.substring(0, text.length - 1);
+      while (text.trimRight().endsWith('null')) {
+        final int cut = text.lastIndexOf(',');
+        if (cut < 0) break;
+        text = text.substring(0, cut);
+      }
+    }
+    return text.trim();
   }
 
   /// Picking what you are connecting to, before asking for a key.
@@ -769,13 +813,20 @@ class _ModelsScreenState extends State<ModelsScreen> {
       title: editing ? 'Edit ${row['label']}' : 'Connect to ${base.name}',
       builder: (BuildContext sheetContext) => StatefulBuilder(
         builder: (BuildContext inner, StateSetter refresh) {
-          void say(String message) {
-            ScaffoldMessenger.of(inner).showSnackBar(SnackBar(
-              backgroundColor: LunaTheme.ink,
-              content: Text(message,
-                  style: LunaTheme.text(size: 13, color: LunaTheme.onInk)),
-            ));
-          }
+          void say(String message) => _say(inner, message);
+
+          /// One real request before anything is kept. Empty when the model
+          /// answered; otherwise the provider's own words.
+          Future<String> check(String name) => core.probeModel(
+                id: editing ? '${row['id']}' : '',
+                baseUrl: baseUrl.text.trim(),
+                apiKey: apiKey.text.trim(),
+                model: name,
+                kind: kind,
+                authStyle: authStyle,
+                authName: authName.text.trim(),
+                headers: parseHeaders(headers.text),
+              );
 
           Future<List<String>> ask() => core.providerModels(
                 id: editing ? '${row['id']}' : '',
@@ -898,34 +949,50 @@ class _ModelsScreenState extends State<ModelsScreen> {
                         try {
                           found = await ask();
                         } catch (error) {
-                          failure = '$error'.replaceFirst(
-                              RegExp(r'^PlatformException\([^,]*,\s*'), '');
+                          failure = _plainError(error);
                         }
                         if (!inner.mounted) return;
                         if (failure != null) {
-                          say(failure.replaceAll(RegExp(r',\s*null,\s*null\)$'), ''));
+                          say(failure);
                           return;
                         }
                         if (found.isEmpty) {
                           say('That key can see no models.');
                           return;
                         }
-                        refresh(() => model.text = found.first);
+                        // Nothing is chosen for you. Being in the list and
+                        // being usable are different facts, and the second one
+                        // is only known by asking.
                         await showLunaSheet<void>(
                           context: inner,
                           title: 'It serves ${found.length}',
-                          builder: (BuildContext listContext) => Group(
-                            children: found
-                                .map((String name) => LunaRow(
-                                      icon: FontAwesomeIcons.microchip,
-                                      title: name,
-                                      onTap: () {
-                                        refresh(() => model.text = name);
-                                        Navigator.of(listContext).pop();
-                                      },
-                                    ))
-                                .toList(),
-                          ),
+                          builder: (BuildContext listContext) {
+                            String trying = '';
+                            return StatefulBuilder(
+                              builder: (BuildContext listInner, StateSetter listRefresh) => Group(
+                                children: found
+                                    .map((String name) => LunaRow(
+                                          icon: FontAwesomeIcons.microchip,
+                                          title: name,
+                                          subtitle:
+                                              trying == name ? 'Checking it works…' : null,
+                                          onTap: () async {
+                                            listRefresh(() => trying = name);
+                                            final String problem = await check(name);
+                                            if (!listInner.mounted) return;
+                                            listRefresh(() => trying = '');
+                                            if (problem.isNotEmpty) {
+                                              _say(listInner, problem);
+                                              return;
+                                            }
+                                            refresh(() => model.text = name);
+                                            Navigator.of(listContext).pop();
+                                          },
+                                        ))
+                                    .toList(),
+                              ),
+                            );
+                          },
                         );
                       },
                     ),
@@ -949,6 +1016,13 @@ class _ModelsScreenState extends State<ModelsScreen> {
                             authStyle != 'none' &&
                             apiKey.text.trim().isEmpty) {
                           say('This provider needs a key.');
+                          return;
+                        }
+                        say('Checking ${model.text.trim()}…');
+                        final String problem = await check(model.text.trim());
+                        if (!inner.mounted) return;
+                        if (problem.isNotEmpty) {
+                          say(problem);
                           return;
                         }
                         Navigator.of(sheetContext).pop();

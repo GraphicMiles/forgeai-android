@@ -763,6 +763,16 @@ public final class AgentEngine {
             });
         if (reply.error != null) {
             errors.record("cloud", reply.error);
+            // A model that is no longer there must not stay selected, or every
+            // job from now on fails with the same sentence.
+            if (reply.error.contains("not available on this key")
+                && !cloud.optBoolean("local")) {
+                prefs.clearCloudModel(cloud.optString("id"));
+                finishWithMessage(reply.error
+                    + " I have cleared it, so open Model Zoo, tap the provider and check the "
+                    + "model list.");
+                return null;
+            }
             finishWithMessage(reply.error);
             return null;
         }
