@@ -22,6 +22,7 @@ public final class ProviderConfigTest {
         addresses();
         catalogue();
         shapes();
+        namespacedIds();
         configuration();
         conversation();
         words();
@@ -93,6 +94,38 @@ public final class ProviderConfigTest {
                 .equals("x-api-key"));
         check("a query key is called key",
             CloudProvider.defaultAuthName("gemini", CloudProvider.AUTH_QUERY).equals("key"));
+    }
+
+    /**
+     * The owner prefix is part of the id everywhere except Gemini. Groq serves
+     * "openai/gpt-oss-120b"; sending "gpt-oss-120b" is a 404 that reads like
+     * the app is broken, which is exactly what happened.
+     */
+    private static void namespacedIds() {
+        CloudProvider.Config groq = new CloudProvider.Config(
+            "openai", "https://api.groq.com/openai/v1", "gsk-test",
+            "openai/gpt-oss-120b", "", "", null);
+        check("an openai-shaped id keeps its owner",
+            groq.model.equals("openai/gpt-oss-120b"));
+        CloudProvider.Config compound = new CloudProvider.Config(
+            "openai", "https://api.groq.com/openai/v1", "gsk-test",
+            "groq/compound-mini", "", "", null);
+        check("compound-mini keeps its owner", compound.model.equals("groq/compound-mini"));
+        CloudProvider.Config claude = new CloudProvider.Config(
+            "anthropic", "https://api.anthropic.com/v1", "sk-ant",
+            "anthropic/claude-3-5-haiku", "", "", null);
+        check("anthropic ids are left alone",
+            claude.model.equals("anthropic/claude-3-5-haiku"));
+        CloudProvider.Config gemini = new CloudProvider.Config(
+            "gemini", "https://generativelanguage.googleapis.com/v1beta", "key",
+            "models/gemini-2.0-flash", "", "", null);
+        check("gemini still loses its models/ prefix",
+            gemini.model.equals("gemini-2.0-flash"));
+        check("a bare id survives either way",
+            new CloudProvider.Config("openai", "https://api.openai.com/v1", "k",
+                "gpt-4o-mini", "", "", null).model.equals("gpt-4o-mini"));
+        check("withModel keeps the owner too",
+            groq.withModel("qwen/qwen3.6-27b").model.equals("qwen/qwen3.6-27b"));
     }
 
     private static void configuration() {
