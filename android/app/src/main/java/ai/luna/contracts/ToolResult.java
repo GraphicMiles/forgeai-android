@@ -20,40 +20,44 @@ public final class ToolResult {
     /** Milliseconds spent inside the tool. */
     public final long tookMs;
 
-    private ToolResult(boolean ok, String observation, String error, long tookMs) {
+    /** True when the tool ran past its own limit and was abandoned. */
+    public final boolean timedOut;
+
+    private ToolResult(boolean ok, String observation, String error, long tookMs, boolean timedOut) {
         this.ok = ok;
         this.observation = observation == null ? "" : observation;
         this.error = error;
         this.tookMs = tookMs;
+        this.timedOut = timedOut;
     }
 
     public static ToolResult ok(String observation) {
-        return new ToolResult(true, observation, null, 0L);
+        return new ToolResult(true, observation, null, 0L, false);
     }
 
     public static ToolResult ok(String observation, long tookMs) {
-        return new ToolResult(true, observation, null, tookMs);
+        return new ToolResult(true, observation, null, tookMs, false);
     }
 
     public static ToolResult failed(String reason) {
-        return new ToolResult(false, "Failed: " + reason, reason, 0L);
+        return new ToolResult(false, "Failed: " + reason, reason, 0L, false);
     }
 
     /** The tool ran past its own timeout and was abandoned. */
     public static ToolResult unfinished(String toolId, long timeoutMs) {
         String reason = toolId + " took longer than " + (timeoutMs / 1000L)
             + " seconds, so it was abandoned. Try a smaller piece of the same job.";
-        return new ToolResult(false, reason, reason, timeoutMs);
+        return new ToolResult(false, reason, reason, timeoutMs, true);
     }
 
     /** The capability this tool needs was not granted. */
     public static ToolResult denied(String capability) {
         String reason = "That needs permission to " + Capability.describe(capability).toLowerCase()
             + ", which this agent does not have.";
-        return new ToolResult(false, reason, reason, 0L);
+        return new ToolResult(false, reason, reason, 0L, false);
     }
 
     public ToolResult withTiming(long millis) {
-        return new ToolResult(ok, observation, error, millis);
+        return new ToolResult(ok, observation, error, millis, timedOut);
     }
 }
