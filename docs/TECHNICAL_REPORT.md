@@ -549,6 +549,11 @@ arrived before a Stop is kept.
 entries whose `supportedGenerationMethods` contains `generateContent`, with the
 `models/` prefix stripped) and orders it through `ModelCatalog`.
 
+The owner prefix is part of the id. Only Gemini reports `models/gemini-2.0-flash`
+and wants the tail in the path; every OpenAI-shaped provider means the whole
+string, so `openai/gpt-oss-120b` and `groq/compound-mini` are sent as they are.
+Stripping them was a 404 that read like a bug in Luna.
+
 `ModelCatalog.looksLikeChatModel(id)` filters on substrings — whisper, tts,
 speech, voice, audio, transcribe, realtime, orpheus, playai, canary, kokoro,
 bark, musicgen, embed, rerank, moderation, guard, prompt-guard, image, dall-e,

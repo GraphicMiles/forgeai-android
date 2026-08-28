@@ -81,7 +81,13 @@ public final class CloudProvider {
             this.kind = normaliseKind(kind);
             this.baseUrl = EndpointPolicy.tidy(baseUrl);
             this.apiKey = apiKey == null ? "" : apiKey.trim();
-            this.model = model == null ? "" : ModelCatalog.stripPrefix(model.trim());
+            // Only Gemini wants a bare id: it lists "models/gemini-2.0-flash"
+            // and the request path wants the tail. Everywhere else the part
+            // before the slash IS the id — Groq serves "openai/gpt-oss-120b"
+            // and "groq/compound-mini", and sending the tail alone is a 404
+            // that reads like the app is broken.
+            String wanted = model == null ? "" : model.trim();
+            this.model = GEMINI.equals(this.kind) ? ModelCatalog.stripPrefix(wanted) : wanted;
             String style = authStyle == null ? "" : authStyle.trim().toLowerCase(Locale.ROOT);
             this.authStyle = style.isEmpty() ? defaultAuthStyle(this.kind) : style;
             String name = authName == null ? "" : authName.trim();
