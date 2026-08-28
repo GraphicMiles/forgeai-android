@@ -71,6 +71,21 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         this.runtime = new OnDeviceRuntime();
         this.vault = new CredentialVault(activity);
         this.errors = new ErrorLog(activity);
+        // Every line the app writes about itself also goes up the event stream,
+        // so the debug panel fills in while the job is still running.
+        this.errors.listen(new ErrorLog.Listener() {
+            @Override
+            public void onLine(JSONObject line) {
+                JSONObject event = new JSONObject();
+                try {
+                    event.put("type", "log");
+                    event.put("line", line);
+                } catch (JSONException ignored) {
+                    return;
+                }
+                push(event);
+            }
+        });
         this.browser = new HeadlessBrowser(activity, errors);
         this.agent = new AgentEngine(activity, prefs, workspace, models, runtime, vault, errors, browser,
             new AgentEngine.Events() {
@@ -116,6 +131,7 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
     }
 
     private void push(final JSONObject event) {
+        traceEvent(event);
         main.post(new Runnable() {
             @Override
             public void run() {
@@ -127,10 +143,51 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         });
     }
 
+    /**
+     * The engine's own events, written into the log as one line each. Tokens are
+     * skipped: a hundred lines saying "e" tells nobody anything, and log lines
+     * about log lines would never end.
+     */
+    private void traceEvent(JSONObject event) {
+        String type = event.optString("type", "");
+        if (type.isEmpty() || "log".equals(type) || "token".equals(type) || "heartbeat".equals(type)) {
+            return;
+        }
+        StringBuilder detail = new StringBuilder(type);
+        String tool = event.optString("tool", "");
+        String state = event.optString("state", "");
+        String path = event.optString("path", "");
+        String reason = event.optString("reason", event.optString("error", ""));
+        if (!tool.isEmpty()) {
+            detail.append("  ").append(tool);
+        }
+        if (!state.isEmpty()) {
+            detail.append("  ").append(state);
+        }
+        if (!path.isEmpty()) {
+            detail.append("  ").append(path);
+        }
+        if (!reason.isEmpty()) {
+            detail.append("  ").append(reason);
+        }
+        boolean bad = !event.optString("error", "").isEmpty()
+            || "failed".equals(state) || "blocked".equals(state) || "unfinished".equals(state);
+        if (bad) {
+            errors.warn("engine", detail.toString());
+        } else {
+            errors.note("engine", detail.toString());
+        }
+    }
+
     // --- methods -------------------------------------------------------------
 
     @Override
     public void onMethodCall(@NonNull final MethodCall call, @NonNull final MethodChannel.Result result) {
+        // The method name only. Arguments carry keys and file contents, and a
+        // debug panel that shows a key is a leak wearing a helpful face.
+        if (!"snapshot".equals(call.method) && !"debugLog".equals(call.method)) {
+            errors.note("call", call.method);
+        }
         switch (call.method) {
             // Anything that only reads memory answers straight away.
             case "snapshot":
@@ -199,6 +256,13 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 return;
             case "errors":
                 result.success(errors.entries().toString());
+                return;
+            case "debugLog":
+                result.success(errors.lines().toString());
+                return;
+            case "clearDebugLog":
+                errors.clear();
+                result.success(null);
                 return;
             case "clearErrors":
                 errors.clear();
@@ -305,6 +369,7 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                     reply(result, value, null, null);
                 } catch (Exception error) {
                     String message = error.getMessage();
+                    errors.record(call.method, error);
                     reply(result, null, "luna_error", message == null ? error.toString() : message);
                 }
             }
