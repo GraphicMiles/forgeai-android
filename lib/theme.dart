@@ -146,9 +146,10 @@ class LunaTheme {
   static TextStyle get screenTitleSmall =>
       displayStyle(size: 16.5, weight: 700, letterSpacing: -0.028, height: 1.2);
 
-  /// 19px decision headline, on the black card.
+  /// The decision headline on the one filled card. Sized to be read at a
+  /// glance, not to fill the card: a two-line question at 19px was a poster.
   static TextStyle get decision =>
-      displayStyle(size: 19, weight: 700, color: onInk, letterSpacing: -0.03, height: 1.22);
+      displayStyle(size: 16, weight: 700, color: onInk, letterSpacing: -0.028, height: 1.25);
 
   static TextStyle get sectionLabel =>
       text(size: 12.5, weight: 600, color: ink3, letterSpacing: -0.005);

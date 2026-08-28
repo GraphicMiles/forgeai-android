@@ -15,6 +15,46 @@ public final class NetworkTargets {
     private NetworkTargets() {
     }
 
+    /** Hosts that only ever appear because a model invented an address. */
+    private static final String[] PLACEHOLDERS = {
+        "example.com", "example.org", "example.net", "example.edu", "www.example.com",
+        "yoursite.com", "yourdomain.com", "mysite.com", "mywebsite.com", "site.com",
+        "domain.com", "url.com", "website.com", "test.com", "sample.com", "foo.com",
+        "bar.com", "somewhere.com", "someurl.com", "yourapi.com", "api.example.com",
+    };
+
+    /**
+     * A made-up address, in words, or null when the host is a real one.
+     *
+     * <p>example.com is what a model writes when it has decided to browse but
+     * has nowhere to go. Opening it wastes an approval, a page load and the
+     * person's attention, and the answer that follows is invented too — so the
+     * request is turned back before anyone is asked to allow it.
+     */
+    public static String placeholderReason(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return "No address was given, so there is nothing to open. Ask for one, or answer "
+                + "without the web.";
+        }
+        String host;
+        try {
+            host = new URI(normalise(url)).getHost();
+        } catch (Exception error) {
+            return null;
+        }
+        if (host == null) {
+            return null;
+        }
+        String lower = host.toLowerCase(Locale.US);
+        for (String placeholder : PLACEHOLDERS) {
+            if (lower.equals(placeholder) || lower.equals("www." + placeholder)) {
+                return "\"" + host + "\" is a placeholder, not a real site. Do not invent an "
+                    + "address: use one the person gave you, or answer from what you already know.";
+            }
+        }
+        return null;
+    }
+
     /** Null when the address is fine, otherwise a plain reason it was refused. */
     public static String check(String url) {
         if (url == null || url.trim().isEmpty()) {

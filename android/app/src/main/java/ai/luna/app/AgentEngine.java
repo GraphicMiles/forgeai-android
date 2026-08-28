@@ -87,6 +87,13 @@ public final class AgentEngine {
      */
     private volatile JSONObject livePrompt;
 
+    /**
+     * True when this turn is a greeting or a question about Luna herself. The
+     * tool list is left out of the prompt entirely, because a small model shown
+     * a tool will use one.
+     */
+    private volatile boolean conversationOnly;
+
     /** Milliseconds this run spent waiting on the person, not working. */
     private final java.util.concurrent.atomic.AtomicLong waitedMillis =
         new java.util.concurrent.atomic.AtomicLong(0L);
@@ -452,6 +459,7 @@ public final class AgentEngine {
         finished.set(false);
         waitedMillis.set(0L);
         livePrompt = null;
+        conversationOnly = SmallTalk.matches(userText);
         long started = System.currentTimeMillis();
         RunGuards guards = new RunGuards(prefs.budgetSteps(), prefs.budgetSeconds(), prefs.budgetCloudCalls());
         guards.begin();
@@ -532,6 +540,19 @@ public final class AgentEngine {
                     break;
                 }
 
+                if (conversationOnly) {
+                    // Nothing was asked for that a tool could provide. Rather
+                    // than run one, ask once for the sentence that was wanted.
+                    if (!repaired) {
+                        repaired = true;
+                        appendObservation("format", "No tool is needed here. Reply to the person "
+                            + "in one or two plain sentences, with no JSON.");
+                        continue;
+                    }
+                    answer = "Hello. Tell me what you would like done and I will get on with it.";
+                    break;
+                }
+
                 if (!ToolPolicy.isKnown(tool)) {
                     appendObservation(tool, "That tool does not exist. Use one of: "
                         + ToolPolicy.READ_ONLY + " " + ToolPolicy.MUTATING);
@@ -561,6 +582,16 @@ public final class AgentEngine {
                     appendObservation(tool, "No folder is granted, so there is nothing to read or "
                         + "write. Ask for a folder in one sentence, or answer without files.");
                     continue;
+                }
+
+                if (tool.equals("open_page")) {
+                    String invented = NetworkTargets.placeholderReason(
+                        args.optString("url", path));
+                    if (invented != null) {
+                        emitStep(tool, path, "blocked");
+                        appendObservation(tool, invented);
+                        continue;
+                    }
                 }
 
                 RunGuards.Verdict verdict = guards.check(tool, args, mutating);
@@ -1010,6 +1041,19 @@ public final class AgentEngine {
     private String systemPrompt(String modelPersona) {
         boolean folder = workspace.hasRoot();
         StringBuilder out = new StringBuilder();
+        if (conversationOnly) {
+            // No tool list at all. There is nothing here to be tempted by.
+            out.append("You are Luna, a local agent living on the user's Android phone. ");
+            out.append("The person is greeting you or asking about you. Reply in one or two warm, ");
+            out.append("plain sentences and offer to help with something on the phone: reading and ");
+            out.append("writing files in a folder they grant, or looking something up on the web. ");
+            out.append("Do not write JSON. Do not mention tools. Do not invent anything you have ");
+            out.append("done, because you have done nothing yet.\n");
+            if (modelPersona != null && !modelPersona.isEmpty()) {
+                out.append('\n').append(modelPersona).append('\n');
+            }
+            return out.toString();
+        }
         out.append("You are Luna, a local utility agent that runs natively on the user's Android phone. ");
         out.append("You are not a chat window with tools bolted on: the device is your workplace.\n\n");
         out.append("Folder granted: ").append(folder ? workspace.rootName() : "none yet").append('\n');
@@ -1048,6 +1092,8 @@ public final class AgentEngine {
             out.append("for a folder. Everything else you can still answer normally.\n\n");
         }
 
+        out.append("Never invent a web address. Open a page only when the person gave you one, or\n");
+        out.append("when you are certain of the real site. example.com is not a real site.\n\n");
         out.append("open_page then read_page is how you read the web; the browser has no window and\n");
         out.append("forgets everything when the job ends. ask_user stops and waits for a real answer, so\n");
         out.append("use it when a guess would be expensive.\n\n");

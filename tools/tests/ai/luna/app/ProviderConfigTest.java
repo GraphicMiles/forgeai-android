@@ -25,6 +25,8 @@ public final class ProviderConfigTest {
         configuration();
         conversation();
         words();
+        greetings();
+        invented();
 
         System.out.println(failures == 0 ? "ALL PASS" : failures + " FAILED");
         if (failures > 0) {
@@ -160,6 +162,37 @@ public final class ProviderConfigTest {
                 .contains("bad tool block"));
         check("a plain-text failure still reads",
             CloudProvider.explain(config, 418, "teapot").contains("teapot"));
+    }
+
+    private static void greetings() {
+        check("hi is not a job", SmallTalk.matches("hi"));
+        check("Hello! is not a job", SmallTalk.matches("Hello!"));
+        check("hey luna is not a job", SmallTalk.matches("hey luna"));
+        check("thanks is not a job", SmallTalk.matches("thanks"));
+        check("who are you is not a job", SmallTalk.matches("who are you?"));
+        check("good morning is not a job", SmallTalk.matches("good morning"));
+        check("read my notes is a job", !SmallTalk.matches("read my notes"));
+        check("hi, read notes.md is a job", !SmallTalk.matches("hi, read notes.md"));
+        check("open bbc.com is a job", !SmallTalk.matches("open bbc.com"));
+        check("a long sentence is a job",
+            !SmallTalk.matches("hello can you look through this folder and tell me what is in it"));
+        check("an empty message is not small talk", !SmallTalk.matches("   "));
+        check("summarise it is a job", !SmallTalk.matches("summarise it"));
+    }
+
+    private static void invented() {
+        check("example.com is refused",
+            NetworkTargets.placeholderReason("https://www.example.com") != null);
+        check("example.org is refused",
+            NetworkTargets.placeholderReason("http://example.org/page") != null);
+        check("yoursite.com is refused",
+            NetworkTargets.placeholderReason("https://yoursite.com") != null);
+        check("a real site is allowed",
+            NetworkTargets.placeholderReason("https://en.wikipedia.org/wiki/Lagos") == null);
+        check("no address at all is refused",
+            NetworkTargets.placeholderReason("") != null);
+        check("the refusal names the placeholder",
+            NetworkTargets.placeholderReason("https://example.com").contains("example.com"));
     }
 
     private static JSONObject turn(String role, String content) {
