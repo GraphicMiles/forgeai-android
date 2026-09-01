@@ -412,9 +412,10 @@ class _ChatScreenState extends State<ChatScreen> {
     for (int i = 0; i < core.messages.length; i++) {
       if (core.messages[i]['role'] == 'user') lastUser = i;
     }
-    // The trace is part of every answer, not only the ones that went wrong.
-    // A plain answer with no tool steps renders as one quiet "Thought for Xs"
-    // line; a turn that used tools folds open to the record of the work.
+    // The trace is part of every answer, not only the ones that went wrong:
+    // a plain answer renders as one quiet "Thought for Xs" line, and a turn
+    // that used tools folds open to the record of the work. But a chat with
+    // nothing sent and nothing running has no answer to attach it to.
     bool tracePlaced = false;
     for (int i = 0; i < core.messages.length; i++) {
       final Map<String, dynamic> message = core.messages[i];
@@ -436,7 +437,10 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       out.add(_agentColumn(Text(content, style: LunaTheme.body)));
     }
-    if (!tracePlaced) {
+    // Nothing was asked and nothing is running: there is no answer to attach
+    // the trace to, so it stays out. This is what keeps an empty chat from
+    // showing a stray "Thought for Xs" under the "Pick a model" card.
+    if (!tracePlaced && (lastUser != -1 || core.running || core.waitingOnYou)) {
       out.add(_steps(core));
       tracePlaced = true;
     }
