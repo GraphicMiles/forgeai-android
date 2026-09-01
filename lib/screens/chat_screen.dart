@@ -412,7 +412,10 @@ class _ChatScreenState extends State<ChatScreen> {
     for (int i = 0; i < core.messages.length; i++) {
       if (core.messages[i]['role'] == 'user') lastUser = i;
     }
-    bool tracePlaced = core.steps.isEmpty && !core.running && !core.waitingOnYou;
+    // The trace is part of every answer, not only the ones that went wrong.
+    // A plain answer with no tool steps renders as one quiet "Thought for Xs"
+    // line; a turn that used tools folds open to the record of the work.
+    bool tracePlaced = false;
     for (int i = 0; i < core.messages.length; i++) {
       final Map<String, dynamic> message = core.messages[i];
       final String role = (message['role'] as String?) ?? '';
