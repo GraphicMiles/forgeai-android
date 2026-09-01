@@ -183,7 +183,8 @@ public final class AgentEngine {
         this.errors = errors;
         this.browser = browser;
         this.events = events;
-        this.environment = new AndroidExecution(workspace, browser, vault);
+        this.environment = new AndroidExecution(workspace, browser, vault,
+            new AppGitStore(new File(context.getFilesDir(), "git"), errors));
         environments.register(environment);
         for (JSONObject declared : prefs.declaredEnvironments()) {
             environments.register(ai.luna.builtin.DeclaredEnvironment.fromJson(declared));

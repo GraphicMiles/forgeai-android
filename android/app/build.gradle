@@ -125,4 +125,8 @@ flutter {
 
 dependencies {
     implementation "androidx.documentfile:documentfile:1.0.1"
+    // Git as a library: Android has no git binary, so JGit (pure Java) does
+    // the work in-process. slf4j-nop silences the "no provider" warning.
+    implementation "org.eclipse.jgit:org.eclipse.jgit:6.10.0.202406032230-r"
+    implementation "org.slf4j:slf4j-nop:2.0.13"
 }

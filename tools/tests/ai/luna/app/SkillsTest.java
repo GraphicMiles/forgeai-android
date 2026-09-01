@@ -49,13 +49,13 @@ public final class SkillsTest {
 
     private static void registration() {
         SkillRegistry registry = core();
-        check("the core skills are registered", registry.all().size() == 7);
+        check("the core skills are registered", registry.all().size() == 8);
         check("identity is one of them", registry.has("core.identity"));
         check("every skill is credited to core",
             registry.get("core.web").providerId.equals("core"));
         check("a skill can be switched off",
             !registry.disable(Arrays.asList("core.web")).isEnabled("core.web"));
-        check("switching one off leaves the rest", registry.enabled().size() == 6);
+        check("switching one off leaves the rest", registry.enabled().size() == 7);
         check("but it is still known", registry.has("core.web"));
         check("the catalogue says which are on",
             registry.describe().optJSONObject(0).optBoolean("enabled"));
@@ -97,6 +97,11 @@ public final class SkillsTest {
         check("and the no-folder skill is not", !full.contains("core.no-folder"));
         check("the web skill comes with the browser", full.contains("core.web"));
         check("asking comes with ask_user", full.contains("core.asking"));
+
+        List<String> withGit = ids(resolver.resolve(core().enabled(), context(true, true, true),
+            tools, "clone the project repo"));
+        check("the git skill comes with a git client", withGit.contains("core.git"));
+        check("and stays out without one", !full.contains("core.git"));
 
         List<String> bare = ids(resolver.resolve(core().enabled(), context(false, false), tools,
             "tidy up my notes folder"));
@@ -187,7 +192,7 @@ public final class SkillsTest {
 
         JSONObject empty = new JSONObject();
         registry.addJson(empty, "acme");
-        check("a skill with no instructions is not installed", registry.all().size() == 8);
+        check("a skill with no instructions is not installed", registry.all().size() == 9);
     }
 
     /** Context is finite, and an always-on skill outranks a chatty one. */
@@ -239,10 +244,16 @@ public final class SkillsTest {
     }
 
     private static ToolContext context(boolean folder, boolean browser) {
+        return context(folder, browser, false);
+    }
+
+    private static ToolContext context(boolean folder, boolean browser, boolean git) {
         return new ToolContext("luna", "core",
             folder ? new Fakes.FakeStorage() : null,
             browser ? new Fakes.FakeBrowser() : null,
-            null, Trace.SILENT, "android");
+            null,
+            git ? new Fakes.FakeGit() : null,
+            Trace.SILENT, "android");
     }
 
     private static void check(String what, boolean condition) {

@@ -201,6 +201,9 @@ public final class ToolRegistry {
         if (definition.requires.contains("workspace") && !context.hasStorage()) {
             return false;
         }
+        if (definition.requires.contains("git") && !context.hasGit()) {
+            return false;
+        }
         return !definition.requires.contains("browser") || context.hasBrowser();
     }
 

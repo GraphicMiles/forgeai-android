@@ -101,4 +101,47 @@ final class Fakes {
         public void close() {
         }
     }
+
+    /** Git that exists but does nothing; availability is what these tests check. */
+    static final class FakeGit implements ai.luna.contracts.GitProvider {
+        @Override
+        public String id() {
+            return "test.git";
+        }
+
+        @Override
+        public String clone(String url, String name, String token) {
+            return "";
+        }
+
+        @Override
+        public String pull(String path, String token) {
+            return "";
+        }
+
+        @Override
+        public String push(String path, String token) {
+            return "";
+        }
+
+        @Override
+        public String status(String path) {
+            return "";
+        }
+
+        @Override
+        public String commit(String path, String message) {
+            return "";
+        }
+
+        @Override
+        public String log(String path, int limit) {
+            return "";
+        }
+
+        @Override
+        public String diff(String path) {
+            return "";
+        }
+    }
 }

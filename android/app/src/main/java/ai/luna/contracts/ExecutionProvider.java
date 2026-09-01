@@ -34,6 +34,15 @@ public interface ExecutionProvider {
 
     SecretProvider secrets();
 
+    /**
+     * A git client, or null when this environment has none. The phone offers
+     * git through JGit; a server environment could offer a real binary behind
+     * the same contract.
+     */
+    default GitProvider git() {
+        return null;
+    }
+
     /** True when the environment is reachable right now. */
     boolean available();
 

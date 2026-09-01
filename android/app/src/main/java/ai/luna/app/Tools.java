@@ -1,6 +1,7 @@
 package ai.luna.app;
 
 import ai.luna.contracts.BrowserProvider;
+import ai.luna.contracts.GitProvider;
 import ai.luna.contracts.SecretProvider;
 import ai.luna.contracts.StorageProvider;
 import ai.luna.contracts.Trace;
@@ -33,12 +34,15 @@ public final class Tools {
         public final StorageProvider workspace;
         public final BrowserProvider browser;
         public final SecretProvider vault;
+        public final GitProvider git;
         public final Trace errors;
 
-        public Env(StorageProvider workspace, BrowserProvider browser, SecretProvider vault, Trace errors) {
+        public Env(StorageProvider workspace, BrowserProvider browser, SecretProvider vault,
+                   GitProvider git, Trace errors) {
             this.workspace = workspace;
             this.browser = browser;
             this.vault = vault;
+            this.git = git;
             this.errors = errors;
         }
     }
@@ -78,6 +82,20 @@ public final class Tools {
                     return searchWeb(env, args.optString("query", ""));
                 case "github_file":
                     return githubFile(env, args);
+                case "git_clone":
+                    return gitClone(env, args.optString("url", ""), args.optString("name", ""));
+                case "git_pull":
+                    return gitPull(env, args.optString("path", ""));
+                case "git_push":
+                    return gitPush(env, args.optString("path", ""));
+                case "git_status":
+                    return gitStatus(env, args.optString("path", ""));
+                case "git_commit":
+                    return gitCommit(env, args.optString("path", ""), args.optString("message", ""));
+                case "git_log":
+                    return gitLog(env, args.optString("path", ""));
+                case "git_diff":
+                    return gitDiff(env, args.optString("path", ""));
                 default:
                     return "Unknown tool: " + tool;
             }
@@ -204,6 +222,79 @@ public final class Tools {
                 connection.disconnect();
             }
         }
+    }
+
+    // --- git ------------------------------------------------------------------
+
+    /** The same token the GitHub file tool uses, or empty for public access. */
+    private static String gitToken(Env env) {
+        return env.vault == null ? "" : env.vault.get(SecretProvider.CORE, "github");
+    }
+
+    private static String gitClone(Env env, String url, String name) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        if (url == null || url.trim().isEmpty()) {
+            return "Give me the repository address to clone.";
+        }
+        String refused = NetworkTargets.check(url);
+        if (refused != null) {
+            return "That repository address was refused: " + refused + ".";
+        }
+        String result = env.git.clone(url.trim(), name, gitToken(env));
+        return result.isEmpty() ? "Cloned " + url.trim() + " into the git workspace." : result;
+    }
+
+    private static String gitPull(Env env, String path) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        if (path == null || path.trim().isEmpty()) {
+            return "Give me the repository to pull (the name it was cloned under).";
+        }
+        String result = env.git.pull(path.trim(), gitToken(env));
+        return result.isEmpty() ? "Pulled " + path.trim() + "." : result;
+    }
+
+    private static String gitPush(Env env, String path) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        if (path == null || path.trim().isEmpty()) {
+            return "Give me the repository to push (the name it was cloned under).";
+        }
+        String result = env.git.push(path.trim(), gitToken(env));
+        return result.isEmpty() ? "Pushed " + path.trim() + "." : result;
+    }
+
+    private static String gitStatus(Env env, String path) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        return env.git.status(path == null ? "" : path.trim());
+    }
+
+    private static String gitCommit(Env env, String path, String message) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        String result = env.git.commit(path == null ? "" : path.trim(), message);
+        return result.isEmpty() ? "Committed the changes in " + path + "." : result;
+    }
+
+    private static String gitLog(Env env, String path) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        return env.git.log(path == null ? "" : path.trim(), 10);
+    }
+
+    private static String gitDiff(Env env, String path) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        return env.git.diff(path == null ? "" : path.trim());
     }
 
     // --- the folder --------------------------------------------------------------
