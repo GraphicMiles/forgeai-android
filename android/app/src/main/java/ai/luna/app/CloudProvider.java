@@ -284,14 +284,18 @@ public final class CloudProvider {
         JSONObject body = new JSONObject();
         body.put("model", config.model);
         body.put("stream", stream);
-        body.put("max_tokens", maxTokens);
-        // GPT-OSS models think into a dedicated reasoning field that Groq
-        // includes by default. On a reasoning-heavy turn that thinking can
-        // spend the whole token budget before any answer lands in "content",
-        // so the stream closes with no answer and reads like the provider
-        // died. Asking for the answer only keeps the budget for the answer.
         if (isReasoningModel(config.model)) {
+            // GPT-OSS models think into a dedicated reasoning field before they
+            // answer, and that thinking counts against the completion budget.
+            // Groq deprecated max_tokens in favour of max_completion_tokens, so
+            // a reasoning model gets the current parameter, a budget its
+            // thinking cannot swallow, and the answer only (no reasoning
+            // stream) — otherwise a short question can end with an empty
+            // stream and "The provider streamed nothing back".
             body.put("include_reasoning", false);
+            body.put("max_completion_tokens", Math.max(maxTokens, 4096));
+        } else {
+            body.put("max_tokens", maxTokens);
         }
         JSONArray array = new JSONArray();
         for (JSONObject message : messages) {
@@ -589,6 +593,10 @@ public final class CloudProvider {
             }
 
             StringBuilder gathered = new StringBuilder();
+            // Recent frames that carried no text, kept in case nothing at all
+            // comes back — the one thing that turns "streamed nothing back"
+            // from a mystery into a diagnosis.
+            StringBuilder silent = new StringBuilder();
             reader = new BufferedReader(
                 new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
             String line;
@@ -622,17 +630,19 @@ public final class CloudProvider {
                     if (!piece.isEmpty()) {
                         gathered.append(piece);
                         sink.onToken(piece);
-                    } else if (frame.optJSONArray("choices") == null) {
-                        // A normal first frame carries an empty choices delta;
-                        // a frame with no choices at all is something unusual,
-                        // so keep it to make the next empty stream diagnosable.
-                        ErrorLog.tapNote("http", "frame with no choices: " + trim(data, 200));
+                    } else {
+                        silent.append(trim(data, 160)).append(' ');
+                        if (silent.length() > 400) {
+                            silent.delete(0, silent.length() - 400);
+                        }
                     }
                 } catch (Exception badFrame) {
                     // One malformed frame does not end the answer.
                 }
             }
             if (gathered.length() == 0) {
+                ErrorLog.tapFail("http", "empty stream; last frames: "
+                    + trim(silent.toString(), 400));
                 return new Reply("", "The provider streamed nothing back.");
             }
             return new Reply(gathered.toString(), null);
