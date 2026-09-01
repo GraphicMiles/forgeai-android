@@ -32,6 +32,35 @@ public final class MemoryRecoveryTest {
         check("the instruction is found however far back it is",
             AgentEngine.lastUserInstruction(chat).equals("Tidy the notes folder"));
 
+        // --- a long conversation keeps the recent turns ---
+        List<JSONObject> longChat = new ArrayList<>();
+        for (int i = 1; i <= 40; i++) {
+            longChat.add(message("user", "Question number " + i, null));
+            longChat.add(message("assistant", "Answer number " + i, null));
+        }
+        List<JSONObject> recent = AgentEngine.tailTurns(longChat, 30, 100000);
+        check("thirty turns are kept when they fit", countUser(recent) == 30);
+        check("the oldest turns are dropped first",
+            recent.get(0).optString("content").equals("Question number 11"));
+        check("a kept window never opens on a tool result", !firstIsObservation(recent));
+
+        List<JSONObject> limited = AgentEngine.tailTurns(longChat, 30, 300);
+        check("the character budget still bounds the window", limited.size() < 60);
+        check("a budgeted window is never empty", !limited.isEmpty());
+        check("a budgeted window still never opens on a tool result",
+            !firstIsObservation(limited));
+
+        List<JSONObject> withTools = new ArrayList<>();
+        for (int i = 1; i <= 35; i++) {
+            withTools.add(message("user", "Look at file " + i, null));
+            withTools.add(message("observation", "read_file → file " + i, "read_file"));
+            withTools.add(message("assistant", "File " + i + " read.", null));
+        }
+        List<JSONObject> kept = AgentEngine.tailTurns(withTools, 30, 100000);
+        check("tool results inside the kept turns survive", containsObservation(kept));
+        check("tool results before the kept turns are dropped",
+            kept.get(0).optString("role").equals("user"));
+
         // --- a finished job ---
         check("a finished job is not dangling", !AgentEngine.dangling(chat));
         check("a finished job offers no carry on", !AgentEngine.resumable(chat));
@@ -89,6 +118,30 @@ public final class MemoryRecoveryTest {
             // Not possible with these keys.
         }
         return out;
+    }
+
+    private static int countUser(List<JSONObject> messages) {
+        int count = 0;
+        for (JSONObject m : messages) {
+            if (m.optString("role").equals("user")) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static boolean firstIsObservation(List<JSONObject> messages) {
+        return !messages.isEmpty()
+            && messages.get(0).optString("role").equals("observation");
+    }
+
+    private static boolean containsObservation(List<JSONObject> messages) {
+        for (JSONObject m : messages) {
+            if (m.optString("role").equals("observation")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void check(String what, boolean ok) {

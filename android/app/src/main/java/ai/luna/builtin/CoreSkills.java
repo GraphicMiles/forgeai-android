@@ -67,15 +67,17 @@ public final class CoreSkills implements SkillProvider {
         .order(30)
         .build();
 
-    /** Reading the web without inventing it. */
+    /** Searching and reading the web without inventing it. */
     public static final SkillDefinition WEB = SkillDefinition
         .of("core.web", "Reading the web")
-        .describe("How to open and read a page, and why addresses are never invented.")
-        .says("Never invent a web address. Open a page only when the person gave you one, or "
-            + "when you are certain of the real site. example.com is not a real site. "
-            + "open_page then read_page is how you read the web; the browser has no window and "
-            + "forgets everything when the job ends.")
-        .tools("open_page", "read_page")
+        .describe("How to search the web and read a page, and why addresses are never invented.")
+        .says("To look something up, use search_web with a short query; it runs the search and "
+            + "returns the top results with snippets, so it is how you answer \"check online\" "
+            + "and \"search for…\" questions. Never invent a web address: open_page is only for "
+            + "a specific address the person gave you, or one you are certain is real — "
+            + "example.com is not a real site. The browser has no window and forgets "
+            + "everything when the job ends.")
+        .tools("open_page", "read_page", "search_web")
         .requires("browser")
         .order(40)
         .build();

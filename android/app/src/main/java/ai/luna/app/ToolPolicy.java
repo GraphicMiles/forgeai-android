@@ -26,7 +26,7 @@ public final class ToolPolicy {
 
     public static final List<String> MUTATING = Arrays.asList(
         "write_file", "create_file", "create_folder", "delete_file", "rename_file",
-        "open_page", "read_page", "github_file", "ask_user"
+        "open_page", "read_page", "search_web", "github_file", "ask_user"
     );
 
     private static final Set<String> READ_ONLY_SET = new HashSet<>(READ_ONLY);
@@ -124,6 +124,8 @@ public final class ToolPolicy {
                 return "Open " + safePath + " in the background browser?";
             case "read_page":
                 return "Read the page that is open?";
+            case "search_web":
+                return "Search the web for \"" + safePath + "\"?";
             case "github_file":
                 return "Fetch " + safePath + " from GitHub?";
             default:
@@ -147,6 +149,8 @@ public final class ToolPolicy {
                 return "A page load off this device. Cookies are thrown away when the job ends.";
             case "read_page":
                 return "The words on the page become part of what the model reads.";
+            case "search_web":
+                return "A search query leaves this device to a search engine.";
             case "github_file":
                 return "Your GitHub token is sent to github.com to fetch this file.";
             default:

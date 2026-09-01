@@ -53,14 +53,14 @@ public final class RegistryTest {
     private static void registration() {
         ToolRegistry registry = builtins();
         check("four providers ship with the runtime", registry.providers().size() == 4);
-        check("thirteen tools are registered", registry.all().size() == 13);
+        check("fourteen tools are registered", registry.all().size() == 14);
         check("the registry has read_file", registry.has("read_file"));
         check("the registry does not invent tools", !registry.has("shell_exec"));
         check("a definition comes back whole",
             registry.definition("write_file").required.contains("content"));
-        check("the catalogue is data", registry.describe().length() == 13);
+        check("the catalogue is data", registry.describe().length() == 14);
         check("read-only and mutating add up",
-            registry.idsByRisk(true).size() + registry.idsByRisk(false).size() == 13);
+            registry.idsByRisk(true).size() + registry.idsByRisk(false).size() == 14);
         check("every capability used is a real one",
             registry.capabilitiesUsed().size() >= 6);
     }
@@ -97,7 +97,7 @@ public final class RegistryTest {
 
         ToolContext full = context(true, true);
         check("with everything granted, everything is offered",
-            registry.availableIds(full).size() == 13);
+            registry.availableIds(full).size() == 14);
 
         ToolContext folderOnly = context(true, false);
         List<String> ids = registry.availableIds(folderOnly);
@@ -193,7 +193,7 @@ public final class RegistryTest {
         check("a folderless prompt never mentions a file tool", noFiles);
         check("every line is one JSON object", everyLineIsAnObject(lines));
         check("a full prompt lists them all",
-            registry.promptLines(context(true, true)).size() == 13);
+            registry.promptLines(context(true, true)).size() == 14);
     }
 
     /** A plugin must not be able to take over a name the core already uses. */

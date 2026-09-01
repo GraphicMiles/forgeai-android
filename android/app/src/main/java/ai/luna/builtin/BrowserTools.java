@@ -36,6 +36,16 @@ public final class BrowserTools extends BuiltinProvider {
             .risk(RiskLevel.MEDIUM)
             .requires("browser")
             .build());
+        all.add(ToolDefinition.of("search_web", "Search the web")
+            .description("Search the web for a query and return the top results with snippets")
+            .input("query", "What to search for")
+            .required("query")
+            .capabilities(Capability.BROWSER_NAVIGATE, Capability.BROWSER_READ,
+                Capability.NETWORK_REQUEST)
+            .risk(RiskLevel.MEDIUM)
+            .timeout(20000L)
+            .requires("browser")
+            .build());
         return all;
     }
 }

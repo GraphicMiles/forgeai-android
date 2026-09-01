@@ -42,6 +42,55 @@ public final class HeadlessBrowser implements BrowserProvider {
     private static final long DEFAULT_TIMEOUT_MS = 20000L;
     private static final int MAX_TEXT = 40000;
 
+    /**
+     * Pulls Google's result blocks into one "title || address || snippet" line
+     * each. Google wraps the real address in a /url?q= redirect and sprinkles
+     * the page with non-result links, so the script only keeps blocks that
+     * have a title, resolves the address, and drops repeats.
+     */
+    private static final String SEARCH_EXTRACT =
+        "(function(){"
+            + "var out=[], seen={};"
+            + "function clean(s){ return (s||'').replace(/\\s+/g,' ').trim(); }"
+            + "function decode(u){"
+            + "try{"
+            + "var m=u.match(/[?&](?:q|url)=([^&]+)/i);"
+            + "if(m){ return decodeURIComponent(m[1]); }"
+            + "}catch(e){}"
+            + "return u;"
+            + "}"
+            + "var blocks=document.querySelectorAll('div.g, div.Gx5Zad');"
+            + "for(var i=0;i<blocks.length&&out.length<10;i++){"
+            + "var b=blocks[i];"
+            + "var a=b.querySelector('a[href]');"
+            + "var h3=b.querySelector('h3');"
+            + "var title=clean(h3?h3.innerText:'');"
+            + "var href=a?a.getAttribute('href'):'';"
+            + "if(!title||!href){continue;}"
+            + "href=decode(href);"
+            + "if(href.indexOf('http')!==0){continue;}"
+            + "if(seen[href]){continue;}"
+            + "seen[href]=1;"
+            + "var snip=b.querySelector('[data-sncf], .VwiC3b, .IsZvec, .aCOpRe');"
+            + "var text=clean(snip?snip.innerText:b.innerText.replace(title,''));"
+            + "if(text.length>300){text=text.slice(0,300)+'…';}"
+            + "out.push(title+' || '+href+' || '+text);"
+            + "}"
+            + "if(out.length===0){"
+            + "var links=document.querySelectorAll('a[href*=\"/url?q=\"]');"
+            + "for(var j=0;j<links.length&&out.length<10;j++){"
+            + "var l=links[j];"
+            + "var t=clean(l.innerText);"
+            + "if(!t){continue;}"
+            + "var h=decode(l.getAttribute('href'));"
+            + "if(h.indexOf('http')!==0||seen[h]){continue;}"
+            + "seen[h]=1;"
+            + "out.push(t+' || '+h+' || ');"
+            + "}"
+            + "}"
+            + "return out.join('\\n');"
+            + "})();";
+
     private final Context context;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ErrorLog errors;
@@ -170,6 +219,35 @@ public final class HeadlessBrowser implements BrowserProvider {
                             holder.set(value == null ? "" : value);
                             done.countDown();
                         });
+                } catch (Throwable error) {
+                    done.countDown();
+                }
+            }
+        });
+        try {
+            done.await(8, TimeUnit.SECONDS);
+        } catch (InterruptedException stopped) {
+            Thread.currentThread().interrupt();
+        }
+        return ReadableText.clean(holder.get(), MAX_TEXT);
+    }
+
+    /** The open page's search results, as "title || address || snippet" lines. */
+    @Override
+    public String searchResults() {
+        if (web == null) {
+            return "";
+        }
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicReference<String> holder = new AtomicReference<>("");
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    web.evaluateJavascript(SEARCH_EXTRACT, value -> {
+                        holder.set(value == null ? "" : value);
+                        done.countDown();
+                    });
                 } catch (Throwable error) {
                     done.countDown();
                 }
