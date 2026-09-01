@@ -14,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -73,6 +74,8 @@ public final class Tools {
                     return openPage(env, args.optString("url", args.optString("path", "")));
                 case "read_page":
                     return readPage(env);
+                case "search_web":
+                    return searchWeb(env, args.optString("query", ""));
                 case "github_file":
                     return githubFile(env, args);
                 default:
@@ -111,6 +114,35 @@ public final class Tools {
             return "Nothing is open, or the page had no readable text.";
         }
         return clamp("Text of " + env.browser.currentUrl() + ":\n" + text);
+    }
+
+    /**
+     * A search, run through whichever browser the environment offers.
+     *
+     * <p>The model never builds a search address itself: the query is encoded
+     * into one known, real search page, so the "never invent an address" rule
+     * still holds while "check online" questions get answered. The answer is
+     * the browser's structured results — one "title || address || snippet"
+     * line per result — never the raw page.
+     */
+    private static String searchWeb(Env env, String query) throws Exception {
+        if (env.browser == null) {
+            return "There is no browser available on this device.";
+        }
+        if (query == null || query.trim().isEmpty()) {
+            return "Give me a query to search for.";
+        }
+        String url = "https://www.google.com/search?q="
+            + URLEncoder.encode(query.trim(), "UTF-8") + "&hl=en&num=10";
+        String refusal = env.browser.open(url, 20000L);
+        if (!refusal.isEmpty()) {
+            return "The search could not run: " + refusal.replace("refused: ", "") + ".";
+        }
+        String results = env.browser.searchResults();
+        if (results.isEmpty()) {
+            return "The search ran, but no readable results came back. Try a different query.";
+        }
+        return clamp("Search results for \"" + query.trim() + "\":\n" + results);
     }
 
     /**

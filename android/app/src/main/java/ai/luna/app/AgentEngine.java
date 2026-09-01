@@ -65,7 +65,10 @@ public final class AgentEngine {
     private static final int CHARS_PER_TOKEN = 3;
 
     /** What a cloud model gets. Their windows are large; this is the sane cap. */
-    private static final int CLOUD_HISTORY_CHARS = 12000;
+    private static final int CLOUD_HISTORY_CHARS = 48000;
+
+    /** How many turns of conversation the cloud model is given to hold. */
+    private static final int CLOUD_HISTORY_TURNS = 30;
 
     /** How the engine talks to Flutter. */
     public interface Events {
@@ -687,7 +690,7 @@ public final class AgentEngine {
                     continue;
                 }
 
-                String path = args.optString("path", args.optString("url", ""));
+                String path = args.optString("path", args.optString("url", args.optString("query", "")));
                 boolean mutating = tools.mutating(tool);
 
                 if (tools.needsFolder(tool) && !workspace.hasRoot()) {
@@ -1635,7 +1638,8 @@ public final class AgentEngine {
             system.put("role", "system");
             system.put("content", systemPrompt(null));
             out.add(system);
-            for (JSONObject message : trimmedHistory(CLOUD_HISTORY_CHARS)) {
+            for (JSONObject message : tailTurns(transcript, CLOUD_HISTORY_TURNS,
+                CLOUD_HISTORY_CHARS)) {
                 JSONObject copy = new JSONObject();
                 String role = message.optString("role");
                 copy.put("role", role.equals("assistant") ? "assistant" : "user");
@@ -1681,6 +1685,42 @@ public final class AgentEngine {
             }
             budget -= cost;
             out.add(0, message);
+        }
+        return out;
+    }
+
+    /**
+     * The newest turns of a conversation, for the cloud model.
+     *
+     * <p>A turn is one thing the person asked, with everything said after it —
+     * the tool results and the reply — up to the next question. At least the
+     * last {@code maxTurns} turns are kept, bounded only by the character
+     * budget that keeps the request inside the provider's window. Older turns,
+     * and the tool results that belong to them, are dropped first.
+     */
+    static List<JSONObject> tailTurns(List<JSONObject> messages, int maxTurns, int budgetChars) {
+        List<JSONObject> out = new ArrayList<>();
+        int turns = 0;
+        int chars = 0;
+        for (int index = messages.size() - 1; index >= 0; index--) {
+            JSONObject message = messages.get(index);
+            if (turns >= maxTurns) {
+                break;
+            }
+            int cost = message.optString("content").length();
+            if (chars + cost > budgetChars && !out.isEmpty()) {
+                break;
+            }
+            out.add(0, message);
+            chars += cost;
+            if (message.optString("role").equals("user")) {
+                turns++;
+            }
+        }
+        // A tool result with nothing before it in the window is meaningless.
+        while (!out.isEmpty()
+            && out.get(0).optString("role").equals("observation")) {
+            out.remove(0);
         }
         return out;
     }

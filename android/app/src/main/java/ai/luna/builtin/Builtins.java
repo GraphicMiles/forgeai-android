@@ -32,6 +32,7 @@ public final class Builtins {
         CANONICAL.put("rename_file", "filesystem.rename");
         CANONICAL.put("open_page", "browser.open");
         CANONICAL.put("read_page", "browser.read");
+        CANONICAL.put("search_web", "browser.search");
         CANONICAL.put("github_file", "github.file");
         CANONICAL.put("ask_user", "user.ask");
         CANONICAL.put("respond", "agent.respond");

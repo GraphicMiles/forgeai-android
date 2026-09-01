@@ -285,12 +285,26 @@ public final class CloudProvider {
         body.put("model", config.model);
         body.put("stream", stream);
         body.put("max_tokens", maxTokens);
+        // GPT-OSS models think into a dedicated reasoning field that Groq
+        // includes by default. On a reasoning-heavy turn that thinking can
+        // spend the whole token budget before any answer lands in "content",
+        // so the stream closes with no answer and reads like the provider
+        // died. Asking for the answer only keeps the budget for the answer.
+        if (isReasoningModel(config.model)) {
+            body.put("include_reasoning", false);
+        }
         JSONArray array = new JSONArray();
         for (JSONObject message : messages) {
             array.put(message);
         }
         body.put("messages", array);
         return new Wire(config.baseUrl + "/chat/completions", body);
+    }
+
+    /** Models whose thinking arrives in a separate reasoning field. */
+    private static boolean isReasoningModel(String model) {
+        String id = model == null ? "" : model.toLowerCase(Locale.US);
+        return id.contains("gpt-oss");
     }
 
     private static Wire anthropicWire(Config config, List<JSONObject> messages, int maxTokens,
@@ -405,13 +419,31 @@ public final class CloudProvider {
                 }
                 JSONObject delta = choice.optJSONObject("delta");
                 if (delta != null) {
-                    return delta.optString("content", "");
+                    String content = delta.optString("content", "");
+                    if (!content.isEmpty()) {
+                        return content;
+                    }
+                    // Reasoning models stream their thinking into their own
+                    // field while content stays empty. Taking it beats failing
+                    // with "streamed nothing back"; the real answer, when the
+                    // model produces one, still arrives on top of it.
+                    String reasoning = delta.optString("reasoning", "");
+                    if (!reasoning.isEmpty()) {
+                        return reasoning;
+                    }
+                    reasoning = delta.optString("reasoning_content", "");
+                    if (!reasoning.isEmpty()) {
+                        return reasoning;
+                    }
+                    return "";
                 }
                 // Some servers stream the non-delta shape.
                 JSONObject whole = choice.optJSONObject("message");
-                return whole == null
-                    ? choice.optString("text", "")
-                    : whole.optString("content", "");
+                if (whole == null) {
+                    return choice.optString("text", "");
+                }
+                String content = whole.optString("content", "");
+                return content.isEmpty() ? whole.optString("reasoning", "") : content;
             }
         };
     }
@@ -577,10 +609,24 @@ public final class CloudProvider {
                     break;
                 }
                 try {
-                    String piece = frames.textOf(new JSONObject(data));
+                    JSONObject frame = new JSONObject(data);
+                    String error = errorOf(frame);
+                    if (error != null) {
+                        // The provider said why it failed, inside a 200 stream.
+                        // Saying "streamed nothing back" would hide the one
+                        // thing worth knowing.
+                        ErrorLog.tapFail("http", "chat stream error: " + trim(error, 300));
+                        return new Reply("", error);
+                    }
+                    String piece = frames.textOf(frame);
                     if (!piece.isEmpty()) {
                         gathered.append(piece);
                         sink.onToken(piece);
+                    } else if (frame.optJSONArray("choices") == null) {
+                        // A normal first frame carries an empty choices delta;
+                        // a frame with no choices at all is something unusual,
+                        // so keep it to make the next empty stream diagnosable.
+                        ErrorLog.tapNote("http", "frame with no choices: " + trim(data, 200));
                     }
                 } catch (Exception badFrame) {
                     // One malformed frame does not end the answer.
@@ -799,6 +845,19 @@ public final class CloudProvider {
         return trim(payload, 200);
     }
 
+    /** The provider's own error, out of whichever envelope it used, or null. */
+    private static String errorOf(JSONObject frame) {
+        JSONObject error = frame.optJSONObject("error");
+        if (error == null) {
+            return null;
+        }
+        String message = error.optString("message", "");
+        if (!message.isEmpty()) {
+            return trim(message, 300);
+        }
+        return trim(error.toString(), 300);
+    }
+
     private static String firstChoice(JSONObject json) {
         JSONArray choices = json.optJSONArray("choices");
         if (choices == null || choices.length() == 0) {
@@ -809,7 +868,11 @@ public final class CloudProvider {
             return "";
         }
         JSONObject message = choice.optJSONObject("message");
-        return message == null ? choice.optString("text", "") : message.optString("content", "");
+        if (message == null) {
+            return choice.optString("text", "");
+        }
+        String content = message.optString("content", "");
+        return content.isEmpty() ? message.optString("reasoning", "") : content;
     }
 
     private static String hostOf(String raw) {
