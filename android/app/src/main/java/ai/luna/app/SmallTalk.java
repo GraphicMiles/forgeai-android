@@ -28,7 +28,9 @@ public final class SmallTalk {
         "hi luna", "hey luna", "are you there", "you there", "still there",
         "how are you", "how are you doing", "whats up", "what up",
         "who are you", "what are you", "what can you do", "what do you do",
-        "help", "bye", "goodbye", "good night", "night",
+        "help", "hlep", "helpp", "helllo", "helloo", "hallo", "allo",
+        "gud morning", "good mornin",
+        "bye", "goodbye", "good night", "night",
     };
 
     private SmallTalk() {
@@ -53,6 +55,10 @@ public final class SmallTalk {
             if (text.equals(phrase)) {
                 return true;
             }
+            // One typo in a single greeting word still reads as a greeting.
+            if (words(text) == 1 && words(phrase) == 1 && oneAway(text, phrase)) {
+                return true;
+            }
         }
         // "hi there", "hey luna, morning" — an opener plus pleasantries only.
         for (String phrase : EXACT) {
@@ -61,6 +67,36 @@ public final class SmallTalk {
             }
         }
         return false;
+    }
+
+    /** True when two single words differ by at most one character. */
+    private static boolean oneAway(String left, String right) {
+        if (Math.abs(left.length() - right.length()) > 1) {
+            return false;
+        }
+        int edits = 0;
+        int i = 0;
+        int j = 0;
+        while (i < left.length() && j < right.length()) {
+            if (left.charAt(i) == right.charAt(j)) {
+                i++;
+                j++;
+                continue;
+            }
+            edits++;
+            if (edits > 1) {
+                return false;
+            }
+            if (left.length() > right.length()) {
+                i++;
+            } else if (right.length() > left.length()) {
+                j++;
+            } else {
+                i++;
+                j++;
+            }
+        }
+        return edits + (left.length() - i) + (right.length() - j) <= 1;
     }
 
     /** Words that mean a job is being described, however short the sentence. */

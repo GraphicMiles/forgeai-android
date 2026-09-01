@@ -60,15 +60,30 @@ public final class NetworkTargets {
         if (url == null || url.trim().isEmpty()) {
             return "no address was given";
         }
+        // Look at the scheme the caller actually wrote, before normalise() can
+        // staple "https://" onto something like "file:///etc/passwd". A scheme
+        // that could reach somewhere it should not is refused here; about:,
+        // data: and blob: cannot reach the network and are left to the WebView.
+        String raw = url.trim();
+        String scheme = null;
+        try {
+            scheme = new URI(raw).getScheme();
+        } catch (Exception ignored) {
+            // No usable scheme: normalise() adds https and the parse below
+            // judges the rest.
+        }
+        if (scheme != null) {
+            String lower = scheme.toLowerCase(Locale.US);
+            if (!lower.equals("http") && !lower.equals("https")
+                && !lower.equals("about") && !lower.equals("data") && !lower.equals("blob")) {
+                return "only web pages can be opened";
+            }
+        }
         URI parsed;
         try {
             parsed = new URI(normalise(url));
         } catch (Exception error) {
             return "that is not an address";
-        }
-        String scheme = parsed.getScheme() == null ? "" : parsed.getScheme().toLowerCase(Locale.US);
-        if (!scheme.equals("http") && !scheme.equals("https")) {
-            return "only web pages can be opened";
         }
         String host = parsed.getHost() == null ? "" : parsed.getHost().toLowerCase(Locale.US);
         if (host.isEmpty()) {
