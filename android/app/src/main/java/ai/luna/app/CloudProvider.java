@@ -290,10 +290,15 @@ public final class CloudProvider {
             // Groq deprecated max_tokens in favour of max_completion_tokens, so
             // a reasoning model gets the current parameter, a budget its
             // thinking cannot swallow, and the answer only (no reasoning
-            // stream) — otherwise a short question can end with an empty
-            // stream and "The provider streamed nothing back".
+            // stream). It also gets tool_choice "none": Luna calls tools by
+            // writing JSON in the reply, never through the provider's
+            // function-calling, and without this an agentic model answers a
+            // "search the web" request with a native tool_calls delta to its
+            // own server-side search — a stream with no content, which reads
+            // as "The provider streamed nothing back".
             body.put("include_reasoning", false);
             body.put("max_completion_tokens", Math.max(maxTokens, 4096));
+            body.put("tool_choice", "none");
         } else {
             body.put("max_tokens", maxTokens);
         }
@@ -438,6 +443,32 @@ public final class CloudProvider {
                     reasoning = delta.optString("reasoning_content", "");
                     if (!reasoning.isEmpty()) {
                         return reasoning;
+                    }
+                    // A native function call arrives as a tool_calls delta.
+                    // Luna does not speak that language, so the call is
+                    // written back out as the JSON object the engine knows how
+                    // to read. Reaching here means the model tried to call its
+                    // own tool despite tool_choice "none", so surfacing it is
+                    // better than reporting an empty stream.
+                    JSONArray calls = delta.optJSONArray("tool_calls");
+                    if (calls != null && calls.length() > 0) {
+                        JSONObject call = calls.optJSONObject(0);
+                        JSONObject fn = call == null ? null : call.optJSONObject("function");
+                        if (fn != null) {
+                            String name = fn.optString("name", "");
+                            if (!name.isEmpty()) {
+                                try {
+                                    JSONObject tool = new JSONObject();
+                                    tool.put("tool", name);
+                                    String args = fn.optString("arguments", "");
+                                    tool.put("args", args.isEmpty()
+                                        ? new JSONObject() : new JSONObject(args));
+                                    return tool.toString();
+                                } catch (Exception notJson) {
+                                    return "{\"tool\":\"" + name + "\",\"args\":{}}";
+                                }
+                            }
+                        }
                     }
                     return "";
                 }
@@ -594,9 +625,13 @@ public final class CloudProvider {
 
             StringBuilder gathered = new StringBuilder();
             // Recent frames that carried no text, kept in case nothing at all
-            // comes back — the one thing that turns "streamed nothing back"
-            // from a mystery into a diagnosis.
+            // comes back — plus the two fields that say why a stream ended:
+            // finish_reason and completion_tokens are the difference between
+            // "the model called a tool", "the model stopped", and "the budget
+            // ran out", which look identical from outside.
             StringBuilder silent = new StringBuilder();
+            String lastFinish = "";
+            int completionTokens = -1;
             reader = new BufferedReader(
                 new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
             String line;
@@ -626,6 +661,18 @@ public final class CloudProvider {
                         ErrorLog.tapFail("http", "chat stream error: " + trim(error, 300));
                         return new Reply("", error);
                     }
+                    JSONArray choices = frame.optJSONArray("choices");
+                    if (choices != null && choices.length() > 0) {
+                        JSONObject choice = choices.optJSONObject(0);
+                        String finish = choice == null ? "" : choice.optString("finish_reason", "");
+                        if (!finish.isEmpty()) {
+                            lastFinish = finish;
+                        }
+                    }
+                    JSONObject usage = frame.optJSONObject("usage");
+                    if (usage != null) {
+                        completionTokens = usage.optInt("completion_tokens", -1);
+                    }
                     String piece = frames.textOf(frame);
                     if (!piece.isEmpty()) {
                         gathered.append(piece);
@@ -641,8 +688,10 @@ public final class CloudProvider {
                 }
             }
             if (gathered.length() == 0) {
-                ErrorLog.tapFail("http", "empty stream; last frames: "
-                    + trim(silent.toString(), 400));
+                ErrorLog.tapFail("http", "empty stream: finish="
+                    + (lastFinish.isEmpty() ? "(none)" : lastFinish)
+                    + " completionTokens=" + completionTokens
+                    + " lastFrames=" + trim(silent.toString(), 300));
                 return new Reply("", "The provider streamed nothing back.");
             }
             return new Reply(gathered.toString(), null);
