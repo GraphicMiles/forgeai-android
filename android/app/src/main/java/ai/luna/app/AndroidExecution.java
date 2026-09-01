@@ -3,6 +3,7 @@ package ai.luna.app;
 import ai.luna.contracts.BrowserProvider;
 import ai.luna.contracts.Capability;
 import ai.luna.contracts.ExecutionProvider;
+import ai.luna.contracts.GitProvider;
 import ai.luna.contracts.SecretProvider;
 import ai.luna.contracts.StorageProvider;
 
@@ -22,12 +23,14 @@ public final class AndroidExecution implements ExecutionProvider {
     private final WorkspaceStore workspace;
     private final HeadlessBrowser browser;
     private final CredentialVault vault;
+    private final GitProvider git;
 
     public AndroidExecution(WorkspaceStore workspace, HeadlessBrowser browser,
-                            CredentialVault vault) {
+                            CredentialVault vault, GitProvider git) {
         this.workspace = workspace;
         this.browser = browser;
         this.vault = vault;
+        this.git = git;
     }
 
     @Override
@@ -61,6 +64,7 @@ public final class AndroidExecution implements ExecutionProvider {
             Capability.BROWSER_NAVIGATE,
             Capability.BROWSER_READ,
             Capability.GITHUB_READ,
+            Capability.GITHUB_WRITE,
             Capability.CREDENTIAL_READ,
             Capability.USER_ASK);
     }
@@ -78,6 +82,11 @@ public final class AndroidExecution implements ExecutionProvider {
     @Override
     public SecretProvider secrets() {
         return vault;
+    }
+
+    @Override
+    public GitProvider git() {
+        return git;
     }
 
     @Override

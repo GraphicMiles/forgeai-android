@@ -19,6 +19,7 @@ public final class ToolContext {
     public final StorageProvider storage;
     public final BrowserProvider browser;
     public final SecretProvider secrets;
+    public final GitProvider git;
     public final Trace trace;
 
     /** Where this call is running: android, desktop, server. */
@@ -27,18 +28,25 @@ public final class ToolContext {
     public ToolContext(String agentId, String ownerId, StorageProvider storage,
                        BrowserProvider browser, SecretProvider secrets, Trace trace,
                        String platform) {
+        this(agentId, ownerId, storage, browser, secrets, null, trace, platform);
+    }
+
+    public ToolContext(String agentId, String ownerId, StorageProvider storage,
+                       BrowserProvider browser, SecretProvider secrets, GitProvider git,
+                       Trace trace, String platform) {
         this.agentId = agentId == null || agentId.isEmpty() ? "luna" : agentId;
         this.ownerId = ownerId == null || ownerId.isEmpty() ? "core" : ownerId;
         this.storage = storage;
         this.browser = browser;
         this.secrets = secrets;
+        this.git = git;
         this.trace = trace == null ? Trace.SILENT : trace;
         this.platform = platform == null || platform.isEmpty() ? "android" : platform;
     }
 
     /** The same context, credited to a different owner. */
     public ToolContext ownedBy(String owner) {
-        return new ToolContext(agentId, owner, storage, browser, secrets, trace, platform);
+        return new ToolContext(agentId, owner, storage, browser, secrets, git, trace, platform);
     }
 
     public boolean hasStorage() {
@@ -47,5 +55,9 @@ public final class ToolContext {
 
     public boolean hasBrowser() {
         return browser != null;
+    }
+
+    public boolean hasGit() {
+        return git != null;
     }
 }

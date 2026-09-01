@@ -52,15 +52,15 @@ public final class RegistryTest {
 
     private static void registration() {
         ToolRegistry registry = builtins();
-        check("four providers ship with the runtime", registry.providers().size() == 4);
-        check("fourteen tools are registered", registry.all().size() == 14);
+        check("five providers ship with the runtime", registry.providers().size() == 5);
+        check("twenty-one tools are registered", registry.all().size() == 21);
         check("the registry has read_file", registry.has("read_file"));
         check("the registry does not invent tools", !registry.has("shell_exec"));
         check("a definition comes back whole",
             registry.definition("write_file").required.contains("content"));
-        check("the catalogue is data", registry.describe().length() == 14);
+        check("the catalogue is data", registry.describe().length() == 21);
         check("read-only and mutating add up",
-            registry.idsByRisk(true).size() + registry.idsByRisk(false).size() == 14);
+            registry.idsByRisk(true).size() + registry.idsByRisk(false).size() == 21);
         check("every capability used is a real one",
             registry.capabilitiesUsed().size() >= 6);
     }
@@ -94,10 +94,19 @@ public final class RegistryTest {
         check("respond is always offered", withNothing.contains("respond"));
         check("so is asking the person", withNothing.contains("ask_user"));
         check("github does not need a folder", withNothing.contains("github_file"));
+        check("with no git client, no git tool is offered",
+            !withNothing.contains("git_clone") && !withNothing.contains("git_status"));
 
         ToolContext full = context(true, true);
         check("with everything granted, everything is offered",
             registry.availableIds(full).size() == 14);
+        check("but git still needs its client", !registry.availableIds(full).contains("git_clone"));
+
+        ToolContext everything = context(true, true, true);
+        check("a git client brings the git tools",
+            registry.availableIds(everything).size() == 21);
+        check("and git_clone is among them",
+            registry.availableIds(everything).contains("git_clone"));
 
         ToolContext folderOnly = context(true, false);
         List<String> ids = registry.availableIds(folderOnly);
@@ -194,6 +203,8 @@ public final class RegistryTest {
         check("every line is one JSON object", everyLineIsAnObject(lines));
         check("a full prompt lists them all",
             registry.promptLines(context(true, true)).size() == 14);
+        check("a git-capable prompt lists them all too",
+            registry.promptLines(context(true, true, true)).size() == 21);
     }
 
     /** A plugin must not be able to take over a name the core already uses. */
@@ -226,10 +237,16 @@ public final class RegistryTest {
     }
 
     private static ToolContext context(boolean folder, boolean browser) {
+        return context(folder, browser, false);
+    }
+
+    private static ToolContext context(boolean folder, boolean browser, boolean git) {
         return new ToolContext("luna", "core",
             folder ? new Fakes.FakeStorage() : null,
             browser ? new Fakes.FakeBrowser() : null,
-            null, Trace.SILENT, "android");
+            null,
+            git ? new Fakes.FakeGit() : null,
+            Trace.SILENT, "android");
     }
 
     private static JSONObject args(String... pairs) {

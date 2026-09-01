@@ -21,12 +21,14 @@ import java.util.Set;
 public final class ToolPolicy {
 
     public static final List<String> READ_ONLY = Arrays.asList(
-        "list_files", "read_file", "search_code", "respond"
+        "list_files", "read_file", "search_code", "respond",
+        "git_status", "git_log", "git_diff"
     );
 
     public static final List<String> MUTATING = Arrays.asList(
         "write_file", "create_file", "create_folder", "delete_file", "rename_file",
-        "open_page", "read_page", "search_web", "github_file", "ask_user"
+        "open_page", "read_page", "search_web", "github_file", "ask_user",
+        "git_clone", "git_pull", "git_push", "git_commit"
     );
 
     private static final Set<String> READ_ONLY_SET = new HashSet<>(READ_ONLY);
@@ -128,6 +130,14 @@ public final class ToolPolicy {
                 return "Search the web for \"" + safePath + "\"?";
             case "github_file":
                 return "Fetch " + safePath + " from GitHub?";
+            case "git_clone":
+                return "Clone " + safePath + " into Luna's git workspace?";
+            case "git_pull":
+                return "Pull the newest changes into " + safePath + "?";
+            case "git_push":
+                return "Push " + safePath + " to its remote?";
+            case "git_commit":
+                return "Commit the changes in " + safePath + "?";
             default:
                 return "Let Luna " + plainName(tool) + "?";
         }
@@ -153,6 +163,14 @@ public final class ToolPolicy {
                 return "A search query leaves this device to a search engine.";
             case "github_file":
                 return "Your GitHub token is sent to github.com to fetch this file.";
+            case "git_clone":
+                return "A repository is downloaded from the internet to this device.";
+            case "git_pull":
+                return "The remote is contacted and new commits are written here.";
+            case "git_push":
+                return "Your changes and your GitHub token are sent to the remote repository.";
+            case "git_commit":
+                return "A commit is recorded in Luna's git workspace.";
             default:
                 return path == null ? "" : path;
         }

@@ -82,6 +82,21 @@ public final class CoreSkills implements SkillProvider {
         .order(40)
         .build();
 
+    /** Git as a library: the phone has no git binary, JGit does the work. */
+    public static final SkillDefinition GIT = SkillDefinition
+        .of("core.git", "Working with git")
+        .describe("How to clone, commit and push repositories in Luna's git workspace.")
+        .says("Repositories live in Luna's own git workspace, not in the granted folder. "
+            + "git_clone downloads a repository by its address; the other git tools name it "
+            + "by the folder it was cloned under. Read the status before you commit, and say "
+            + "what changed when you are done. A push sends your changes and your GitHub token "
+            + "to the remote.")
+        .tools("git_clone", "git_pull", "git_push", "git_status", "git_commit", "git_log",
+            "git_diff")
+        .requires("git")
+        .order(35)
+        .build();
+
     /** Stopping to ask, which is a skill and not a failure. */
     public static final SkillDefinition ASKING = SkillDefinition
         .of("core.asking", "Asking instead of guessing")
@@ -133,6 +148,7 @@ public final class CoreSkills implements SkillProvider {
         all.add(RESTRAINT);
         all.add(FILES);
         all.add(NO_FOLDER);
+        all.add(GIT);
         all.add(WEB);
         all.add(ASKING);
         all.add(REPORTING);

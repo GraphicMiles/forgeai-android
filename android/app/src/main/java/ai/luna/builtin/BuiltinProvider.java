@@ -64,7 +64,7 @@ public abstract class BuiltinProvider implements ToolProvider {
         }
         long started = System.currentTimeMillis();
         Tools.Env env = new Tools.Env(context.storage, context.browser, context.secrets,
-            context.trace);
+            context.git, context.trace);
         String observation = Tools.run(env, toolId, args == null ? new JSONObject() : args);
         long took = System.currentTimeMillis() - started;
         if (observation != null && observation.startsWith("Failed: ")) {
@@ -80,6 +80,9 @@ public abstract class BuiltinProvider implements ToolProvider {
         }
         if (definition.requires.contains("browser") && !context.hasBrowser()) {
             return "There is no browser available on this device.";
+        }
+        if (definition.requires.contains("git") && !context.hasGit()) {
+            return "There is no git available on this device.";
         }
         return null;
     }

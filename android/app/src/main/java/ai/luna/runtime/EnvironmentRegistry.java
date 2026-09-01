@@ -87,7 +87,7 @@ public final class EnvironmentRegistry {
             return new ToolContext(agentId, "core", null, null, null, trace, "android");
         }
         return new ToolContext(agentId, "core", environment.storage(), environment.browser(),
-            environment.secrets(), trace, environment.platform());
+            environment.secrets(), environment.git(), trace, environment.platform());
     }
 
     /** Capabilities the active environment is prepared to offer. */

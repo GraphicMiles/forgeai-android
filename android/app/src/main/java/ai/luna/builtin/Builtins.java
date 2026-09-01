@@ -34,6 +34,13 @@ public final class Builtins {
         CANONICAL.put("read_page", "browser.read");
         CANONICAL.put("search_web", "browser.search");
         CANONICAL.put("github_file", "github.file");
+        CANONICAL.put("git_clone", "git.clone");
+        CANONICAL.put("git_pull", "git.pull");
+        CANONICAL.put("git_push", "git.push");
+        CANONICAL.put("git_status", "git.status");
+        CANONICAL.put("git_commit", "git.commit");
+        CANONICAL.put("git_log", "git.log");
+        CANONICAL.put("git_diff", "git.diff");
         CANONICAL.put("ask_user", "user.ask");
         CANONICAL.put("respond", "agent.respond");
     }
@@ -46,6 +53,7 @@ public final class Builtins {
             new FilesystemTools(),
             new BrowserTools(),
             new GithubTools(),
+            new GitTools(),
             new UserTools());
     }
 
