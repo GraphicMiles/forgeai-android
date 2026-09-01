@@ -651,6 +651,14 @@ public final class AgentEngine {
                     args = new JSONObject();
                 }
 
+                // A small model spells a tool id the way it sounds — readfile,
+                // list-files — so a near-miss is resolved to the real id before
+                // anything else judges it. An exact id always wins.
+                String resolved = tools.resolve(tool);
+                if (!resolved.isEmpty()) {
+                    tool = resolved;
+                }
+
                 if (tool.equals("respond")) {
                     answer = args.optString("text", raw.trim());
                     break;

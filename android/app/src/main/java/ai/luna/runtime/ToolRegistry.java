@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,6 +47,36 @@ public final class ToolRegistry {
 
     /** Capabilities the environment is prepared to offer. Empty means all. */
     private Set<String> granted = new HashSet<>();
+
+    /** Ids a small model tends to spell the way they sound. */
+    private static final Map<String, String> SYNONYMS = new LinkedHashMap<>();
+    static {
+        SYNONYMS.put("readfile", "read_file");
+        SYNONYMS.put("writefile", "write_file");
+        SYNONYMS.put("listfiles", "list_files");
+        SYNONYMS.put("ls", "list_files");
+        SYNONYMS.put("list", "list_files");
+        SYNONYMS.put("find", "search_code");
+        SYNONYMS.put("grep", "search_code");
+        SYNONYMS.put("createfile", "create_file");
+        SYNONYMS.put("createfolder", "create_folder");
+        SYNONYMS.put("mkdir", "create_folder");
+        SYNONYMS.put("deletefile", "delete_file");
+        SYNONYMS.put("delete", "delete_file");
+        SYNONYMS.put("rm", "delete_file");
+        SYNONYMS.put("renamefile", "rename_file");
+        SYNONYMS.put("mv", "rename_file");
+        SYNONYMS.put("openpage", "open_page");
+        SYNONYMS.put("readpage", "read_page");
+        SYNONYMS.put("searchweb", "search_web");
+        SYNONYMS.put("lookup", "search_web");
+        SYNONYMS.put("google", "search_web");
+        SYNONYMS.put("githubfile", "github_file");
+        SYNONYMS.put("github", "github_file");
+        SYNONYMS.put("askuser", "ask_user");
+        SYNONYMS.put("ask", "ask_user");
+        SYNONYMS.put("answer", "respond");
+    }
 
     /**
      * Adds a provider. A tool id belongs to whoever claimed it first: a plugin
@@ -87,6 +118,35 @@ public final class ToolRegistry {
 
     public ToolDefinition definition(String toolId) {
         return definitions.get(toolId);
+    }
+
+    /**
+     * A tool id spelled the way a small model heard it: readfile, list-files,
+     * "search". The exact id wins; then case, hyphens and spaces are flattened;
+     * then a few names nobody types correctly are mapped. Anything still
+     * unknown returns empty and the caller keeps the original, so the
+     * "no such tool" message stays honest.
+     */
+    public String resolve(String toolId) {
+        if (toolId == null) {
+            return "";
+        }
+        String trimmed = toolId.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        if (definitions.containsKey(trimmed)) {
+            return trimmed;
+        }
+        String flat = trimmed.toLowerCase(Locale.US).replace('-', '_').replace(' ', '_');
+        if (definitions.containsKey(flat)) {
+            return flat;
+        }
+        String synonym = SYNONYMS.get(flat);
+        if (synonym != null && definitions.containsKey(synonym)) {
+            return synonym;
+        }
+        return "";
     }
 
     public String ownerOf(String toolId) {
