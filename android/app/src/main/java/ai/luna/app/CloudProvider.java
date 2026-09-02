@@ -198,7 +198,7 @@ public final class CloudProvider {
                 && wire.body.optJSONArray("contents").length() == 0) {
                 return new Reply("", "There was nothing to send.");
             }
-            return readStream(config, wire, sink, cancellation,
+            return readStream(config, messages, maxTokens, wire, sink, cancellation,
                 framesFor(config), wholeFor(config));
         } catch (Exception error) {
             return new Reply("", "Could not reach the provider: " + message(error));
@@ -626,33 +626,47 @@ public final class CloudProvider {
     /** Seconds Luna will wait out a 429 before it just tells you to. */
     private static final long RATE_LIMIT_WAIT_CAP_MS = 30_000L;
 
+    /** Private signals between the read loop and one attempt. */
+    private static final Reply RETRY_429 = new Reply("", "rate limited");
+    private static final Reply RETRY_TOOL = new Reply("", "model called a tool");
+
     /**
      * Writes the body, then reads whatever comes back — server-sent events when
      * the provider streams, one document when it does not. The difference is
-     * invisible above this method. A single 429 that promises a short wait is
-     * waited out and retried once, so a tokens-per-minute hiccup does not kill
-     * an otherwise fine job.
+     * invisible above this method. Two failures get one second chance each: a
+     * short 429 is waited out and retried, and a model that ignored
+     * tool_choice "none" to call a tool is retried once with a reminder that it
+     * has none.
      */
-    private static Reply readStream(Config config, Wire wire,
-                                    TokenSink sink, Cancellation cancellation,
+    private static Reply readStream(Config config, List<JSONObject> messages, int maxTokens,
+                                    Wire wire, TokenSink sink, Cancellation cancellation,
                                     FrameReader frames, WholeReader whole) {
-        boolean[] retry = new boolean[1];
+        Wire current = wire;
         for (int attempt = 0; attempt < 2; attempt++) {
-            retry[0] = false;
-            Reply reply = readStreamOnce(config, wire, sink, cancellation, frames, whole, retry);
-            if (!retry[0] || attempt == 1) {
-                return reply;
+            Reply reply = readStreamOnce(config, current, sink, cancellation, frames, whole, attempt);
+            if (reply == RETRY_429 && attempt == 0) {
+                continue;                       // the wait has already been slept
             }
+            if (reply == RETRY_TOOL && attempt == 0) {
+                Wire reminded = remindedWire(config, messages, maxTokens);
+                if (reminded != null) {
+                    current = reminded;
+                    continue;
+                }
+                return new Reply("", "The model tried to use a built-in tool instead of "
+                    + "answering. Send the message again.");
+            }
+            return reply;
         }
         return new Reply("", "Could not reach the provider.");
     }
 
-    /** One attempt at a streamed reply. A retryable 429 sleeps, sets
-     * {@code retry[0]}, and returns an empty reply for the loop above. */
+    /** One attempt at a streamed reply. A retryable 429 sleeps and signals
+     * {@link #RETRY_429}; a forbidden tool call signals {@link #RETRY_TOOL}. */
     private static Reply readStreamOnce(Config config, Wire wire,
                                         TokenSink sink, Cancellation cancellation,
                                         FrameReader frames, WholeReader whole,
-                                        boolean[] retry) {
+                                        int attempt) {
         HttpURLConnection connection = null;
         BufferedReader reader = null;
         try {
@@ -669,12 +683,11 @@ public final class CloudProvider {
             if (code >= 400) {
                 String body2 = readAll(connection.getErrorStream());
                 ErrorLog.tapFail("http", "chat " + code + " " + trim(body2, 300));
-                if (code == 429 && retry != null) {
+                if (code == 429 && attempt == 0) {
                     long wait = retryAfterMs(connection, body2);
                     if (wait >= 1000 && wait <= RATE_LIMIT_WAIT_CAP_MS) {
                         sleepUntil(wait, cancellation);
-                        retry[0] = true;
-                        return new Reply("", "");
+                        return RETRY_429;
                     }
                 }
                 return new Reply("", explain(config, code, body2));
@@ -736,7 +749,16 @@ public final class CloudProvider {
                         // Saying "streamed nothing back" would hide the one
                         // thing worth knowing.
                         ErrorLog.tapFail("http", "chat stream error: " + trim(error, 300));
-                        return new Reply("", error);
+                        if (attempt == 0 && error.indexOf("model called a tool") >= 0) {
+                            // A gpt-oss model ignored tool_choice "none" and
+                            // invoked its built-in web_search; Groq rejects it.
+                            // One retry, this time reminded it has none.
+                            return RETRY_TOOL;
+                        }
+                        return new Reply("", error.indexOf("model called a tool") >= 0
+                            ? "The model tried to use a built-in tool instead of answering. "
+                                + "Send the message again."
+                            : error);
                     }
                     JSONArray choices = frame.optJSONArray("choices");
                     if (choices != null && choices.length() > 0) {
@@ -854,6 +876,24 @@ public final class CloudProvider {
                 Thread.currentThread().interrupt();
                 return;
             }
+        }
+    }
+
+    /** The same request, plus one user turn reminding the model it has no
+     * tools — for a model that called one despite tool_choice "none". */
+    private static Wire remindedWire(Config config, List<JSONObject> messages, int maxTokens) {
+        try {
+            List<JSONObject> reminded = new ArrayList<>(messages);
+            JSONObject reminder = new JSONObject();
+            reminder.put("role", "user");
+            reminder.put("content",
+                "Stop. You have no tools and no function-calling ability. Do not call web_search "
+                + "or any other tool — that was an error. Answer now in plain text; if you need "
+                + "Luna to act, write the JSON tool object exactly as your instructions describe.");
+            reminded.add(reminder);
+            return wireFor(config, reminded, maxTokens, true);
+        } catch (Exception cannotBuild) {
+            return null;
         }
     }
 
