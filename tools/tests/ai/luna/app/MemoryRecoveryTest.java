@@ -94,6 +94,22 @@ public final class MemoryRecoveryTest {
         cutShort.add(message("assistant", "I hit the time limit.", "stopped"));
         check("a job cut short by a limit can be carried on", AgentEngine.resumable(cutShort));
 
+        // --- a model that wrapped its sentence in JSON ---
+        check("a wrapped answer is unwrapped to the sentence",
+            AgentEngine.wrappedText("{\"text\": \"Three lines.\"}").equals("Three lines."));
+        check("an answer field is unwrapped too",
+            AgentEngine.wrappedText("{\"answer\": \"Done.\"}").equals("Done."));
+        check("an object without a text-ish field is not unwrapped",
+            AgentEngine.wrappedText("{\"status\": \"ok\"}").isEmpty());
+        check("plain prose is not unwrapped",
+            AgentEngine.wrappedText("just prose").isEmpty());
+        check("prose survives around a tool call",
+            AgentEngine.proseOf("Sure — {\"tool\":\"list_files\",\"args\":{}}").equals("Sure —"));
+        check("words on both sides of a call stay separate",
+            AgentEngine.proseOf("a{\"tool\":\"x\",\"args\":{}}b").equals("a b"));
+        check("a bare tool call leaves no prose",
+            AgentEngine.proseOf("{\"tool\":\"search_web\",\"args\":{\"query\":\"x\"}}").isEmpty());
+
         // --- nothing to carry on ---
         check("an empty chat offers nothing", !AgentEngine.resumable(new ArrayList<JSONObject>()));
         List<JSONObject> noOrder = new ArrayList<>();

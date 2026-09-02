@@ -631,6 +631,15 @@ public final class AgentEngine {
                 JSONObject call = parseToolCall(raw);
                 if (call == null) {
                     String trimmed = raw.trim();
+                    // A small model often wraps its sentence in a JSON object
+                    // that names no tool — {"text": ...}, {"answer": ...}.
+                    // That is an answer in JSON clothing, not a broken tool
+                    // call: take the sentence, never the braces.
+                    String wrapped = wrappedText(trimmed);
+                    if (!wrapped.isEmpty()) {
+                        answer = wrapped;
+                        break;
+                    }
                     // A reply that opens like a tool call but does not parse is
                     // a broken tool call, not an answer. Printing it would show
                     // the person half a brace. One correction is offered; a
@@ -661,7 +670,13 @@ public final class AgentEngine {
                 }
 
                 if (tool.equals("respond")) {
-                    answer = args.optString("text", raw.trim());
+                    String said = args.optString("text", "").trim();
+                    if (said.isEmpty()) {
+                        // respond with no sentence: take whatever prose
+                        // surrounded the call, never the call JSON itself.
+                        said = proseOf(raw);
+                    }
+                    answer = said;
                     break;
                 }
 
@@ -732,7 +747,11 @@ public final class AgentEngine {
                     emitStep(tool, path, "blocked", reasonStep(verdict.reason));
                     appendObservation(tool, verdict.reason);
                     if (verdict.reason.contains("limit")) {
+                        // Hitting a limit mid-job is the same as running out of
+                        // time: everything already done is in the transcript,
+                        // so the chat has to offer the way back in.
                         answer = verdict.reason;
+                        cutShort = true;
                         break;
                     }
                     continue;
@@ -1438,6 +1457,12 @@ public final class AgentEngine {
             }
             WorkflowRun run = new WorkflowEngine(
                 new EngineHost(env, guards, local, cloud)).run(workflow, input);
+            // A stop that raced the workflow already ended the turn; say the
+            // summary only if nothing else did, so the chat never shows two
+            // answers for one run.
+            if (!finished.compareAndSet(false, true)) {
+                return;
+            }
             JSONObject done = new JSONObject();
             done.put("text", summarise(run));
             done.put("elapsedMs", System.currentTimeMillis() - started);
@@ -1796,6 +1821,90 @@ public final class AgentEngine {
             start = raw.indexOf('{', start + 1);
         }
         return null;
+    }
+
+    /**
+     * When a model wraps its sentence in one JSON object that names no tool —
+     * {@code {"text": ...}}, {@code {"answer": ...}} — the sentence inside is
+     * the answer. Returns the first non-empty text-ish field, or empty.
+     */
+    static String wrappedText(String raw) {
+        try {
+            JSONObject json = new JSONObject(raw);
+            String[] fields = {
+                "text", "answer", "response", "content", "message", "reply", "output", "result",
+            };
+            for (String field : fields) {
+                String value = json.optString(field, "").trim();
+                if (!value.isEmpty()) {
+                    return value;
+                }
+            }
+        } catch (JSONException notAnObject) {
+            // Not a single JSON object; there is nothing to unwrap.
+        }
+        return "";
+    }
+
+    /**
+     * Everything in a reply that is not a balanced {@code {...}} object. The
+     * sentence a model wrote around a tool call survives; the JSON does not.
+     */
+    static String proseOf(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder();
+        int index = 0;
+        while (index < raw.length()) {
+            int start = raw.indexOf('{', index);
+            if (start < 0) {
+                out.append(raw, index, raw.length());
+                break;
+            }
+            out.append(raw, index, start).append(' ');
+            int end = balancedEnd(raw, start);
+            if (end < 0) {
+                out.append(raw, start, raw.length());
+                break;
+            }
+            index = end + 1;
+        }
+        return out.toString().replaceAll("\\s+", " ").trim();
+    }
+
+    /** The '}' that closes the '{' at start, or -1 while still unbalanced. */
+    private static int balancedEnd(String text, int start) {
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int index = start; index < text.length(); index++) {
+            char symbol = text.charAt(index);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (symbol == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (symbol == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (symbol == '{') {
+                depth++;
+            } else if (symbol == '}') {
+                depth--;
+                if (depth == 0) {
+                    return index;
+                }
+            }
+        }
+        return -1;
     }
 
     // --- plumbing ------------------------------------------------------------
