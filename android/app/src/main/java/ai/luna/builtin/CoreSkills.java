@@ -81,7 +81,12 @@ public final class CoreSkills implements SkillProvider {
             + "and \"search for…\" questions. Never invent a web address: open_page is only for "
             + "a specific address the person gave you, or one you are certain is real — "
             + "example.com is not a real site. The browser has no window and forgets "
-            + "everything when the job ends.")
+            + "everything when the job ends. A search that comes back with nothing is not "
+            + "permission to answer from memory: what you remember about the newest video, "
+            + "the current price, the latest release or today's news is out of date, and "
+            + "stating it as fact is a lie however plausible it sounds. Never invent a "
+            + "title, a date, a number or a headline. If the results do not contain the "
+            + "answer, say what you searched for and that it did not come back, and stop.")
         .tools("open_page", "read_page", "search_web")
         .requires("browser")
         .order(40)
