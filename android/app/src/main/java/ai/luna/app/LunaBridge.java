@@ -435,8 +435,7 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 workspace.createFolder(argString(call, "path"));
                 return null;
             case "renameFile":
-                workspace.rename(argString(call, "path"), argString(call, "newName"));
-                return null;
+                return workspace.rename(argString(call, "path"), argString(call, "newName"));
             case "deleteFile":
                 workspace.delete(argString(call, "path"));
                 return null;

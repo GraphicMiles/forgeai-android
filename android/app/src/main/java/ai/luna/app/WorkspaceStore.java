@@ -149,7 +149,7 @@ public final class WorkspaceStore implements StorageProvider {
         if (isProtected(name)) {
             throw new IOException("That file is the kind Luna is not allowed to hold.");
         }
-        DocumentFile existing = root.findFile(name);
+        DocumentFile existing = findChild(root, name);
         if (existing != null) {
             int dot = name.lastIndexOf('.');
             String stem = dot > 0 ? name.substring(0, dot) : name;
@@ -160,6 +160,9 @@ public final class WorkspaceStore implements StorageProvider {
         if (target == null) {
             throw new IOException("Could not create " + name + " in the folder.");
         }
+        // The provider may have renamed it on the way in; the caller is told
+        // the name that exists, not the one that was requested.
+        name = settleName(target, name);
         InputStream input = null;
         OutputStream output = null;
         try {
@@ -289,10 +292,66 @@ public final class WorkspaceStore implements StorageProvider {
             return parts;
         }
         DocumentFile here = root();
-        if (here != null && here.findFile(parts.get(0)) != null) {
+        if (here != null && findChild(here, parts.get(0)) != null) {
             return parts;
         }
         return new ArrayList<>(parts.subList(1, parts.size()));
+    }
+
+    /**
+     * The extensions a document provider bolts on when it does not believe the
+     * name it was given. A file asked for as life.js can be sitting on disk as
+     * life.js.txt, and an exact-name lookup will not find it.
+     */
+    private static final String[] APPENDED = { ".txt", ".bin", ".dat", ".html", ".json", ".md" };
+
+    /**
+     * Find a child by name, the way a person means it.
+     *
+     * <p>Exact match first, because that is almost always the answer. Then a
+     * case-insensitive match, because storage on Android is frequently not
+     * case-sensitive and "Life.js" is the same file. Then the mangled forms:
+     * a file created before {@code mimeFor} was fixed is on disk under an
+     * extension nobody asked for, and if it is not found here the caller will
+     * cheerfully create a second copy beside it — which is exactly the bug
+     * where "add a loop to life.js" produced a new file instead of editing the
+     * one that was already there.
+     */
+    private static DocumentFile findChild(DocumentFile parent, String name) {
+        if (parent == null || name == null || name.isEmpty()) {
+            return null;
+        }
+        DocumentFile exact = parent.findFile(name);
+        if (exact != null) {
+            return exact;
+        }
+        DocumentFile[] children;
+        try {
+            children = parent.listFiles();
+        } catch (Exception error) {
+            return null;
+        }
+        if (children == null) {
+            return null;
+        }
+        for (DocumentFile child : children) {
+            String actual = child.getName();
+            if (actual != null && actual.equalsIgnoreCase(name)) {
+                return child;
+            }
+        }
+        for (DocumentFile child : children) {
+            String actual = child.getName();
+            if (actual == null) {
+                continue;
+            }
+            for (String suffix : APPENDED) {
+                if (actual.equalsIgnoreCase(name + suffix)) {
+                    return child;
+                }
+            }
+        }
+        return null;
     }
 
     private DocumentFile resolve(String path, boolean parentOnly) {
@@ -303,7 +362,7 @@ public final class WorkspaceStore implements StorageProvider {
         List<String> parts = segments(path);
         int limit = parentOnly ? parts.size() - 1 : parts.size();
         for (int index = 0; index < limit; index++) {
-            current = current.findFile(parts.get(index));
+            current = findChild(current, parts.get(index));
             if (current == null) {
                 return null;
             }
@@ -478,7 +537,7 @@ public final class WorkspaceStore implements StorageProvider {
         }
         DocumentFile parent = parentOf(path);
         String name = lastSegment(path);
-        if (parent.findFile(name) != null) {
+        if (findChild(parent, name) != null) {
             return;
         }
         if (parent.createDirectory(name) == null) {
@@ -489,8 +548,12 @@ public final class WorkspaceStore implements StorageProvider {
     private DocumentFile createFileDocument(String path) throws IOException {
         DocumentFile parent = parentOf(path);
         String name = lastSegment(path);
-        DocumentFile existing = parent.findFile(name);
+        DocumentFile existing = findChild(parent, name);
         if (existing != null) {
+            // Already there, possibly under a name the provider chose. Reusing
+            // it is the whole point: creating a second one is how "edit this
+            // file" turns into "write a copy next to it".
+            settleName(existing, name);
             return existing;
         }
         DocumentFile created = parent.createFile(mimeFor(name), name);
@@ -521,7 +584,7 @@ public final class WorkspaceStore implements StorageProvider {
             throw new IOException("No folder has been granted yet.");
         }
         for (int index = 0; index < parts.size() - 1; index++) {
-            DocumentFile next = current.findFile(parts.get(index));
+            DocumentFile next = findChild(current, parts.get(index));
             if (next == null) {
                 next = current.createDirectory(parts.get(index));
             }
@@ -533,7 +596,8 @@ public final class WorkspaceStore implements StorageProvider {
         return current;
     }
 
-    public void rename(String path, String newName) throws IOException {
+    @Override
+    public String rename(String path, String newName) throws IOException {
         if (isProtected(path) || isProtected(newName)) {
             throw new IOException("That file is protected.");
         }
@@ -541,9 +605,17 @@ public final class WorkspaceStore implements StorageProvider {
         if (file == null) {
             throw new IOException("No such file: " + path);
         }
-        if (!file.renameTo(newName)) {
+        String wanted = lastSegment(newName);
+        if (wanted.isEmpty()) {
+            throw new IOException("A new name is required.");
+        }
+        if (!file.renameTo(wanted)) {
             throw new IOException("Could not rename " + path);
         }
+        // A rename goes through the same provider that appends extensions, so
+        // what it is called now is a question, not an assumption.
+        String actual = settleName(file, wanted);
+        return settledPath(path, actual);
     }
 
     public void delete(String path) throws IOException {
