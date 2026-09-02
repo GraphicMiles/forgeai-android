@@ -55,6 +55,23 @@ public final class Tools {
      * told in words it cannot skim past, or it reports the path it requested
      * and the person is told something untrue.
      */
+    /**
+     * How much was written, in the terms the caller used.
+     *
+     * <p>The point is that the model can tell an empty write from a full one
+     * without reading the file back, so a successful write is never repeated
+     * out of doubt.
+     */
+    private static String measured(String content) {
+        if (content == null || content.isEmpty()) {
+            return "an empty file";
+        }
+        int lines = content.split("\n", -1).length;
+        int chars = content.length();
+        return lines + (lines == 1 ? " line" : " lines") + " (" + chars
+            + (chars == 1 ? " character)" : " characters)");
+    }
+
     private static String landedNote(String asked, String actual) {
         if (asked == null || actual == null || asked.isEmpty() || asked.equals(actual)) {
             return "";
@@ -82,10 +99,16 @@ public final class Tools {
                 case "search_code":
                     return search(env.workspace, args.optString("query", ""));
                 case "write_file": {
-                    // Report where the bytes went, not where they were aimed.
+                    // Report where the bytes went, not where they were aimed,
+                    // and how many there were. "Wrote youtube.yaml." reads the
+                    // same whether the content arrived or an empty string did,
+                    // so a model that is unsure whether its first write landed
+                    // has nothing to check and writes the file a second time.
                     String asked = args.optString("path", "");
-                    String wrote = env.workspace.writeText(asked, args.optString("content", ""));
-                    return "Wrote " + wrote + "." + landedNote(asked, wrote);
+                    String content = args.optString("content", "");
+                    String wrote = env.workspace.writeText(asked, content);
+                    return "Wrote " + measured(content) + " to " + wrote + "."
+                        + landedNote(asked, wrote);
                 }
                 case "edit_file": {
                     return editFile(env, args.optString("path", ""),

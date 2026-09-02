@@ -457,6 +457,13 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!tracePlaced && i > lastUser) {
         out.add(_steps(core));
         tracePlaced = true;
+      } else if (i < lastUser) {
+        // An earlier turn's trace is rebuilt from the transcript, because the
+        // live step list only ever holds the turn in flight -- it is emptied
+        // at run_started. Without this, scrolling up showed finished turns as
+        // though no tool had ever run in them.
+        final List<Map<String, String>> earlier = _observedBefore(core, i);
+        if (earlier.isNotEmpty) out.add(_replayedSteps(earlier));
       }
       // Anything Luna saw while browsing rides with the answer it belongs to.
       final List<Map<String, dynamic>> media = _mediaOf(message);
@@ -560,6 +567,52 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     return out;
+  }
+
+  /// The tool steps recorded between the previous answer and the answer at
+  /// [index], read back out of the saved transcript.
+  List<Map<String, String>> _observedBefore(LunaCore core, int index) {
+    final List<Map<String, String>> out = <Map<String, String>>[];
+    for (int i = index - 1; i >= 0; i--) {
+      final String role = (core.messages[i]['role'] as String?) ?? '';
+      // Stop at the boundary of this turn: the question that started it, or
+      // the answer to the turn before.
+      if (role == 'user' || role == 'assistant') break;
+      if (role != 'observation') continue;
+      final String tool = (core.messages[i]['meta'] as String?) ?? '';
+      if (tool.isEmpty) continue;
+      final String content = (core.messages[i]['content'] as String?) ?? '';
+      // Observations are stored as "tool → result"; the result is the detail.
+      final int arrow = content.indexOf(' → ');
+      out.insert(0, <String, String>{
+        'tool': tool,
+        'state': 'done',
+        'detail': arrow < 0 ? '' : content.substring(arrow + 3).trim(),
+      });
+    }
+    return out;
+  }
+
+  /// A finished turn's trace: the same rows, never spinning, never waiting.
+  Widget _replayedSteps(List<Map<String, String>> recorded) {
+    final List<TraceStep> steps = <TraceStep>[];
+    for (final Map<String, String> step in recorded) {
+      final String tool = step['tool'] ?? '';
+      if (tool == 'load_model') continue;
+      steps.add(TraceStep(
+        label: _stepLabels[tool] ?? tool,
+        state: 'done',
+        detail: step['detail'] ?? '',
+      ));
+    }
+    if (steps.isEmpty) return const SizedBox.shrink();
+    return _agentColumn(AgentTrace(
+      steps: steps,
+      running: false,
+      waiting: false,
+      label: 'Worked',
+      elapsed: Duration.zero,
+    ));
   }
 
   Widget _steps(LunaCore core) {
