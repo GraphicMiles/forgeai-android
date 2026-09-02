@@ -6,6 +6,7 @@ import ai.luna.contracts.StorageProvider;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.DocumentsContract;
+import android.webkit.MimeTypeMap;
 
 import androidx.documentfile.provider.DocumentFile;
 
@@ -252,7 +253,7 @@ public final class WorkspaceStore implements StorageProvider {
         return false;
     }
 
-    private static List<String> segments(String path) {
+    private static List<String> rawSegments(String path) {
         List<String> out = new ArrayList<>();
         if (path == null) {
             return out;
@@ -268,6 +269,30 @@ public final class WorkspaceStore implements StorageProvider {
             out.add(trimmed);
         }
         return out;
+    }
+
+    /**
+     * Paths are relative to the granted folder, but a person who is standing in
+     * "Alarms" says "put it in the alarms folder" and the model dutifully writes
+     * "Alarms/life.js". Taken literally that means a second Alarms inside the
+     * first. So a leading segment that only repeats the root's own name is
+     * dropped — unless the root really does contain a child by that name, in
+     * which case the literal reading is the right one and nothing changes.
+     */
+    private List<String> segments(String path) {
+        List<String> parts = rawSegments(path);
+        if (parts.size() < 2) {
+            return parts;
+        }
+        String root = rootName();
+        if (root.isEmpty() || !parts.get(0).equalsIgnoreCase(root)) {
+            return parts;
+        }
+        DocumentFile here = root();
+        if (here != null && here.findFile(parts.get(0)) != null) {
+            return parts;
+        }
+        return new ArrayList<>(parts.subList(1, parts.size()));
     }
 
     private DocumentFile resolve(String path, boolean parentOnly) {
@@ -286,7 +311,7 @@ public final class WorkspaceStore implements StorageProvider {
         return current;
     }
 
-    private static String lastSegment(String path) {
+    private String lastSegment(String path) {
         List<String> parts = segments(path);
         return parts.isEmpty() ? "" : parts.get(parts.size() - 1);
     }
@@ -418,7 +443,8 @@ public final class WorkspaceStore implements StorageProvider {
 
     // --- writes --------------------------------------------------------------
 
-    public void writeText(String path, String content) throws IOException {
+    @Override
+    public String writeText(String path, String content) throws IOException {
         if (isProtected(path)) {
             throw new IOException("That file is protected. Luna cannot write to it.");
         }
@@ -442,6 +468,8 @@ public final class WorkspaceStore implements StorageProvider {
         } finally {
             closeQuietly(output);
         }
+        String actual = file.getName();
+        return settledPath(path, actual == null ? lastSegment(path) : actual);
     }
 
     public void createFolder(String path) throws IOException {
@@ -469,14 +497,18 @@ public final class WorkspaceStore implements StorageProvider {
         if (created == null) {
             throw new IOException("Could not create " + path);
         }
+        settleName(created, name);
         return created;
     }
 
-    public void createFile(String path) throws IOException {
+    @Override
+    public String createFile(String path) throws IOException {
         if (isProtected(path)) {
             throw new IOException("That name is protected.");
         }
-        createFileDocument(path);
+        DocumentFile created = createFileDocument(path);
+        String actual = created.getName();
+        return settledPath(path, actual == null ? lastSegment(path) : actual);
     }
 
     private DocumentFile parentOf(String path) throws IOException {
@@ -658,18 +690,77 @@ public final class WorkspaceStore implements StorageProvider {
         }
     }
 
+    /**
+     * The MIME type a document provider is given decides the extension it puts
+     * on the file. Hand it "text/plain" for life.js and it saves life.js.txt,
+     * because .js is not an extension text/plain owns. So the type is derived
+     * from the extension the person actually asked for, and anything unknown
+     * goes in as a plain byte stream, which no provider renames.
+     */
     private static String mimeFor(String name) {
         String lower = name.toLowerCase(Locale.US);
-        if (lower.endsWith(".json")) {
+        int dot = lower.lastIndexOf('.');
+        String extension = dot > 0 && dot < lower.length() - 1 ? lower.substring(dot + 1) : "";
+        if (extension.isEmpty()) {
+            return "text/plain";
+        }
+        if (extension.equals("json")) {
             return "application/json";
         }
-        if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+        if (extension.equals("html") || extension.equals("htm")) {
             return "text/html";
         }
-        if (lower.endsWith(".md")) {
+        if (extension.equals("md")) {
             return "text/markdown";
         }
-        return "text/plain";
+        if (extension.equals("txt")) {
+            return "text/plain";
+        }
+        String guess = null;
+        try {
+            guess = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        } catch (Exception ignored) {
+            guess = null;
+        }
+        if (guess != null && !guess.isEmpty()
+            && extension.equals(MimeTypeMap.getSingleton().getExtensionFromMimeType(guess))) {
+            // Only trust the guess when the round trip agrees; otherwise the
+            // provider would swap the extension for its own idea of one.
+            return guess;
+        }
+        return "application/octet-stream";
+    }
+
+    /**
+     * What the provider actually called the thing it just made. A file created
+     * as life.js can come back as life.js.txt or life.js.bin; if it did, it is
+     * renamed back, and if even that fails the real name is what gets reported.
+     */
+    private static String settleName(DocumentFile created, String wanted) {
+        String actual = created.getName();
+        if (actual == null || actual.equals(wanted)) {
+            return wanted;
+        }
+        try {
+            if (created.renameTo(wanted)) {
+                String after = created.getName();
+                return after == null ? wanted : after;
+            }
+        } catch (Exception ignored) {
+            // Fall through and report the name the provider chose.
+        }
+        String after = created.getName();
+        return after == null ? actual : after;
+    }
+
+    /** The path a caller should be told about, given the name that landed. */
+    private String settledPath(String path, String actualName) {
+        List<String> parts = segments(path);
+        StringBuilder out = new StringBuilder();
+        for (int index = 0; index < parts.size() - 1; index++) {
+            out.append(parts.get(index)).append('/');
+        }
+        return out.append(actualName).toString();
     }
 
     static void closeQuietly(java.io.Closeable stream) {

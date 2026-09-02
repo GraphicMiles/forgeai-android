@@ -247,11 +247,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       onTap: () async {
                         final String markdown = await core.exportChat();
                         final String name = 'luna-job-${DateTime.now().millisecondsSinceEpoch}.md';
-                        await core.writeFile(name, markdown);
+                        // Report the name the folder actually gave it.
+                        final String saved = await core.writeFile(name, markdown);
                         if (inner.mounted) Navigator.of(sheetContext).pop();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Saved $name in the folder')),
+                            SnackBar(content: Text('Saved $saved in the folder')),
                           );
                         }
                       },

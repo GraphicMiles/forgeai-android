@@ -512,10 +512,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: () async {
             final String json = await core.exportSettings();
             final String name = 'luna-settings.json';
-            await core.writeFile(name, json);
+            final String saved = await core.writeFile(name, json);
             if (mounted) {
               ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text('Saved $name in the folder')));
+                  .showSnackBar(SnackBar(content: Text('Saved $saved in the folder')));
             }
           },
         ),

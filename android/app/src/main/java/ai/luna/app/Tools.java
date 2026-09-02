@@ -50,6 +50,19 @@ public final class Tools {
     private Tools() {
     }
 
+    /**
+     * When the file did not land where it was asked for, the model has to be
+     * told in words it cannot skim past, or it reports the path it requested
+     * and the person is told something untrue.
+     */
+    private static String landedNote(String asked, String actual) {
+        if (asked == null || actual == null || asked.isEmpty() || asked.equals(actual)) {
+            return "";
+        }
+        return " Note: the path is " + actual + ", not " + asked
+            + ". Tell the user the real path.";
+    }
+
     public static String run(Env env, String tool, JSONObject args) {
         try {
             switch (tool) {
@@ -59,12 +72,17 @@ public final class Tools {
                     return readFile(env.workspace, args.optString("path", ""));
                 case "search_code":
                     return search(env.workspace, args.optString("query", ""));
-                case "write_file":
-                    env.workspace.writeText(args.optString("path", ""), args.optString("content", ""));
-                    return "Wrote " + args.optString("path", "") + ".";
-                case "create_file":
-                    env.workspace.createFile(args.optString("path", ""));
-                    return "Created " + args.optString("path", "") + ".";
+                case "write_file": {
+                    // Report where the bytes went, not where they were aimed.
+                    String asked = args.optString("path", "");
+                    String wrote = env.workspace.writeText(asked, args.optString("content", ""));
+                    return "Wrote " + wrote + "." + landedNote(asked, wrote);
+                }
+                case "create_file": {
+                    String asked = args.optString("path", "");
+                    String created = env.workspace.createFile(asked);
+                    return "Created " + created + "." + landedNote(asked, created);
+                }
                 case "create_folder":
                     env.workspace.createFolder(args.optString("path", ""));
                     return "Created the folder " + args.optString("path", "") + ".";

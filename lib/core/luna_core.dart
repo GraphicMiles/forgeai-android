@@ -674,10 +674,19 @@ class LunaCore extends ChangeNotifier {
     return await _channel.invokeMethod<String>('readFile', <String, dynamic>{'path': path}) ?? '';
   }
 
-  Future<void> writeFile(String path, String content) =>
-      _invoke('writeFile', <String, dynamic>{'path': path, 'content': content});
+  /// Returns the path the file actually landed on, which is not always the one
+  /// that was asked for.
+  Future<String> writeFile(String path, String content) async {
+    final String landed = await _invokeText(
+      'writeFile', <String, dynamic>{'path': path, 'content': content});
+    return landed.isEmpty ? path : landed;
+  }
 
-  Future<void> createFile(String path) => _invoke('createFile', <String, dynamic>{'path': path});
+  /// Returns the path the file actually landed on.
+  Future<String> createFile(String path) async {
+    final String landed = await _invokeText('createFile', <String, dynamic>{'path': path});
+    return landed.isEmpty ? path : landed;
+  }
 
   Future<void> createFolder(String path) => _invoke('createFolder', <String, dynamic>{'path': path});
 
@@ -998,6 +1007,20 @@ class LunaCore extends ChangeNotifier {
   }
 
   // --- plumbing -------------------------------------------------------------
+
+  /// Same as [_invoke], for the calls whose answer is a string worth keeping.
+  Future<String> _invokeText(String method, [Map<String, dynamic>? args]) async {
+    try {
+      final String result = await _channel.invokeMethod<String>(method, args) ?? '';
+      lastError = null;
+      return result;
+    } on PlatformException catch (error) {
+      lastError = error.message ?? error.code;
+      debug.fail(method, error.message ?? error.code);
+      notifyListeners();
+      rethrow;
+    }
+  }
 
   Future<void> _invoke(String method, [Map<String, dynamic>? args]) async {
     try {
