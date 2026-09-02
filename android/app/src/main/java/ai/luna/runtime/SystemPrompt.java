@@ -64,20 +64,45 @@ public final class SystemPrompt {
         List<SkillDefinition> chosen = resolver.resolve(candidates, context, tools, message);
 
         StringBuilder out = new StringBuilder();
-        // Identity, then where the agent is standing, then everything else it
-        // knows. The situation goes second because it is the one part that
-        // changes every single run.
+        // Everything that does not change goes first, byte for byte, and
+        // everything situational goes last.
+        //
+        // Groq bills a prompt at half price for the longest prefix it has seen
+        // recently, and cached tokens do not count against the tokens-per-minute
+        // limit at all. Both stop at the first byte that differs. Today's date
+        // used to sit above the rules, so one character rolling over at midnight
+        // -- or a different folder, or the request itself -- threw away the
+        // discount on everything after it. The rules and the tool list are
+        // identical on every call, so they earn more at the top than anything
+        // that changes.
         for (SkillDefinition skill : chosen) {
             if (skill.order <= 0) {
                 out.append(skill.instructions).append("\n\n");
             }
         }
-        situation(out, folderName, unattended);
         for (SkillDefinition skill : chosen) {
             if (skill.order > 0) {
                 out.append(skill.instructions).append("\n\n");
             }
         }
+        out.append("You have no function-calling ability and no built-in tools. Never emit a "
+            + "function call or try to invoke a tool such as web_search — that is an error and "
+            + "you will be stopped. Use Luna's tools only by writing the JSON object below as "
+            + "plain text.\n");
+        out.append("To use a tool, reply with one JSON object and nothing else:\n");
+        List<String> lines = scope == null ? tools.promptLines(context) : scope.promptLines(context);
+        for (String line : lines) {
+            out.append(line).append('\n');
+        }
+        out.append("For respond you can also just write the sentences.\n");
+        if (scope != null && scope.active() != null && !scope.active().instructions.isEmpty()) {
+            // An agent's own words come after the shared knowledge, so a
+            // definition can add to Luna's rules without quietly replacing them.
+            out.append('\n').append(scope.active().instructions).append('\n');
+        }
+
+        // --- everything below here differs between calls --------------------
+        situation(out, folderName, unattended);
 
         // The job itself, restated every turn. The transcript is trimmed
         // oldest-first, so on a long run the message that started the work is
@@ -101,21 +126,7 @@ public final class SystemPrompt {
             }
             out.append('\n');
         }
-        out.append("You have no function-calling ability and no built-in tools. Never emit a "
-            + "function call or try to invoke a tool such as web_search — that is an error and "
-            + "you will be stopped. Use Luna's tools only by writing the JSON object below as "
-            + "plain text.\n");
-        out.append("To use a tool, reply with one JSON object and nothing else:\n");
-        List<String> lines = scope == null ? tools.promptLines(context) : scope.promptLines(context);
-        for (String line : lines) {
-            out.append(line).append('\n');
-        }
-        out.append("For respond you can also just write the sentences.\n");
-        if (scope != null && scope.active() != null && !scope.active().instructions.isEmpty()) {
-            // An agent's own words come after the shared knowledge, so a
-            // definition can add to Luna's rules without quietly replacing them.
-            out.append('\n').append(scope.active().instructions).append('\n');
-        }
+
         return withPersona(out, persona);
     }
 

@@ -43,6 +43,7 @@ public final class AgentsTest {
         budgets();
         promptForOneAgent();
         goalSurvivesTrimming();
+        cacheablePrefix();
 
         System.out.println();
         if (failed > 0) {
@@ -217,6 +218,60 @@ public final class AgentsTest {
         int end = capped.indexOf("Keep doing this", start);
         check("a rambling request is clamped", end - start < 600);
         check("but still says what it was", capped.contains("tidy the folder"));
+    }
+
+    /**
+     * Two calls that differ only in the situation share a long opening.
+     *
+     * <p>Groq bills the longest prefix it has already seen at half price, and
+     * cached tokens are not counted against the per-minute limit -- but both
+     * stop at the first byte that differs. The date used to be the third line
+     * of the prompt, so at midnight, or on a folder change, or simply because
+     * the request was different, the discount was lost on everything after it.
+     * The rules and the tool list are identical on every call, so they belong
+     * above anything situational.
+     */
+    private static void cacheablePrefix() {
+        SystemPrompt prompt = new SystemPrompt(builtinTools(), coreSkills(), new SkillResolver(),
+            manager());
+        String one = prompt.build(context(true, true), "tidy my downloads", "Downloads",
+            false, null);
+        String two = prompt.build(context(true, true), "find the March invoice", "Work",
+            true, null);
+
+        int shared = 0;
+        while (shared < one.length() && shared < two.length()
+            && one.charAt(shared) == two.charAt(shared)) {
+            shared++;
+        }
+        // The whole static half must match: rules, tool list, the lot.
+        check("two unrelated calls share a long prefix", shared > 2000);
+        check("the shared part covers the tool list",
+            one.substring(0, shared).contains("\"tool\":\"read_file\""));
+        // The label "Folder granted: " is itself identical on every call, so it
+        // sits legitimately inside the shared prefix -- it is the value after
+        // it that diverges. What must not be shared is a situational *value*.
+        check("no situational value is inside it",
+            !one.substring(0, shared).contains("Downloads")
+                && !one.substring(0, shared).contains("tidy my downloads"));
+        check("the divergence is at the folder value, not earlier",
+            shared > one.indexOf("Folder granted"));
+
+        // The order itself: static above, situational below.
+        check("the tool list comes before the folder",
+            one.indexOf("To use a tool") < one.indexOf("Folder granted"));
+        check("and before the request",
+            one.indexOf("To use a tool") < one.indexOf("What you were asked to do"));
+        check("the date is below the rules",
+            one.indexOf("Never claim you did something") < one.indexOf("Today is"));
+
+        // Same inputs must still be byte-identical, or nothing ever caches.
+        check("the same call twice is identical",
+            prompt.build(context(true, true), "tidy my downloads", "Downloads", false, null)
+                .equals(one));
+        // And the situational parts are still actually present.
+        check("the folder is still stated", one.contains("Folder granted: Downloads"));
+        check("the mode is still stated", two.contains("Mode: unattended"));
     }
 
     // --- helpers --------------------------------------------------------------
