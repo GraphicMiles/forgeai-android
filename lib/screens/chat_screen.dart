@@ -38,10 +38,20 @@ class _ChatScreenState extends State<ChatScreen> {
     'rename_file': 'Renamed a file',
     'open_page': 'Opened a page',
     'read_page': 'Read the page',
+    'search_web': 'Searched the web',
     'github_file': 'Fetched from GitHub',
+    'git_clone': 'Cloned a repository',
+    'git_pull': 'Pulled a repository',
+    'git_push': 'Pushed a repository',
+    'git_status': 'Checked the git status',
+    'git_commit': 'Committed the changes',
+    'git_log': 'Read the git history',
+    'git_diff': 'Showed the changes',
     'ask_user': 'Asked you',
     'load_model': 'Loaded the model',
     'failover': 'Fell back to the cloud',
+    'sub_agent': 'Consulted an agent',
+    'workflow': 'Ran a workflow',
   };
 
   /// What the same tool is called while it is still happening.
@@ -56,10 +66,20 @@ class _ChatScreenState extends State<ChatScreen> {
     'rename_file': 'Renaming a file',
     'open_page': 'Opening a page',
     'read_page': 'Reading the page',
+    'search_web': 'Searching the web',
     'github_file': 'Fetching from GitHub',
+    'git_clone': 'Cloning a repository',
+    'git_pull': 'Pulling a repository',
+    'git_push': 'Pushing a repository',
+    'git_status': 'Checking the git status',
+    'git_commit': 'Committing the changes',
+    'git_log': 'Reading the git history',
+    'git_diff': 'Showing the changes',
     'ask_user': 'Waiting on you',
     'load_model': 'Loading the model',
     'failover': 'Falling back to the cloud',
+    'sub_agent': 'Consulting an agent',
+    'workflow': 'Running a workflow',
   };
 
   final TextEditingController _answer = TextEditingController();
@@ -494,9 +514,19 @@ class _ChatScreenState extends State<ChatScreen> {
     'rename_file': 'Did not rename a file',
     'open_page': 'Did not open a page',
     'read_page': 'Did not read the page',
+    'search_web': 'Did not search the web',
     'github_file': 'Did not fetch from GitHub',
+    'git_clone': 'Did not clone the repository',
+    'git_pull': 'Did not pull the repository',
+    'git_push': 'Did not push the repository',
+    'git_status': 'Did not check the git status',
+    'git_commit': 'Did not commit the changes',
+    'git_log': 'Did not read the git history',
+    'git_diff': 'Did not show the changes',
     'ask_user': 'Did not ask you',
     'load_model': 'Could not load the model',
+    'sub_agent': 'Did not consult an agent',
+    'workflow': 'Did not run the workflow',
   };
 
   Widget _steps(LunaCore core) {
@@ -528,9 +558,15 @@ class _ChatScreenState extends State<ChatScreen> {
         'unfinished': 'took too long and was dropped',
         'failed': 'it did not work',
       };
-      final String detail = state == 'denied'
-          ? (tool == 'load_model' ? 'the model would not load' : 'not allowed')
-          : (reasons[state] ?? name);
+      // The engine sends the real reason on the step when it has one; the
+      // canned words here are only the fallback for a step that arrived
+      // without one. "Over the limit for one job" was never the whole story.
+      final String stepDetail = step['detail'] ?? '';
+      final String detail = stepDetail.isNotEmpty
+          ? stepDetail
+          : state == 'denied'
+              ? (tool == 'load_model' ? 'the model would not load' : 'not allowed')
+              : (reasons[state] ?? name);
       final String label = refused
           ? (_refusedLabels[tool] ?? _stepLabels[tool] ?? tool)
           : (state == 'running' || state == 'held')

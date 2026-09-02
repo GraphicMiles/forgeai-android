@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luna — agent pipeline mockups</title>
+<style>
+  :root{
+    --ink:#0B0B0C; --ink2:#3D3D42; --ink3:#76767E; --ink4:#A3A3AB;
+    --line:#EDEDF0; --fill:#F4F4F6; --fill2:#EAEAEE; --paper:#FFFFFF;
+    --onInk:#FFFFFF; --onInkDim:#9A9AA2; --onInkFaint:#8F8F98;
+    --inkCell:#1A1A1E; --inkButton:#232327;
+    --mascot:#7C5CFF;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:#F4F4F6;}
+  body{
+    font-family:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+
+  /* ---- page shell (outside the phones) ---- */
+  .page{max-width:1280px; margin:0 auto; padding:34px 28px 60px;}
+  .pagehead h1{font-size:22px; font-weight:800; letter-spacing:-.03em;}
+  .pagehead p{font-size:13px; color:var(--ink3); margin-top:4px; max-width:640px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:34px; margin-top:30px; align-items:start;}
+  section h2{font-size:13px; font-weight:600; color:var(--ink3); letter-spacing:-.005em; margin-bottom:12px; padding-left:6px;}
+  section h2 b{color:var(--ink);}
+
+  /* ---- the phone frame ---- */
+  .phone{
+    width:380px; height:812px; margin:0 auto;
+    background:var(--paper); border:1px solid var(--line); border-radius:44px;
+    overflow:hidden; display:flex; flex-direction:column; position:relative;
+  }
+
+  /* status bar */
+  .statusbar{height:46px; flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:0 26px; font-size:15px; font-weight:600;}
+  .sbicons{display:flex; align-items:center; gap:5px; color:var(--ink);}
+  .sbicons svg{display:block;}
+
+  /* header */
+  .top{flex:0 0 auto; padding:8px 20px 10px;}
+  .toprow{display:flex; align-items:center; justify-content:space-between;}
+  .title{font-size:16.5px; font-weight:700; letter-spacing:-.028em;}
+  .topbtns{display:flex; gap:9px;}
+  .ibtn{width:34px; height:34px; border-radius:50%; background:var(--fill); color:var(--ink2); display:flex; align-items:center; justify-content:center;}
+  .ibtn svg{width:13px; height:13px;}
+  .pillrow{margin-top:10px;}
+  .pill{display:inline-flex; align-items:center; gap:7px; background:var(--fill); border-radius:999px; padding:6px 13px; font-size:12px; font-weight:500; color:var(--ink2);}
+  .pill svg{width:10.5px; height:10.5px; color:var(--ink4);}
+  .pill .dot{width:3px; height:3px; border-radius:50%; background:var(--ink4);}
+
+  /* thread */
+  .thread{flex:1 1 auto; overflow:hidden; padding-bottom:8px;}
+  .user{display:flex; justify-content:flex-end; margin:4px 20px 24px;}
+  .bubble{background:var(--ink); color:var(--onInk); font-size:14px; line-height:1.4; letter-spacing:-.01em; padding:7px 11px; border-radius:15px 15px 15px 5px; max-width:80%;}
+  .agent{margin:0 20px 11px 24px; max-width:304px;}
+  .answer{font-size:14.5px; line-height:1.5; color:var(--ink);}
+  .w{display:inline-block; margin-right:4.5px; animation:win .5s cubic-bezier(.22,.61,.25,1) both;}
+  @keyframes win{from{opacity:0; filter:blur(10px);} to{opacity:1; filter:blur(0);}}
+
+  /* trace */
+  .trace{padding:2px 0;}
+  .thead{display:flex; align-items:center; gap:6px;}
+  .mark{display:inline-flex;}
+  .mark svg{width:14px; height:14px;}
+  .hlabel{font-size:12.5px; font-weight:600; color:var(--ink2); letter-spacing:-.012em; white-space:nowrap;}
+  .hlabel.shimmer{
+    background:linear-gradient(100deg,#76767E 32%, #0B0B0C 50%, #76767E 68%);
+    background-size:220% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:shim 1.4s linear infinite;
+  }
+  @keyframes shim{from{background-position:130% 0;} to{background-position:-130% 0;}}
+  .timer{font-size:11px; color:var(--ink3); margin-left:7px;}
+  .timer.hide{display:none;}
+  .chev{color:var(--ink3); display:inline-flex; margin-left:6px; transition:transform .3s cubic-bezier(.23,1,.32,1);}
+  .chev svg{width:9px; height:9px;}
+  .chev.open{transform:rotate(180deg);}
+  .railwrap{margin-left:6px; padding-left:10px; border-left:1px solid var(--line); overflow:hidden; transition:max-height .4s cubic-bezier(.23,1,.32,1), opacity .35s, margin .4s, border .4s;}
+  .railwrap.folded{max-height:0 !important; opacity:0; border-left-color:transparent; padding-top:0; padding-bottom:0;}
+
+  .step{display:flex; gap:7px; align-items:flex-start; padding:2.5px 0; animation:rowin .35s cubic-bezier(.23,1,.32,1) both;}
+  @keyframes rowin{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+  .sicon{width:13px; height:17px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:var(--ink3);}
+  .sicon svg{width:9.5px; height:9.5px;}
+  .step.done .sicon{color:var(--ink2);}
+  .sbody{min-width:0;}
+  .slabel{font-size:12px; font-weight:500; color:var(--ink2); line-height:1.35; letter-spacing:-.012em;}
+  .step.done .slabel{color:var(--ink); font-weight:600;}
+  .sdetail{font-size:10.5px; color:var(--ink3); margin-top:1px; line-height:1.3;}
+
+  /* pixel loader (running step) */
+  .pxl{display:grid; grid-template-columns:repeat(3,3px); grid-template-rows:repeat(3,3px); gap:1.5px;}
+  .pxl i{width:3px; height:3px; border-radius:1.5px; background:var(--ink); opacity:.12; animation:pxl .65s linear infinite; animation-delay:calc((var(--r) + var(--c)) * .1625s);}
+  @keyframes pxl{0%,55%{opacity:.12;} 28%{opacity:1;}}
+
+  /* the one filled-black surface: approval / question cards */
+  .card{background:var(--ink); border-radius:24px; padding:12px 13px 11px; color:var(--onInk); animation:cardIn .35s cubic-bezier(.23,1,.32,1) both;}
+  .card.out{animation:cardOut .26s cubic-bezier(.23,1,.32,1) both;}
+  @keyframes cardIn{from{opacity:0; transform:translateY(8px) scale(.98);} to{opacity:1; transform:none;}}
+  @keyframes cardOut{to{opacity:0; transform:translateY(6px) scale(.985);}}
+  .csmall{display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; color:var(--onInkDim); letter-spacing:-.005em;}
+  .csmall svg{width:10px; height:10px;}
+  .chead{font-size:16px; font-weight:700; color:var(--onInk); letter-spacing:-.028em; line-height:1.25; margin-top:4px;}
+  .cconseq{font-size:11.5px; color:var(--onInkFaint); line-height:1.4; margin-top:3px;}
+  .cpreview{margin-top:9px; background:var(--inkCell); border-radius:15px; padding:8px 10px; font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:11px; color:var(--onInk);}
+  .qfield{margin-top:11px; background:var(--inkButton); border-radius:999px; padding:4px 13px; font-size:13.5px; color:var(--onInk); min-height:29px; display:flex; align-items:center;}
+  .qfield .typed{white-space:pre;}
+  .qfield .caret{display:inline-block; width:1.6px; height:14px; background:var(--onInk); margin-left:1px; animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .cbtns{display:flex; gap:7px; margin-top:11px;}
+  .btn{display:flex; align-items:center; gap:6px; padding:7px 13px; border-radius:999px; font-size:12.5px; font-weight:600; border:none; font-family:inherit; cursor:default;}
+  .btn svg{width:10.5px; height:10.5px;}
+  .btn.allow{background:var(--onInk); color:var(--ink);}
+  .btn.skip{background:var(--inkButton); color:var(--onInk);}
+
+  /* composer */
+  .composer{flex:0 0 auto; display:flex; align-items:flex-end; gap:9px; margin:8px 20px 6px; background:var(--fill); border-radius:999px; padding:5px 5px 5px 15px;}
+  .paperclip{color:var(--ink3); padding-bottom:9px; display:flex;}
+  .paperclip svg{width:13.5px; height:13.5px;}
+  .hint{flex:1; color:var(--ink3); font-size:13.5px; padding:9px 0; white-space:nowrap; overflow:hidden;}
+  .send{width:34px; height:34px; border-radius:50%; background:var(--ink); color:var(--onInk); display:flex; align-items:center; justify-content:center; flex:0 0 auto;}
+  .send svg{width:12.5px; height:12.5px;}
+  .send .stop{width:11px; height:11px;}
+
+  /* tab bar */
+  .tabbar{flex:0 0 auto; display:flex; border-top:1px solid var(--line);}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 0 12px; font-size:10.5px; font-weight:500; color:var(--ink4); letter-spacing:-.01em;}
+  .tab svg{width:18px; height:18px;}
+  .tab.on{color:var(--ink);}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="pagehead">
+    <h1>Luna — the agent pipeline, as it is supposed to run</h1>
+    <p>Three mockups of the Chat screen with the thinking trace inside. Everything is the app&#8217;s own design language — monochrome ink, the one filled-black surface for a decision, steps on a rail under the mascot mark. Each phone loops its animation.</p>
+  </header>
+
+  <div class="grid">
+    <section><h2><b>1 · The live run</b> — think → read → ask → search → answer</h2><div class="phone" id="phoneA"></div></section>
+    <section><h2><b>2 · Ask me, then resume</b> — the human-in-the-loop handoff</h2><div class="phone" id="phoneB"></div></section>
+    <section><h2><b>3 · Every step state</b> — the finished record, pinned open</h2><div class="phone" id="phoneC"></div></section>
+  </div>
+</div>
+
+<script>
+/* ---------- icons (inline SVG, currentColor) ---------- */
+const I = {
+  paperclip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+  stop:'<svg class="stop" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  hourglass:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M7 3h10v2.2L13.6 9.8 17 14.2V21H7v-6.8l3.4-4.4L7 5.2z"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.2 14"/></svg>',
+  pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  chip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>',
+  folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+  hand:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>',
+  q:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 3.5"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  cube:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>',
+  chatSolid:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  chatLine:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  signal:'<svg viewBox="0 0 17 11" width="17" height="11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.7" y="4.6" width="3" height="6.4" rx="1"/><rect x="9.4" y="2.4" width="3" height="8.6" rx="1"/><rect x="14" y="0" width="3" height="11" rx="1"/></svg>',
+  wifi:'<svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor"><path d="M8 9.4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM8 6.4a4.6 4.6 0 0 1 3.2 1.3l-1.5 1.5a2.5 2.5 0 0 0-3.4 0L4.8 7.7A4.6 4.6 0 0 1 8 6.4zM8 3.1a8 8 0 0 1 5.6 2.3l-1.5 1.5A5.9 5.9 0 0 0 8 5.2a5.9 5.9 0 0 0-4.1 1.7L2.4 5.4A8 8 0 0 1 8 3.1z"/></svg>',
+  battery:'<svg viewBox="0 0 25 12" width="25" height="12" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="21" height="11" rx="3"/><rect x="2" y="2" width="15" height="8" rx="1.5" fill="currentColor" stroke="none"/><path d="M23 4v4a2 2 0 0 0 0-4z" fill="currentColor" stroke="none"/></svg>',
+  mark:function(bg){return '<svg viewBox="0 0 24 24"><circle cx="12.4" cy="12" r="9.6" fill="#7C5CFF"/><circle cx="21" cy="3.5" r="7" fill="'+bg+'"/><rect x="8.9" y="10.7" width="1.7" height="4.4" rx="0.85" fill="'+bg+'" transform="rotate(-11 9.75 12.9)"/><rect x="13.4" y="10.7" width="1.7" height="4.4" rx="0.85" fill="'+bg+'" transform="rotate(11 14.25 12.9)"/></svg>';}
+};
+
+/* ---------- helpers ---------- */
+function h(html){const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild;}
+function q(root,sel){return root.querySelector(sel);}
+
+/* ---------- phone chrome ---------- */
+function makePhone(id){
+  const el = h(
+    '<div class="phone" id="'+id+'">'+
+      '<div class="statusbar"><span>9:41</span><span class="sbicons">'+I.signal+I.wifi+I.battery+'</span></div>'+
+      '<div class="top">'+
+        '<div class="toprow"><div class="title">This job</div>'+
+          '<div class="topbtns">'+
+            '<div class="ibtn">'+I.clock+'</div>'+
+            '<div class="ibtn">'+I.pen+'</div>'+
+          '</div></div>'+
+        '<div class="pillrow"><span class="pill">'+I.chip+'<span class="model">openai/gpt-oss-120b</span><span class="dot"></span>'+I.folder+'<span class="folder">Alarms</span></span></div>'+
+      '</div>'+
+      '<div class="thread"></div>'+
+      '<div class="composer">'+
+        '<div class="paperclip">'+I.paperclip+'</div>'+
+        '<div class="hint">Tell Luna what to do&#8230;</div>'+
+        '<div class="send">'+I.up+'</div>'+
+      '</div>'+
+      '<div class="tabbar">'+
+        '<div class="tab on">'+I.chatSolid+'<span>Chat</span></div>'+
+        '<div class="tab">'+I.folder+'<span>Files</span></div>'+
+        '<div class="tab">'+I.cube+'<span>Models</span></div>'+
+        '<div class="tab">'+I.gear+'<span>Settings</span></div>'+
+      '</div>'+
+    '</div>');
+  el.thread = q(el,'.thread');
+  el.hint = q(el,'.hint');
+  el.send = q(el,'.send');
+  el.setRunning = function(run){
+    el.send.innerHTML = run ? I.stop : I.up;
+    el.hint.textContent = run ? 'Add to the job\u2026' : 'Tell Luna what to do\u2026';
+  };
+  return el;
+}
+
+/* ---------- trace + steps ---------- */
+function traceEl(){
+  const t = h(
+    '<div class="trace">'+
+      '<div class="thead">'+
+        '<span class="mark">'+I.mark('#FFFFFF')+'</span>'+
+        '<span class="hlabel">Thinking</span>'+
+        '<span class="timer mono">0s</span>'+
+        '<span class="chev">'+I.chev+'</span>'+
+      '</div>'+
+      '<div class="railwrap"><div class="rail"></div></div>'+
+    '</div>');
+  t.label = q(t,'.hlabel');
+  t.timer = q(t,'.timer');
+  t.chev = q(t,'.chev');
+  t.rail = q(t,'.rail');
+  t.railwrap = q(t,'.railwrap');
+  return t;
+}
+
+function iconFor(status){
+  if(status==='running'){
+    let c=''; for(let r=0;r<3;r++)for(let cc=0;cc<3;cc++) c+='<i style="--r:'+r+';--c:'+cc+'"></i>';
+    return '<span class="pxl">'+c+'</span>';
+  }
+  if(status==='done') return I.check;
+  if(status==='held') return I.hourglass;
+  return I.x;
+}
+
+function stepEl(label, detail, status){
+  const s = h('<div class="step"><div class="sicon">'+iconFor(status)+'</div><div class="sbody"><div class="slabel">'+label+'</div><div class="sdetail">'+detail+'</div></div></div>');
+  if(status==='done') s.classList.add('done');
+  return s;
+}
+
+function setStep(row, label, detail, status){
+  q(row,'.sicon').innerHTML = iconFor(status);
+  q(row,'.slabel').textContent = label;
+  q(row,'.sdetail').textContent = detail;
+  row.classList.toggle('done', status==='done');
+}
+
+function userBubble(text){ return h('<div class="user"><div class="bubble">'+text+'</div></div>'); }
+
+function answerEl(){ return h('<div class="agent answer"></div>'); }
+
+function wordSpan(w){ const s=document.createElement('span'); s.className='w'; s.textContent=w; return s; }
+
+function approvalCard(){
+  return h(
+    '<div class="agent card">'+
+      '<div class="csmall">'+I.hand+'<span>Needs your approval</span></div>'+
+      '<div class="chead">Search the web for &ldquo;current Apple CEO 2026&rdquo;?</div>'+
+      '<div class="cconseq">A search query leaves this device to a search engine.</div>'+
+      '<div class="cpreview">current Apple CEO 2026</div>'+
+      '<div class="cbtns">'+
+        '<span class="btn allow">'+I.check+'Allow</span>'+
+        '<span class="btn skip">'+I.x+'Skip</span>'+
+      '</div>'+
+    '</div>');
+}
+
+function questionCard(){
+  return h(
+    '<div class="agent card">'+
+      '<div class="csmall">'+I.q+'<span>Luna needs to know</span></div>'+
+      '<div class="chead">Who should own the report?</div>'+
+      '<div class="qfield"><span class="typed"></span><span class="caret"></span></div>'+
+      '<div class="cbtns">'+
+        '<span class="btn allow">'+I.check+'Answer</span>'+
+        '<span class="btn skip">'+I.x+'Skip</span>'+
+      '</div>'+
+    '</div>');
+}
+
+function fmt(ms){ const s = Math.round(ms/1000); return s<60 ? s+'s' : Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'; }
+
+/* ---------- scene runner ---------- */
+function runScene(phone, scene){
+  cancelAnimationFrame(phone._raf);
+  let st = null;
+  function build(){
+    phone.thread.innerHTML = '';
+    st = scene.build(phone);
+    return st;
+  }
+  st = build();
+  const evs = scene.events.slice().sort((a,b)=>a.t-b.t);
+  let ei = 0, t0 = performance.now();
+  const D = scene.duration, PAUSE = 1500;
+  function frame(now){
+    let t = now - t0;
+    if(t >= D + PAUSE){ st = build(); t0 = now; ei = 0; t = 0; }
+    const tt = Math.min(t, D);
+    while(ei < evs.length && evs[ei].t <= tt){ evs[ei].fn(st, tt); ei++; }
+    if(scene.frame) scene.frame(st, tt);
+    phone._raf = requestAnimationFrame(frame);
+  }
+  phone._raf = requestAnimationFrame(frame);
+}
+
+/* ---------- shared scene plumbing ---------- */
+function baseScene(build, events, frame, duration){
+  return {build:build, events:events, frame:frame, duration:duration};
+}
+
+/* ================================================================
+   SCENE A — the live run
+================================================================ */
+const A_WORDS = 'Two things in alerts-page.html need you. The backup runs at 2 a.m., and one alarm is armed with a disabled sensor. Everything else is quiet.'.split(' ');
+
+const sceneA = baseScene(
+  function(phone){
+    phone.setRunning(true);
+    phone.thread.appendChild(userBubble('Read alerts-page.html and flag anything that needs me.'));
+    const trace = traceEl();
+    phone.thread.appendChild(trace);
+    return {
+      phone, trace,
+      label: trace.label, timer: trace.timer, chev: trace.chev, rail: trace.rail, railwrap: trace.railwrap,
+      rows: [], answer: null, card: null, lastWord: -1, words: A_WORDS, streamT: 7300,
+      heading(text, live){ this.label.textContent = text; this.label.classList.toggle('shimmer', !!live); },
+      addStep(l,d,s){ const r = stepEl(l,d,s); this.rail.appendChild(r); this.rows.push(r); return r; },
+    };
+  },
+  [
+    {t:0,    fn:s=>s.heading('Thinking', true)},
+    {t:300,  fn:s=>{ s.addStep('Reading a file','alerts-page.html','running'); s.heading('Reading a file', true); }},
+    {t:1500, fn:s=>{ setStep(s.rows[0],'Read a file','alerts-page.html','done'); s.heading('Thinking', true); }},
+    {t:2100, fn:s=>{ s.addStep('Searching the web','waiting for you to allow it','held'); s.heading('Waiting on you', false); s.card = approvalCard(); s.trace.after(s.card); }},
+    {t:3400, fn:s=>{ s.card.classList.add('out'); setTimeout(()=>s.card.remove(),260); setStep(s.rows[1],'Searching the web','current Apple CEO 2026','running'); s.heading('Searching the web', true); }},
+    {t:4900, fn:s=>{ setStep(s.rows[1],'Searched the web','current Apple CEO 2026','done'); s.heading('Thinking', true); }},
+    {t:5500, fn:s=>{ s.addStep('Opening a page','en.wikipedia.org/wiki/Tim_Cook','running'); s.heading('Opening a page', true); }},
+    {t:6500, fn:s=>{ setStep(s.rows[2],'Opened a page','en.wikipedia.org/wiki/Tim_Cook','done'); s.heading('Thinking', true); }},
+    {t:7100, fn:s=>{ s.heading('Thought for 7s', false); s.timer.classList.add('hide'); s.chev.classList.add('open'); s.railwrap.classList.add('folded'); s.phone.setRunning(false); }},
+    {t:7500, fn:s=>{ s.answer = answerEl(); s.trace.after(s.answer); }},
+  ],
+  function(s,t){
+    if(t < 7100){ s.timer.textContent = fmt(t); s.timer.classList.remove('hide'); }
+    if(s.answer){
+      const n = Math.floor((t - s.streamT)/170);
+      for(let i=s.lastWord+1; i<=Math.min(n, s.words.length-1); i++){ s.answer.appendChild(wordSpan(s.words[i])); s.lastWord = i; }
+    }
+  },
+  13300
+);
+
+/* ================================================================
+   SCENE B — ask me, then resume
+================================================================ */
+const B_WORDS = 'Done \u2014 report.md is now report-final.md, and Ada is listed as the owner.'.split(' ');
+
+const sceneB = baseScene(
+  function(phone){
+    phone.setRunning(true);
+    phone.thread.appendChild(userBubble('Rename the report and set its owner.'));
+    const trace = traceEl();
+    phone.thread.appendChild(trace);
+    return {
+      phone, trace,
+      label: trace.label, timer: trace.timer, chev: trace.chev, rail: trace.rail, railwrap: trace.railwrap,
+      rows: [], answer: null, card: null, typed: null, lastWord: -1, words: B_WORDS, streamT: 6200,
+      heading(text, live){ this.label.textContent = text; this.label.classList.toggle('shimmer', !!live); },
+      addStep(l,d,s){ const r = stepEl(l,d,s); this.rail.appendChild(r); this.rows.push(r); return r; },
+    };
+  },
+  [
+    {t:0,    fn:s=>s.heading('Thinking', true)},
+    {t:300,  fn:s=>{ s.addStep('Waiting on you','answer to continue','held'); s.heading('Waiting on you', false); s.card = questionCard(); s.typed = q(s.card,'.typed'); s.trace.after(s.card); }},
+    {t:3600, fn:s=>{ s.card.classList.add('out'); setTimeout(()=>s.card.remove(),260); setStep(s.rows[0],'Asked you','Ada','done'); s.heading('Thinking', true); }},
+    {t:4300, fn:s=>{ s.addStep('Renaming a file','report.md','running'); s.heading('Renaming a file', true); }},
+    {t:5500, fn:s=>{ setStep(s.rows[1],'Renamed a file','report.md','done'); s.heading('Thinking', true); }},
+    {t:6100, fn:s=>{ s.heading('Thought for 6s', false); s.timer.classList.add('hide'); s.chev.classList.add('open'); s.railwrap.classList.add('folded'); s.phone.setRunning(false); }},
+    {t:6500, fn:s=>{ s.answer = answerEl(); s.trace.after(s.answer); }},
+  ],
+  function(s,t){
+    if(t < 6100){ s.timer.textContent = fmt(t); s.timer.classList.remove('hide'); }
+    if(s.typed){
+      const name = 'Ada';
+      const n = Math.max(0, Math.floor((t-2600)/210));
+      s.typed.textContent = name.slice(0, n);
+    }
+    if(s.answer){
+      const n = Math.floor((t - s.streamT)/170);
+      for(let i=s.lastWord+1; i<=Math.min(n, s.words.length-1); i++){ s.answer.appendChild(wordSpan(s.words[i])); s.lastWord = i; }
+    }
+  },
+  10500
+);
+
+/* ================================================================
+   SCENE C — every step state, pinned open
+================================================================ */
+const C_ROWS = [
+  ['Listed the folder','docs','done'],
+  ['Read a file','alerts-page.html','done'],
+  ['Searched the web','current Apple CEO 2026','done'],
+  ['Did not search the web','over the limit for one job','refused'],
+  ['Read a file','already read this run','done'],
+  ['Waiting on you','waiting for you to allow it','held'],
+  ['Did not write a file','you skipped this one','refused'],
+  ['Did not fetch from GitHub','it did not work','refused'],
+  ['Did not read the page','took too long and was dropped','refused'],
+];
+
+const sceneC = baseScene(
+  function(phone){
+    phone.setRunning(false);
+    phone.thread.appendChild(userBubble('Run the alerts sweep from the top.'));
+    const trace = traceEl();
+    trace.label.textContent = 'Thought for 24s';
+    trace.timer.classList.add('hide');
+    trace.chev.classList.add('open');
+    phone.thread.appendChild(trace);
+    return { trace, rail: trace.rail, rows: [], placed: 0 };
+  },
+  C_ROWS.map(function(row,i){
+    return {t: 250 + i*340, fn: function(s){ const r = stepEl(row[0], row[1], row[2]); s.rail.appendChild(r); s.rows.push(r); }};
+  }),
+  null,
+  6200
+);
+
+/* ---------- go ---------- */
+const A = makePhone('phoneA'), B = makePhone('phoneB'), C = makePhone('phoneC');
+document.getElementById('phoneA').replaceWith(A);
+document.getElementById('phoneB').replaceWith(B);
+document.getElementById('phoneC').replaceWith(C);
+runScene(A, sceneA);
+runScene(B, sceneB);
+runScene(C, sceneC);
+</script>
+</body>
+</html>
