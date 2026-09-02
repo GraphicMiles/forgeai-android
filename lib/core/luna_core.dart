@@ -690,8 +690,12 @@ class LunaCore extends ChangeNotifier {
 
   Future<void> createFolder(String path) => _invoke('createFolder', <String, dynamic>{'path': path});
 
-  Future<void> renameFile(String path, String newName) =>
-      _invoke('renameFile', <String, dynamic>{'path': path, 'newName': newName});
+  /// Returns the path the file actually ended up on.
+  Future<String> renameFile(String path, String newName) async {
+    final String landed = await _invokeText(
+      'renameFile', <String, dynamic>{'path': path, 'newName': newName});
+    return landed.isEmpty ? newName : landed;
+  }
 
   Future<void> deleteFile(String path) => _invoke('deleteFile', <String, dynamic>{'path': path});
 

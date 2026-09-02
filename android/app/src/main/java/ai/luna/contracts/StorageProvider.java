@@ -45,7 +45,8 @@ public interface StorageProvider {
 
     void createFolder(String path) throws IOException;
 
-    void rename(String path, String newName) throws IOException;
+    /** Renames the file and returns the path it actually ended up on. */
+    String rename(String path, String newName) throws IOException;
 
     void delete(String path) throws IOException;
 

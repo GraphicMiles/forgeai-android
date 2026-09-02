@@ -63,6 +63,15 @@ public final class Tools {
             + ". Tell the user the real path.";
     }
 
+    /** The last segment of a path, which is the part a rename was asked about. */
+    private static String baseName(String path) {
+        if (path == null) {
+            return "";
+        }
+        int slash = path.lastIndexOf('/');
+        return slash < 0 ? path : path.substring(slash + 1);
+    }
+
     public static String run(Env env, String tool, JSONObject args) {
         try {
             switch (tool) {
@@ -89,9 +98,13 @@ public final class Tools {
                 case "delete_file":
                     env.workspace.delete(args.optString("path", ""));
                     return "Deleted " + args.optString("path", "") + ". A backup was kept.";
-                case "rename_file":
-                    env.workspace.rename(args.optString("path", ""), args.optString("newName", ""));
-                    return "Renamed to " + args.optString("newName", "") + ".";
+                case "rename_file": {
+                    // A rename is given a bare name but reports a full path, so
+                    // only the name itself is worth comparing.
+                    String asked = args.optString("newName", "");
+                    String renamed = env.workspace.rename(args.optString("path", ""), asked);
+                    return "Renamed to " + renamed + "." + landedNote(asked, baseName(renamed));
+                }
                 case "open_page":
                     return openPage(env, args.optString("url", args.optString("path", "")));
                 case "read_page":
