@@ -198,8 +198,7 @@ public final class CloudProvider {
                 && wire.body.optJSONArray("contents").length() == 0) {
                 return new Reply("", "There was nothing to send.");
             }
-            HttpURLConnection connection = open(config, wire.url, true);
-            return readStream(config, connection, wire.body, sink, cancellation,
+            return readStream(config, wire, sink, cancellation,
                 framesFor(config), wholeFor(config));
         } catch (Exception error) {
             return new Reply("", "Could not reach the provider: " + message(error));
@@ -286,19 +285,28 @@ public final class CloudProvider {
         body.put("stream", stream);
         if (isReasoningModel(config.model)) {
             // GPT-OSS models think into a dedicated reasoning field before they
-            // answer, and that thinking counts against the completion budget.
-            // Groq deprecated max_tokens in favour of max_completion_tokens, so
-            // a reasoning model gets the current parameter, a budget its
-            // thinking cannot swallow, and the answer only (no reasoning
-            // stream). It also gets tool_choice "none": Luna calls tools by
-            // writing JSON in the reply, never through the provider's
-            // function-calling, and without this an agentic model answers a
-            // "search the web" request with a native tool_calls delta to its
-            // own server-side search — a stream with no content, which reads
-            // as "The provider streamed nothing back".
-            body.put("include_reasoning", false);
-            body.put("max_completion_tokens", Math.max(maxTokens, 4096));
+            // answer, and that thinking counts against the completion budget —
+            // Groq deprecated max_tokens in favour of max_completion_tokens,
+            // so a reasoning model gets the current parameter. The reasoning is
+            // left in the stream: suppressing it once hid the only output a
+            // model produced, and the frame reader holds it aside until the
+            // real answer arrives anyway.
+            // tool_choice "none" stays: Luna calls tools by writing JSON in the
+            // reply, never through the provider's function-calling, and without
+            // it an agentic model answers a "search the web" request with a
+            // native tool_calls delta to its own server-side search.
+            // The budget is 2048, not 4096: Groq charges the whole ceiling
+            // against its tokens-per-minute allowance (a 429 reads "Requested
+            // N" = prompt + max_completion_tokens), so a 4096 floor quadruples
+            // the engine's own 1024 and turns one large file read into a rate
+            // limit. 2048 still leaves room for short reasoning plus the JSON
+            // tool call, and reasoning_effort keeps the thinking short.
+            body.put("max_completion_tokens", Math.max(maxTokens, 2048));
             body.put("tool_choice", "none");
+            // Low effort: this is a tool driver, not an essayist. GPT-OSS
+            // models otherwise spend their whole output budget thinking and can
+            // stop with everything in the reasoning field and an empty answer.
+            body.put("reasoning_effort", "low");
         } else {
             body.put("max_tokens", maxTokens);
         }
@@ -415,72 +423,100 @@ public final class CloudProvider {
                 }
             };
         }
-        return new FrameReader() {
-            @Override
-            public String textOf(JSONObject frame) {
-                JSONArray choices = frame.optJSONArray("choices");
-                if (choices == null || choices.length() == 0) {
+        return new OpenAiFrames();
+    }
+
+    /**
+     * Reads OpenAI-shaped streaming frames, holding reasoning aside so the
+     * answer is what the person sees. A reasoning model thinks aloud into
+     * {@code delta.reasoning} before it answers; that thinking is kept out of
+     * the chat and only shown if the stream ends with nothing better — the
+     * difference between "The provider streamed nothing back" and the answer.
+     */
+    private static final class OpenAiFrames implements FrameReader {
+
+        /** Reasoning seen so far, in case no actual answer ever arrives. */
+        private final StringBuilder reasoning = new StringBuilder();
+
+        /** True once content or a tool call has been produced. */
+        private boolean answered;
+
+        @Override
+        public String textOf(JSONObject frame) {
+            JSONArray choices = frame.optJSONArray("choices");
+            if (choices == null || choices.length() == 0) {
+                return "";
+            }
+            JSONObject choice = choices.optJSONObject(0);
+            if (choice == null) {
+                return "";
+            }
+            JSONObject delta = choice.optJSONObject("delta");
+            if (delta != null) {
+                String content = delta.optString("content", "");
+                if (!content.isEmpty()) {
+                    answered = true;
+                    return content;
+                }
+                String thought = delta.optString("reasoning", "");
+                if (thought.isEmpty()) {
+                    thought = delta.optString("reasoning_content", "");
+                }
+                if (!thought.isEmpty()) {
+                    reasoning.append(thought);
                     return "";
                 }
-                JSONObject choice = choices.optJSONObject(0);
-                if (choice == null) {
-                    return "";
-                }
-                JSONObject delta = choice.optJSONObject("delta");
-                if (delta != null) {
-                    String content = delta.optString("content", "");
-                    if (!content.isEmpty()) {
-                        return content;
-                    }
-                    // Reasoning models stream their thinking into their own
-                    // field while content stays empty. Taking it beats failing
-                    // with "streamed nothing back"; the real answer, when the
-                    // model produces one, still arrives on top of it.
-                    String reasoning = delta.optString("reasoning", "");
-                    if (!reasoning.isEmpty()) {
-                        return reasoning;
-                    }
-                    reasoning = delta.optString("reasoning_content", "");
-                    if (!reasoning.isEmpty()) {
-                        return reasoning;
-                    }
-                    // A native function call arrives as a tool_calls delta.
-                    // Luna does not speak that language, so the call is
-                    // written back out as the JSON object the engine knows how
-                    // to read. Reaching here means the model tried to call its
-                    // own tool despite tool_choice "none", so surfacing it is
-                    // better than reporting an empty stream.
-                    JSONArray calls = delta.optJSONArray("tool_calls");
-                    if (calls != null && calls.length() > 0) {
-                        JSONObject call = calls.optJSONObject(0);
-                        JSONObject fn = call == null ? null : call.optJSONObject("function");
-                        if (fn != null) {
-                            String name = fn.optString("name", "");
-                            if (!name.isEmpty()) {
-                                try {
-                                    JSONObject tool = new JSONObject();
-                                    tool.put("tool", name);
-                                    String args = fn.optString("arguments", "");
-                                    tool.put("args", args.isEmpty()
-                                        ? new JSONObject() : new JSONObject(args));
-                                    return tool.toString();
-                                } catch (Exception notJson) {
-                                    return "{\"tool\":\"" + name + "\",\"args\":{}}";
-                                }
+                // A native function call arrives as a tool_calls delta. Luna
+                // does not speak that language, so the call is written back
+                // out as the JSON object the engine knows how to read.
+                JSONArray calls = delta.optJSONArray("tool_calls");
+                if (calls != null && calls.length() > 0) {
+                    JSONObject call = calls.optJSONObject(0);
+                    JSONObject fn = call == null ? null : call.optJSONObject("function");
+                    if (fn != null) {
+                        String name = fn.optString("name", "");
+                        if (!name.isEmpty()) {
+                            answered = true;
+                            try {
+                                JSONObject tool = new JSONObject();
+                                tool.put("tool", name);
+                                String args = fn.optString("arguments", "");
+                                tool.put("args", args.isEmpty()
+                                    ? new JSONObject() : new JSONObject(args));
+                                return tool.toString();
+                            } catch (Exception notJson) {
+                                return "{\"tool\":\"" + name + "\",\"args\":{}}";
                             }
                         }
                     }
-                    return "";
                 }
-                // Some servers stream the non-delta shape.
-                JSONObject whole = choice.optJSONObject("message");
-                if (whole == null) {
-                    return choice.optString("text", "");
-                }
-                String content = whole.optString("content", "");
-                return content.isEmpty() ? whole.optString("reasoning", "") : content;
+                return "";
             }
-        };
+            // Some servers stream the non-delta shape.
+            JSONObject whole = choice.optJSONObject("message");
+            if (whole == null) {
+                String text = choice.optString("text", "");
+                if (!text.isEmpty()) {
+                    answered = true;
+                }
+                return text;
+            }
+            String content = whole.optString("content", "");
+            if (!content.isEmpty()) {
+                answered = true;
+                return content;
+            }
+            String thought = whole.optString("reasoning", "");
+            if (!thought.isEmpty()) {
+                reasoning.append(thought);
+            }
+            return "";
+        }
+
+        @Override
+        public String finish() {
+            return answered ? "" : reasoning.toString();
+        }
     }
 
     /** How to read a whole non-streamed document, per shape. */
@@ -572,25 +608,58 @@ public final class CloudProvider {
 
     private interface FrameReader {
         String textOf(JSONObject frame);
+
+        /**
+         * Anything held back while the stream was open, revealed once it is
+         * known nothing better will arrive. A reasoning model that only thinks
+         * aloud has its thinking shown here rather than as "nothing".
+         */
+        default String finish() {
+            return "";
+        }
     }
 
     private interface WholeReader {
         String textOf(JSONObject document);
     }
 
+    /** Seconds Luna will wait out a 429 before it just tells you to. */
+    private static final long RATE_LIMIT_WAIT_CAP_MS = 30_000L;
+
     /**
      * Writes the body, then reads whatever comes back — server-sent events when
      * the provider streams, one document when it does not. The difference is
-     * invisible above this method.
+     * invisible above this method. A single 429 that promises a short wait is
+     * waited out and retried once, so a tokens-per-minute hiccup does not kill
+     * an otherwise fine job.
      */
-    private static Reply readStream(Config config, HttpURLConnection connection, JSONObject body,
+    private static Reply readStream(Config config, Wire wire,
                                     TokenSink sink, Cancellation cancellation,
                                     FrameReader frames, WholeReader whole) {
+        boolean[] retry = new boolean[1];
+        for (int attempt = 0; attempt < 2; attempt++) {
+            retry[0] = false;
+            Reply reply = readStreamOnce(config, wire, sink, cancellation, frames, whole, retry);
+            if (!retry[0] || attempt == 1) {
+                return reply;
+            }
+        }
+        return new Reply("", "Could not reach the provider.");
+    }
+
+    /** One attempt at a streamed reply. A retryable 429 sleeps, sets
+     * {@code retry[0]}, and returns an empty reply for the loop above. */
+    private static Reply readStreamOnce(Config config, Wire wire,
+                                        TokenSink sink, Cancellation cancellation,
+                                        FrameReader frames, WholeReader whole,
+                                        boolean[] retry) {
+        HttpURLConnection connection = null;
         BufferedReader reader = null;
         try {
+            connection = open(config, wire.url, true);
             OutputStream output = connection.getOutputStream();
             try {
-                output.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                output.write(wire.body.toString().getBytes(StandardCharsets.UTF_8));
                 output.flush();
             } finally {
                 WorkspaceStore.closeQuietly(output);
@@ -600,6 +669,14 @@ public final class CloudProvider {
             if (code >= 400) {
                 String body2 = readAll(connection.getErrorStream());
                 ErrorLog.tapFail("http", "chat " + code + " " + trim(body2, 300));
+                if (code == 429 && retry != null) {
+                    long wait = retryAfterMs(connection, body2);
+                    if (wait >= 1000 && wait <= RATE_LIMIT_WAIT_CAP_MS) {
+                        sleepUntil(wait, cancellation);
+                        retry[0] = true;
+                        return new Reply("", "");
+                    }
+                }
                 return new Reply("", explain(config, code, body2));
             }
             ErrorLog.tapNote("http", "chat " + code + " streaming");
@@ -687,6 +764,13 @@ public final class CloudProvider {
                     // One malformed frame does not end the answer.
                 }
             }
+            // A reasoning model that only thought aloud and never wrote the
+            // answer has its thinking revealed here instead of "nothing".
+            String held = frames.finish();
+            if (!held.isEmpty()) {
+                gathered.append(held);
+                sink.onToken(held);
+            }
             if (gathered.length() == 0) {
                 ErrorLog.tapFail("http", "empty stream: finish="
                     + (lastFinish.isEmpty() ? "(none)" : lastFinish)
@@ -700,7 +784,76 @@ public final class CloudProvider {
             return new Reply("", "Could not reach the provider: " + message(error));
         } finally {
             WorkspaceStore.closeQuietly(reader);
-            connection.disconnect();
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    /** How long a Groq-style 429 asks us to wait, in milliseconds, or -1. */
+    private static long retryAfterMs(HttpURLConnection connection, String payload) {
+        String after = connection == null ? null : connection.getHeaderField("Retry-After");
+        if (after != null) {
+            try {
+                double seconds = Double.parseDouble(after.trim());
+                if (seconds > 0) {
+                    return (long) (seconds * 1000);
+                }
+            } catch (Exception notANumber) {
+                // Fall through to the message text.
+            }
+        }
+        double seconds = waitSeconds(payload);
+        return seconds <= 0 ? -1 : (long) (seconds * 1000);
+    }
+
+    /** The "try again in Ns / Nm Xs" a 429 body usually carries, or -1. */
+    private static double waitSeconds(String payload) {
+        if (payload == null) {
+            return -1;
+        }
+        int at = payload.indexOf("try again in ");
+        if (at < 0) {
+            return -1;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("(\\d+(?:\\.\\d+)?)(m|s)")
+            .matcher(payload.substring(at));
+        double total = 0;
+        boolean any = false;
+        while (m.find()) {
+            any = true;
+            double value = Double.parseDouble(m.group(1));
+            total += m.group(2).equals("m") ? value * 60 : value;
+        }
+        return any ? total : -1;
+    }
+
+    /** "25.71s" -> "about 26s"; "6m 11.52s" -> "about 6m"; "" when absent. */
+    private static String waitHint(String payload) {
+        double seconds = waitSeconds(payload);
+        if (seconds <= 0) {
+            return "";
+        }
+        if (seconds < 60) {
+            return "about " + Math.round(seconds) + "s";
+        }
+        return "about " + Math.round(seconds / 60) + "m";
+    }
+
+    /** Sleeps in small slices so a cancelled run is never left hanging. */
+    private static void sleepUntil(long millis, Cancellation cancellation) {
+        long deadline = System.currentTimeMillis() + millis;
+        while (System.currentTimeMillis() < deadline) {
+            if (cancellation != null && cancellation.cancelled()) {
+                return;
+            }
+            try {
+                Thread.sleep(Math.min(250L, Math.max(1L, deadline - System.currentTimeMillis())));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
     }
 
@@ -861,8 +1014,12 @@ public final class CloudProvider {
                         + "and pick another.";
             case 413:
                 return "The conversation is too long for " + where + ". Start a new chat.";
-            case 429:
-                return where + " is rate-limiting this key. Wait a moment and try again.";
+            case 429: {
+                String hint = waitHint(payload);
+                return hint.isEmpty()
+                    ? where + " is rate-limiting this key. Wait a moment and try again."
+                    : where + " is rate-limiting this key — try again in " + hint + ".";
+            }
             case 500:
             case 502:
             case 503:
