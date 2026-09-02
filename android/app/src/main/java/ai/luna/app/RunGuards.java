@@ -2,8 +2,12 @@ package ai.luna.app;
 
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -48,6 +52,12 @@ public final class RunGuards {
     /** How many times one read may be replayed before it is called a loop. */
     private static final int REPLAY_CAP = 2;
 
+    /** How many identical failures before the call is refused outright. */
+    private static final int FAILURE_CAP = 2;
+
+    /** How many times each exact call has failed. */
+    private final Map<String, Integer> failureCounts = new HashMap<>();
+
     /** How many times each identical read has been served from the ledger. */
     private final Map<String, Integer> replayCounts = new HashMap<>();
 
@@ -78,6 +88,12 @@ public final class RunGuards {
         cloudCalls = 0;
         seen.clear();
         ledger.clear();
+        // These three were left standing across runs, so a job could inherit
+        // the previous job's counts and refuse a call the model had not yet
+        // made. Everything a guard counts belongs to one job only.
+        replayCounts.clear();
+        toolCounts.clear();
+        failureCounts.clear();
     }
 
     public long elapsedMillis() {
@@ -129,18 +145,66 @@ public final class RunGuards {
             return Verdict.refuse("You already ran " + tool + " with those arguments in this job. "
                 + "Use what it returned, or do something different.");
         }
+
+        // A call that keeps failing the same way is the loop the ledger cannot
+        // see: a mutating tool is never replayed, so nothing above counts it.
+        // The model rewrites one argument, fails identically, and tries again
+        // until the step budget is gone. Two identical failures is enough to
+        // know the third will not be different.
+        Integer failures = failureCounts.get(signature);
+        if (failures != null && failures >= FAILURE_CAP) {
+            return Verdict.refuse("Calling " + tool + " with those arguments has failed "
+                + failures + " times in this job with the same result. Do not send it again. "
+                + "Change the approach -- read the file or list the folder to find out what is "
+                + "actually there -- or tell the user what is blocking you.");
+        }
         return Verdict.allow();
     }
 
     /** Called after a tool has actually run. */
     public void record(String tool, JSONObject args, String observation) {
         String signature = signature(tool, args);
-        seen.add(signature);
         toolCalls++;
         toolCounts.merge(tool, 1, Integer::sum);
+
+        if (failed(observation)) {
+            // A failure is not an answer, so it must not go in the ledger to be
+            // replayed as one, and the signature must stay callable: the model
+            // deserves a second attempt at something that might be transient.
+            // It does not deserve a third.
+            failureCounts.merge(signature, 1, Integer::sum);
+            return;
+        }
+
+        seen.add(signature);
         if (observation != null && observation.length() < 4000) {
             ledger.put(signature, observation);
         }
+    }
+
+    /**
+     * Whether an observation is a failure rather than an answer.
+     *
+     * <p>Every tool in this app reports trouble in words, not exceptions, so
+     * this reads the words. It is deliberately conservative: treating a real
+     * answer as a failure would let the same read run twice, which merely
+     * wastes a step, whereas the reverse re-serves an error as though it were
+     * content.
+     */
+    private static boolean failed(String observation) {
+        if (observation == null) {
+            return true;
+        }
+        String text = observation.trim();
+        if (text.isEmpty()) {
+            return true;
+        }
+        return text.startsWith("Failed:")
+            || text.startsWith("There is no ")
+            || text.startsWith("Could not ")
+            || text.startsWith("Give me ")
+            || text.startsWith("That repository address was refused")
+            || text.startsWith("The folder permission was withdrawn");
     }
 
     /** Cloud calls are counted separately: they are the ones that cost money. */
@@ -163,6 +227,66 @@ public final class RunGuards {
     }
 
     private static String signature(String tool, JSONObject args) {
-        return tool + "|" + (args == null ? "{}" : args.toString());
+        return tool + "|" + canonical(args);
+    }
+
+    /**
+     * The arguments in a form where two identical calls always look identical.
+     *
+     * <p>{@code JSONObject.toString()} is not stable: it emits keys in hash
+     * order, so the same call written by the model in a different key order
+     * produces a different string. That silently defeated every guard below --
+     * the repeat looked new, so it ran again. Sorting the keys fixes the loop
+     * that mattered.
+     *
+     * <p>Values are normalised too, since a model retrying a failed call tends
+     * to jiggle the formatting rather than the substance: {@code "10"} and
+     * {@code 10} are the same limit, and a padded path is the same path.
+     */
+    private static String canonical(JSONObject args) {
+        if (args == null || args.length() == 0) {
+            return "{}";
+        }
+        List<String> keys = new ArrayList<>();
+        for (Iterator<String> it = args.keys(); it.hasNext(); ) {
+            keys.add(it.next());
+        }
+        Collections.sort(keys);
+
+        StringBuilder out = new StringBuilder("{");
+        for (int index = 0; index < keys.size(); index++) {
+            if (index > 0) {
+                out.append(',');
+            }
+            String key = keys.get(index);
+            out.append(key).append('=').append(normalise(args.opt(key)));
+        }
+        return out.append('}').toString();
+    }
+
+    /** One argument value, stripped of differences that do not change meaning. */
+    private static String normalise(Object value) {
+        if (value == null || value == JSONObject.NULL) {
+            return "";
+        }
+        if (value instanceof Boolean) {
+            return value.toString();
+        }
+        if (value instanceof Number) {
+            double number = ((Number) value).doubleValue();
+            // A whole number is the same whether it arrived as 10, 10.0 or "10".
+            return number == Math.rint(number) && !Double.isInfinite(number)
+                ? String.valueOf((long) number) : String.valueOf(number);
+        }
+        String text = value.toString().trim();
+        // A number that arrived as a string is still that number.
+        if (text.matches("-?\\d+")) {
+            try {
+                return String.valueOf(Long.parseLong(text));
+            } catch (NumberFormatException ignored) {
+                return text;
+            }
+        }
+        return text;
     }
 }

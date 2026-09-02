@@ -155,14 +155,15 @@ public final class Tools {
                     return gitMove(env, args.optString("path", ""),
                         args.optString("to", args.optString("newName", "")));
                 default:
-                    return "Unknown tool: " + tool;
+                    return Recovery.unknownTool(tool, ai.luna.builtin.Builtins.ids());
             }
         } catch (Exception error) {
+            // The log keeps the real message; the model gets advice it can act on.
             String message = error.getMessage();
             if (env.errors != null) {
                 env.errors.fail(tool, message == null ? String.valueOf(error) : message);
             }
-            return "Failed: " + (message == null ? error.toString() : message);
+            return Recovery.from(tool, error);
         }
     }
 

@@ -428,13 +428,39 @@ public final class AppGitStore implements GitProvider {
      * the filesystem has had its say — and a symlink inside a cloned
      * repository can point anywhere at all.
      */
+    /**
+     * A path as the model wrote it, reduced to the form this store expects.
+     *
+     * <p>Models write paths inconsistently -- a leading slash, a Windows
+     * separator, a stray {@code ./}, a doubled slash from string concatenation.
+     * None of those change which file is meant, so none of them should be an
+     * error. {@code ..} is deliberately left alone: it is not tidied away here
+     * but caught by the containment check, which is the part that must not be
+     * negotiable.
+     */
+    private static String tidy(String path) {
+        String cleaned = path.trim().replace('\\', '/');
+        StringBuilder out = new StringBuilder();
+        for (String part : cleaned.split("/")) {
+            String piece = part.trim();
+            if (piece.isEmpty() || piece.equals(".")) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append('/');
+            }
+            out.append(piece);
+        }
+        return out.toString();
+    }
+
     private Resolved resolve(String path) {
         if (path == null || path.trim().isEmpty()) {
             return Resolved.no("Give me a path as repository/file.");
         }
-        String cleaned = path.trim().replace('\\', '/');
-        while (cleaned.startsWith("/")) {
-            cleaned = cleaned.substring(1);
+        String cleaned = tidy(path);
+        if (cleaned.isEmpty()) {
+            return Resolved.no("Give me a path as repository/file.");
         }
         int slash = cleaned.indexOf('/');
         String name = slash < 0 ? cleaned : cleaned.substring(0, slash);
@@ -442,6 +468,19 @@ public final class AppGitStore implements GitProvider {
         File dir = repo(name);
         if (dir == null) {
             return Resolved.no(noRepo(name));
+        }
+
+        // "demo/demo/README.md" for "demo/README.md". A model that has been told
+        // paths start with the repository name sometimes says it twice, and the
+        // bare "no such file" that used to come back sent it hunting for a file
+        // that was never missing. Drop the stutter and carry on.
+        if (inner.equals(name) || inner.startsWith(name + "/")) {
+            File doubled = new File(dir, inner);
+            File single = new File(dir, inner.equals(name)
+                ? "" : inner.substring(name.length() + 1));
+            if (!doubled.exists() && single.exists()) {
+                inner = inner.equals(name) ? "" : inner.substring(name.length() + 1);
+            }
         }
         // The repository's own plumbing is not editable content. Rewriting a
         // hook or config through a file tool is a way to run code later.
