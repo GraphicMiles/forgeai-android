@@ -27,6 +27,17 @@ public final class Tools {
 
     private static final int MAX_OBSERVATION = 4000;
 
+    /**
+     * Search results are capped harder than file content.
+     *
+     * <p>A page of results is a list of titles and snippets, and the tail of it
+     * is chrome -- related searches, footers, cookie notices. File content is
+     * not: the end of a file matters as much as the start. Two searches at the
+     * full 4000 sent a 6338-token request into an 8000-per-minute limit and
+     * rate-limited the run that was trying to answer.
+     */
+    private static final int MAX_SEARCH_OBSERVATION = 2000;
+
     /** Everything a tool is allowed to touch, handed in rather than looked up. */
     public static final class Env {
         // Contracts, not concrete classes: the same tool has to work against a
@@ -311,11 +322,12 @@ public final class Tools {
             return clamp("The search page gave no structured results, and the raw page text "
                 + "below may be a consent wall or a bot check rather than an answer. Use it "
                 + "only if it plainly contains what was asked; otherwise say the search did "
-                + "not return results. Page text:\n" + text);
+                + "not return results. Page text:\n" + text, MAX_SEARCH_OBSERVATION);
         }
         return clamp("Search results for \"" + query.trim() + "\". Answer only from what is "
             + "written here, and cite the page you took it from; if these results do not "
-            + "contain the answer, say so rather than filling it in from memory.\n" + results);
+            + "contain the answer, say so rather than filling it in from memory.\n" + results,
+            MAX_SEARCH_OBSERVATION);
     }
 
     /**
@@ -615,9 +627,14 @@ public final class Tools {
     }
 
     private static String clamp(String value) {
-        if (value.length() <= MAX_OBSERVATION) {
+        return clamp(value, MAX_OBSERVATION);
+    }
+
+    static String clamp(String value, int limit) {
+        if (value == null || value.length() <= limit) {
             return value;
         }
-        return value.substring(0, MAX_OBSERVATION) + "\n… truncated, read a smaller range if you need more.";
+        return value.substring(0, limit)
+            + "\n… truncated, read a smaller range if you need more.";
     }
 }
