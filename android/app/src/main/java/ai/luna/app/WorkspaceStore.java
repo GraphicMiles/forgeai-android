@@ -415,6 +415,15 @@ public final class WorkspaceStore implements StorageProvider {
         return out;
     }
 
+    /** Is there anything at all at this path? Absent and empty are not the same. */
+    @Override
+    public boolean exists(String path) {
+        if (path == null || path.isEmpty()) {
+            return root() != null;
+        }
+        return resolve(path, false) != null;
+    }
+
     public String readText(String path) throws IOException {
         if (isProtected(path)) {
             throw new IOException("That file is protected. Luna cannot read it.");

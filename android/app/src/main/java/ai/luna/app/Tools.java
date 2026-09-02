@@ -347,7 +347,16 @@ public final class Tools {
         }
         JSONArray entries = workspace.list(path);
         if (entries.length() == 0) {
-            return "Empty (or no folder has been granted).";
+            // "Empty" is an answer a model will happily build a story on top
+            // of. A folder that is not there is a different fact from a folder
+            // with nothing in it, and the difference has to survive the trip.
+            if (!path.isEmpty() && !workspace.exists(path)) {
+                return "There is nothing called \"" + path + "\" in the granted folder. "
+                    + "Cloned repositories live in Luna's git workspace, which the file tools "
+                    + "cannot see. Do not describe files you have not read.";
+            }
+            return "The folder " + (path.isEmpty() ? "that was granted" : path)
+                + " is empty. There are no files here to describe.";
         }
         StringBuilder out = new StringBuilder();
         out.append(entries.length()).append(" items in ").append(path.isEmpty() ? "the root" : path).append(":\n");
@@ -373,7 +382,9 @@ public final class Tools {
     private static String search(StorageProvider workspace, String query) throws Exception {
         JSONArray hits = workspace.search(query, 12);
         if (hits.length() == 0) {
-            return "No matches for " + query + ".";
+            return "No matches for " + query + " anywhere in the granted folder. Note this "
+                + "searches only the granted folder, not Luna's git workspace, so a cloned "
+                + "repository will never match. Do not describe files you have not read.";
         }
         StringBuilder out = new StringBuilder();
         for (int index = 0; index < hits.length(); index++) {
