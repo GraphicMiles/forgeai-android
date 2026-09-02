@@ -611,6 +611,8 @@ public final class AgentEngine {
             // picked up again, and the chat should offer that.
             boolean cutShort = false;
             boolean repaired = false;
+            boolean corrected = false;
+            boolean nudged = false;
             while (true) {
                 if (stopRequested.get()) {
                     finishWithMessage("I stopped there.", "stopped");
@@ -631,6 +633,21 @@ public final class AgentEngine {
                 JSONObject call = parseToolCall(raw);
                 if (call == null) {
                     String trimmed = raw.trim();
+                    // A model that answers straight away sometimes writes the
+                    // report it would have written afterwards: "I've searched
+                    // the web for..." when it has not run a single tool. The
+                    // sentence is not the lie by itself — the tick-free trace
+                    // beside it is what makes the person believe it. One
+                    // correction is offered, then the claim is taken at face
+                    // value rather than looping.
+                    if (!corrected && guards.toolCallCount() == 0 && claimsWork(trimmed)) {
+                        corrected = true;
+                        appendObservation("honesty", "You have not run any tool in this job, so "
+                            + "you cannot have searched, opened, read or listed anything. Either "
+                            + "call the tool you need now, or answer without claiming work you "
+                            + "did not do and without inventing results.");
+                        continue;
+                    }
                     // A small model often wraps its sentence in a JSON object
                     // that names no tool — {"text": ...}, {"answer": ...}.
                     // That is an answer in JSON clothing, not a broken tool
@@ -649,6 +666,17 @@ public final class AgentEngine {
                         appendObservation("format", "That was not a complete JSON object. "
                             + "Send exactly one object like {\"tool\":\"read_file\",\"args\":{\"path\":\"notes.md\"}}, "
                             + "or answer in plain sentences with no JSON at all.");
+                        continue;
+                    }
+                    // "Need to read page." is a plan, not an answer. A small
+                    // model narrates its next step and stops; ending the turn
+                    // there hands the person a fragment and abandons the job
+                    // it was one call away from finishing. Nudge once.
+                    if (!nudged && isPlan(trimmed)) {
+                        nudged = true;
+                        appendObservation("format", "That is what you intend to do, not an answer. "
+                            + "Do it now: send the tool call. If you cannot, tell the person "
+                            + "plainly what you could not do and why.");
                         continue;
                     }
                     answer = trimmed;
@@ -1834,6 +1862,75 @@ public final class AgentEngine {
      * {@code {"text": ...}}, {@code {"answer": ...}} — the sentence inside is
      * the answer. Returns the first non-empty text-ish field, or empty.
      */
+    /**
+     * Does this reply claim work that leaves a trace?
+     *
+     * <p>Only the plainly self-reporting openings, in the first person and the
+     * past tense. "I've searched the web for" is a claim; "you could search
+     * for" is advice, and "I will search" is an intention. Getting this wrong
+     * costs the model one turn, so it is kept narrow on purpose.
+     */
+    /**
+     * Is this the model narrating its next step instead of taking it?
+     *
+     * <p>"Need to read page." "Let's list the files." A plan is short, and it
+     * names a thing the model is about to do rather than telling the person
+     * anything. Length is the guard: a real answer that happens to begin
+     * "I should check" is still an answer, and it will be longer than this.
+     */
+    static boolean isPlan(String reply) {
+        if (reply == null) {
+            return false;
+        }
+        String text = reply.trim().toLowerCase(java.util.Locale.US);
+        if (text.isEmpty() || text.length() > 120) {
+            return false;
+        }
+        String[] openings = {
+            "need to ", "needs to ", "i need to ", "we need to ",
+            "let's ", "lets ", "let me ", "i should ", "we should ",
+            "next, ", "next i ", "now i ", "i'll ", "i will ", "going to ",
+            "first, ", "then i ",
+        };
+        for (String opening : openings) {
+            if (text.startsWith(opening)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean claimsWork(String reply) {
+        if (reply == null || reply.isEmpty()) {
+            return false;
+        }
+        String text = reply.toLowerCase(java.util.Locale.US);
+        // Only the opening matters: a report of work comes first, and a long
+        // answer that mentions searching in passing is not the same thing.
+        if (text.length() > 400) {
+            text = text.substring(0, 400);
+        }
+        String[] claims = {
+            "i've searched", "i have searched", "i searched", "i did a search",
+            "i've looked up", "i have looked up", "i looked up",
+            "i've opened", "i have opened", "i opened",
+            "i've read", "i have read", "i read the",
+            "i've listed", "i have listed", "i listed",
+            "i've found", "i have found", "i found the",
+            "i've checked", "i have checked", "i checked",
+            "i've created", "i have created", "i created",
+            "i've written", "i have written", "i wrote",
+            "here are the top results", "here are the results",
+            "based on my search", "according to my search",
+        };
+        for (String claim : claims) {
+            if (text.contains(claim)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static String wrappedText(String raw) {
         try {
             JSONObject json = new JSONObject(raw);
