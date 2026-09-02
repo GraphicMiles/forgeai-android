@@ -195,14 +195,22 @@ public final class Tools {
             // looks like it never ran.
             String text = env.browser.text();
             if (text.isEmpty()) {
-                // Deliberately not "try a different query": that invitation is
-                // how a model burns its whole budget re-searching. It is told
-                // the search failed and left to answer from knowledge instead.
-                return "The search ran, but no readable results came back.";
+                // "Failed: " is load-bearing — it is what turns this into a
+                // failed step rather than a tick in the trace. A search that
+                // returned nothing must never look like a search that worked.
+                return "Failed: the search ran but nothing readable came back, so you have no "
+                    + "results. You do not know the answer. Tell the user the search returned "
+                    + "nothing rather than answering from memory — anything you recall about "
+                    + "recent or current events is out of date and would be a guess.";
             }
-            return clamp("The search page gave no structured results, but its text says:\n" + text);
+            return clamp("The search page gave no structured results, and the raw page text "
+                + "below may be a consent wall or a bot check rather than an answer. Use it "
+                + "only if it plainly contains what was asked; otherwise say the search did "
+                + "not return results. Page text:\n" + text);
         }
-        return clamp("Search results for \"" + query.trim() + "\":\n" + results);
+        return clamp("Search results for \"" + query.trim() + "\". Answer only from what is "
+            + "written here, and cite the page you took it from; if these results do not "
+            + "contain the answer, say so rather than filling it in from memory.\n" + results);
     }
 
     /**

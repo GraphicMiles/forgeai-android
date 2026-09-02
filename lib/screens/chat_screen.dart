@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/luna_core.dart';
 import '../theme.dart';
+import '../widgets/rich_reply.dart';
 import '../widgets/agent_response.dart';
 import '../widgets/common.dart';
 
@@ -456,7 +457,7 @@ class _ChatScreenState extends State<ChatScreen> {
         out.add(_steps(core));
         tracePlaced = true;
       }
-      out.add(_agentColumn(Text(content, style: LunaTheme.body)));
+      out.add(_agentColumn(RichReply(content)));
     }
     // Nothing was asked and nothing is running: there is no answer to attach
     // the trace to, so it stays out. This is what keeps an empty chat from
