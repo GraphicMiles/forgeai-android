@@ -31,6 +31,7 @@ public final class RecoveryTest {
         hygiene();
         misspelledTools();
         unknownTools();
+        observationSize();
 
         System.out.println();
         if (failed > 0) {
@@ -128,6 +129,47 @@ public final class RecoveryTest {
             Recovery.unknownTool("anything", Arrays.<String>asList()).length() > 10);
         check("a null catalogue does not crash",
             Recovery.unknownTool("anything", null).length() > 10);
+    }
+
+    /**
+     * A search result is capped tighter than a file, and the cap holds.
+     *
+     * <p>Every observation stays in the window for the rest of the run, so two
+     * searches at the old 4000-character cap put a 6338-token request into an
+     * 8000-token-per-minute limit and rate-limited the very run that was trying
+     * to answer. Results are a list of snippets whose tail is chrome; file
+     * content is not, and keeps the larger cap.
+     */
+    private static void observationSize() {
+        StringBuilder long_ = new StringBuilder();
+        for (int i = 0; i < 500; i++) {
+            long_.append("result snippet ");
+        }
+        String text = long_.toString();
+
+        String small = Tools.clamp(text, 2000);
+        check("a long result is cut to the search cap", small.length() < 2100);
+        check("and says it was cut", small.contains("truncated"));
+
+        String big = Tools.clamp(text, 4000);
+        check("file content keeps the larger cap", big.length() > 4000);
+        check("search is capped tighter than file content", small.length() < big.length());
+
+        // Short input must be returned untouched, or every observation grows a
+        // spurious note about truncation.
+        String brief = "two results, that is all";
+        check("a short result is left alone", Tools.clamp(brief, 2000).equals(brief));
+        check("with no truncation note", !Tools.clamp(brief, 2000).contains("truncated"));
+        check("null is tolerated", Tools.clamp(null, 2000) == null);
+
+        // The cap is a character count, not a line count -- one very long line
+        // must still be cut, which is the bug that got past clamp once before.
+        StringBuilder oneLine = new StringBuilder();
+        for (int i = 0; i < 3000; i++) {
+            oneLine.append('x');
+        }
+        check("a single long line is still cut",
+            Tools.clamp(oneLine.toString(), 2000).length() < 2100);
     }
 
     private static void check(String what, boolean condition) {

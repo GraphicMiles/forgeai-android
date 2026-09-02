@@ -29,6 +29,7 @@ public final class ProviderConfigTest {
         greetings();
         invented();
         gate();
+        rateLimitWaits();
 
         System.out.println(failures == 0 ? "ALL PASS" : failures + " FAILED");
         if (failures > 0) {
@@ -252,6 +253,41 @@ public final class ProviderConfigTest {
             // Not possible with these keys.
         }
         return out;
+    }
+
+    /**
+     * Every wait a 429 actually asks for is one Luna can sit through.
+     *
+     * <p>The retry used to require a wait of at least a second, so Groq's
+     * "try again in 112ms" and "in 4.3s" were both handed to the user as
+     * failures -- the app telling someone to wait four seconds when it could
+     * have waited itself. Only a wait too long to sit through belongs on
+     * screen.
+     */
+    private static void rateLimitWaits() {
+        // The three shapes seen in the logs, verbatim.
+        check("sub-second waits are read",
+            about(CloudProvider.waitSeconds("Please try again in 112.499999ms."), 0.112));
+        check("a few seconds is read",
+            about(CloudProvider.waitSeconds("Please try again in 4.319999999s."), 4.32));
+        check("twenty seconds is read",
+            about(CloudProvider.waitSeconds("Please try again in 19.634999999s."), 19.635));
+        check("minutes and seconds together are read",
+            about(CloudProvider.waitSeconds("try again in 1m30s."), 90));
+
+        // Anything that is not a wait must stay unparsed rather than becoming a
+        // zero-length sleep that hammers the provider.
+        check("a body with no wait says so", CloudProvider.waitSeconds("go away") < 0);
+        check("null says so too", CloudProvider.waitSeconds(null) < 0);
+
+        // A very long wait is still parsed; it is the caller that declines it.
+        check("a wait beyond the cap is still parsed, for the message",
+            CloudProvider.waitSeconds("try again in 5m0s.") > 60);
+    }
+
+    /** Floating point, so compare with a tolerance rather than equality. */
+    private static boolean about(double actual, double expected) {
+        return Math.abs(actual - expected) < 0.01;
     }
 
     private static void check(String what, boolean ok) {

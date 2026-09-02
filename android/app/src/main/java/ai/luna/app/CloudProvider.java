@@ -642,12 +642,22 @@ public final class CloudProvider {
                                     Wire wire, TokenSink sink, Cancellation cancellation,
                                     FrameReader frames, WholeReader whole) {
         Wire current = wire;
-        for (int attempt = 0; attempt < 2; attempt++) {
-            Reply reply = readStreamOnce(config, current, sink, cancellation, frames, whole, attempt);
-            if (reply == RETRY_429 && attempt == 0) {
+        // Two distinct second chances, counted separately. They used to share
+        // one attempt counter, so a model that ignored tool_choice burned the
+        // retry that a rate limit would have needed: the reminded request came
+        // straight back as a 429 with nowhere left to go, and the run died on
+        // a wait of four seconds.
+        boolean retriedTool = false;
+        boolean retried429 = false;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            Reply reply = readStreamOnce(config, current, sink, cancellation, frames, whole,
+                retried429 ? 1 : 0);
+            if (reply == RETRY_429 && !retried429) {
+                retried429 = true;
                 continue;                       // the wait has already been slept
             }
-            if (reply == RETRY_TOOL && attempt == 0) {
+            if (reply == RETRY_TOOL && !retriedTool) {
+                retriedTool = true;
                 Wire reminded = remindedWire(config, messages, maxTokens);
                 if (reminded != null) {
                     current = reminded;
@@ -685,7 +695,12 @@ public final class CloudProvider {
                 ErrorLog.tapFail("http", "chat " + code + " " + trim(body2, 300));
                 if (code == 429 && attempt == 0) {
                     long wait = retryAfterMs(connection, body2);
-                    if (wait >= 1000 && wait <= RATE_LIMIT_WAIT_CAP_MS) {
+                    // No floor. Groq routinely answers "try again in 112ms" or
+                    // "in 4.3s", and a floor of one second threw those away --
+                    // the user was told to wait four seconds by an app that
+                    // could have waited itself. Only a wait too long to sit
+                    // through is worth handing back.
+                    if (wait > 0 && wait <= RATE_LIMIT_WAIT_CAP_MS) {
                         sleepUntil(wait, cancellation);
                         return RETRY_429;
                     }
@@ -830,7 +845,7 @@ public final class CloudProvider {
     }
 
     /** The "try again in Ns / Nm Xs" a 429 body usually carries, or -1. */
-    private static double waitSeconds(String payload) {
+    static double waitSeconds(String payload) {
         if (payload == null) {
             return -1;
         }
@@ -838,15 +853,25 @@ public final class CloudProvider {
         if (at < 0) {
             return -1;
         }
+        // "ms" has to be matched before "m", or 112.499999ms reads as a
+        // hundred and twelve minutes -- past any sane cap, so the shortest
+        // waits Groq hands out were the ones most certain to be refused.
         java.util.regex.Matcher m = java.util.regex.Pattern
-            .compile("(\\d+(?:\\.\\d+)?)(m|s)")
+            .compile("(\\d+(?:\\.\\d+)?)(ms|m|s)")
             .matcher(payload.substring(at));
         double total = 0;
         boolean any = false;
         while (m.find()) {
             any = true;
             double value = Double.parseDouble(m.group(1));
-            total += m.group(2).equals("m") ? value * 60 : value;
+            String unit = m.group(2);
+            if (unit.equals("ms")) {
+                total += value / 1000;
+            } else if (unit.equals("m")) {
+                total += value * 60;
+            } else {
+                total += value;
+            }
         }
         return any ? total : -1;
     }
