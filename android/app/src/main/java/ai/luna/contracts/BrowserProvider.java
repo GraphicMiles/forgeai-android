@@ -27,6 +27,15 @@ public interface BrowserProvider {
         return "";
     }
 
+    /**
+     * Pictures and videos on the current page, one per line as
+     * {@code kind || src || page || title || id}. Addresses only: a headless
+     * browser has no reason to download the bytes, and the UI can.
+     */
+    default String media() {
+        return "";
+    }
+
     String currentUrl();
 
     String currentTitle();

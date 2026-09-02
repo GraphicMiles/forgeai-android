@@ -53,14 +53,14 @@ public final class RegistryTest {
     private static void registration() {
         ToolRegistry registry = builtins();
         check("five providers ship with the runtime", registry.providers().size() == 5);
-        check("twenty-one tools are registered", registry.all().size() == 21);
+        check("twenty-nine tools are registered", registry.all().size() == 29);
         check("the registry has read_file", registry.has("read_file"));
         check("the registry does not invent tools", !registry.has("shell_exec"));
         check("a definition comes back whole",
             registry.definition("write_file").required.contains("content"));
-        check("the catalogue is data", registry.describe().length() == 21);
+        check("the catalogue is data", registry.describe().length() == 29);
         check("read-only and mutating add up",
-            registry.idsByRisk(true).size() + registry.idsByRisk(false).size() == 21);
+            registry.idsByRisk(true).size() + registry.idsByRisk(false).size() == 29);
         check("every capability used is a real one",
             registry.capabilitiesUsed().size() >= 6);
     }
@@ -99,12 +99,12 @@ public final class RegistryTest {
 
         ToolContext full = context(true, true);
         check("with everything granted, everything is offered",
-            registry.availableIds(full).size() == 14);
+            registry.availableIds(full).size() == 15);
         check("but git still needs its client", !registry.availableIds(full).contains("git_clone"));
 
         ToolContext everything = context(true, true, true);
         check("a git client brings the git tools",
-            registry.availableIds(everything).size() == 21);
+            registry.availableIds(everything).size() == 29);
         check("and git_clone is among them",
             registry.availableIds(everything).contains("git_clone"));
 
@@ -202,9 +202,9 @@ public final class RegistryTest {
         check("a folderless prompt never mentions a file tool", noFiles);
         check("every line is one JSON object", everyLineIsAnObject(lines));
         check("a full prompt lists them all",
-            registry.promptLines(context(true, true)).size() == 14);
+            registry.promptLines(context(true, true)).size() == 15);
         check("a git-capable prompt lists them all too",
-            registry.promptLines(context(true, true, true)).size() == 21);
+            registry.promptLines(context(true, true, true)).size() == 29);
     }
 
     /** A plugin must not be able to take over a name the core already uses. */

@@ -13,8 +13,13 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Git as a library, inside the app.
@@ -198,6 +203,318 @@ public final class AppGitStore implements GitProvider {
             return ReadableText.clean(text, MAX_DIFF);
         } catch (Exception error) {
             return wrap("show the changes in " + path, error);
+        }
+    }
+
+    // --- working tree ---------------------------------------------------------
+
+    /** How much of one file is worth reading into the model's context. */
+    private static final int MAX_READ = 24000;
+
+    /** A refusal to write more than the phone should hold in one file. */
+    private static final long MAX_WRITE = 2L * 1024L * 1024L;
+
+    /** How many entries one listing may name before it stops being readable. */
+    private static final int MAX_ENTRIES = 200;
+
+    @Override
+    public String list(String path) {
+        Resolved target = resolve(path);
+        if (target.refusal != null) {
+            return target.refusal;
+        }
+        File dir = target.file;
+        if (!dir.exists()) {
+            return "There is nothing at \"" + path + "\".";
+        }
+        if (!dir.isDirectory()) {
+            return "\"" + path + "\" is a file, not a folder. Read it instead.";
+        }
+        File[] children = dir.listFiles();
+        if (children == null || children.length == 0) {
+            return "The folder \"" + path + "\" is empty.";
+        }
+        Arrays.sort(children, new Comparator<File>() {
+            @Override
+            public int compare(File left, File right) {
+                boolean leftDir = left.isDirectory();
+                if (leftDir != right.isDirectory()) {
+                    return leftDir ? -1 : 1;
+                }
+                return left.getName().compareToIgnoreCase(right.getName());
+            }
+        });
+        StringBuilder out = new StringBuilder();
+        out.append(children.length).append(" items in ").append(path).append(":\n");
+        for (int index = 0; index < children.length && index < MAX_ENTRIES; index++) {
+            File child = children[index];
+            // .git is the repository's own plumbing. Listing it invites the
+            // model to read objects it cannot use and config it must not.
+            if (child.getName().equals(".git")) {
+                continue;
+            }
+            out.append(child.isDirectory() ? "dir  " : "file ").append(child.getName());
+            if (!child.isDirectory()) {
+                out.append("  ").append(child.length()).append(" B");
+            }
+            out.append('\n');
+        }
+        if (children.length > MAX_ENTRIES) {
+            out.append("(").append(children.length - MAX_ENTRIES).append(" more)\n");
+        }
+        return out.toString();
+    }
+
+    @Override
+    public String read(String path) {
+        Resolved target = resolve(path);
+        if (target.refusal != null) {
+            return target.refusal;
+        }
+        File file = target.file;
+        if (!file.exists()) {
+            return "There is no file at \"" + path + "\".";
+        }
+        if (file.isDirectory()) {
+            return "\"" + path + "\" is a folder. List it instead.";
+        }
+        if (file.length() > MAX_WRITE) {
+            return "That file is larger than the 2 MB limit.";
+        }
+        try {
+            byte[] bytes = readAll(file);
+            if (looksBinary(bytes)) {
+                return "\"" + path + "\" is a binary file (" + bytes.length
+                    + " bytes), so there is no text to read.";
+            }
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            if (text.length() > MAX_READ) {
+                return text.substring(0, MAX_READ)
+                    + "\n… (truncated at " + MAX_READ + " characters)";
+            }
+            return text;
+        } catch (Exception error) {
+            return wrap("read " + path, error);
+        }
+    }
+
+    @Override
+    public String write(String path, String content) {
+        Resolved target = resolve(path);
+        if (target.refusal != null) {
+            return target.refusal;
+        }
+        String body = content == null ? "" : content;
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_WRITE) {
+            return "That write is larger than the 2 MB cap.";
+        }
+        File file = target.file;
+        if (file.isDirectory()) {
+            return "\"" + path + "\" is a folder, so it cannot be written to.";
+        }
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            return "Could not make the folder for " + path + ".";
+        }
+        FileOutputStream out = null;
+        try {
+            out = new FileOutputStream(file);
+            out.write(bytes);
+            out.flush();
+        } catch (Exception error) {
+            return wrap("write " + path, error);
+        } finally {
+            closeQuietly(out);
+        }
+        return "";
+    }
+
+    @Override
+    public String create(String path, boolean folder) {
+        Resolved target = resolve(path);
+        if (target.refusal != null) {
+            return target.refusal;
+        }
+        File file = target.file;
+        if (file.exists()) {
+            return "There is already something at \"" + path + "\".";
+        }
+        try {
+            if (folder) {
+                return file.mkdirs() ? "" : "Could not create the folder " + path + ".";
+            }
+            File parent = file.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                return "Could not make the folder for " + path + ".";
+            }
+            return file.createNewFile() ? "" : "Could not create " + path + ".";
+        } catch (Exception error) {
+            return wrap("create " + path, error);
+        }
+    }
+
+    @Override
+    public String delete(String path) {
+        Resolved target = resolve(path);
+        if (target.refusal != null) {
+            return target.refusal;
+        }
+        File file = target.file;
+        if (target.inner.isEmpty()) {
+            // Deleting the repository root through a file tool would be a
+            // surprise; removing a clone is its own decision.
+            return "That is the repository itself, not a file in it.";
+        }
+        if (!file.exists()) {
+            return "There is nothing at \"" + path + "\".";
+        }
+        return removeTree(file) ? "" : "Could not delete " + path + ".";
+    }
+
+    @Override
+    public String move(String from, String to) {
+        Resolved source = resolve(from);
+        if (source.refusal != null) {
+            return source.refusal;
+        }
+        Resolved destination = resolve(to);
+        if (destination.refusal != null) {
+            return destination.refusal;
+        }
+        if (!source.repo.equals(destination.repo)) {
+            return "Both paths have to be in the same repository.";
+        }
+        if (!source.file.exists()) {
+            return "There is nothing at \"" + from + "\".";
+        }
+        if (destination.file.exists()) {
+            return "There is already something at \"" + to + "\".";
+        }
+        File parent = destination.file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            return "Could not make the folder for " + to + ".";
+        }
+        return source.file.renameTo(destination.file) ? "" : "Could not move " + from + ".";
+    }
+
+    // --- containment ----------------------------------------------------------
+
+    /** A path resolved against the workspace, or the reason it was refused. */
+    private static final class Resolved {
+        final File file;
+        final String repo;
+        final String inner;
+        final String refusal;
+
+        private Resolved(File file, String repo, String inner, String refusal) {
+            this.file = file;
+            this.repo = repo;
+            this.inner = inner;
+            this.refusal = refusal;
+        }
+
+        static Resolved no(String refusal) {
+            return new Resolved(null, "", "", refusal);
+        }
+    }
+
+    /**
+     * Turn {@code repo/inner/path} into a real file inside that repository.
+     *
+     * <p>The first segment names the clone; everything after it is the path
+     * within it. Containment is checked on the resolved canonical path rather
+     * than on the text, because "a/../../etc" is only obviously an escape once
+     * the filesystem has had its say — and a symlink inside a cloned
+     * repository can point anywhere at all.
+     */
+    private Resolved resolve(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return Resolved.no("Give me a path as repository/file.");
+        }
+        String cleaned = path.trim().replace('\\', '/');
+        while (cleaned.startsWith("/")) {
+            cleaned = cleaned.substring(1);
+        }
+        int slash = cleaned.indexOf('/');
+        String name = slash < 0 ? cleaned : cleaned.substring(0, slash);
+        String inner = slash < 0 ? "" : cleaned.substring(slash + 1);
+        File dir = repo(name);
+        if (dir == null) {
+            return Resolved.no(noRepo(name));
+        }
+        // The repository's own plumbing is not editable content. Rewriting a
+        // hook or config through a file tool is a way to run code later.
+        String lower = inner.toLowerCase(Locale.US);
+        if (lower.equals(".git") || lower.startsWith(".git/")) {
+            return Resolved.no("That is the repository's own git data, which is not editable.");
+        }
+        try {
+            File base = dir.getCanonicalFile();
+            File target = inner.isEmpty() ? base : new File(base, inner).getCanonicalFile();
+            String basePath = base.getPath();
+            String targetPath = target.getPath();
+            if (!targetPath.equals(basePath) && !targetPath.startsWith(basePath + File.separator)) {
+                return Resolved.no("Paths have to stay inside the repository.");
+            }
+            return new Resolved(target, name, inner, null);
+        } catch (Exception error) {
+            return Resolved.no("That path could not be resolved.");
+        }
+    }
+
+    /** Depth-first removal: File.delete refuses a folder that is not empty. */
+    private static boolean removeTree(File file) {
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    if (!removeTree(child)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return file.delete();
+    }
+
+    private static byte[] readAll(File file) throws java.io.IOException {
+        FileInputStream input = new FileInputStream(file);
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int read;
+            while ((read = input.read(chunk)) > 0) {
+                buffer.write(chunk, 0, read);
+            }
+            return buffer.toByteArray();
+        } finally {
+            closeQuietly(input);
+        }
+    }
+
+    /**
+     * A NUL byte in the first few KB means this is not text. Handing a model a
+     * megabyte of mangled binary wastes its context and tells it nothing.
+     */
+    private static boolean looksBinary(byte[] bytes) {
+        int limit = Math.min(bytes.length, 8000);
+        for (int index = 0; index < limit; index++) {
+            if (bytes[index] == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void closeQuietly(java.io.Closeable stream) {
+        if (stream == null) {
+            return;
+        }
+        try {
+            stream.close();
+        } catch (Exception ignored) {
+            // Nothing useful to do about a stream that will not close.
         }
     }
 

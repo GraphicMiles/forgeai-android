@@ -95,6 +95,72 @@ public final class GitTools extends BuiltinProvider {
             .timeout(15000L)
             .requires("git")
             .build());
+
+        // --- working inside a clone ------------------------------------------
+        //
+        // Without these a clone is a download nobody can open: the filesystem
+        // tools only see the granted folder, and the git workspace is not in
+        // it. Paths are repository/inner/path throughout.
+        all.add(ToolDefinition.of("git_list", "List repository files")
+            .description("What is in a cloned repository, or in one of its folders")
+            .input("path", "Repository, or repository/folder")
+            .required("path")
+            .capabilities(Capability.FILESYSTEM_READ)
+            .risk(RiskLevel.LOW)
+            .requires("git")
+            .build());
+        all.add(ToolDefinition.of("git_read", "Read a repository file")
+            .description("The text of one file in a cloned repository")
+            .input("path", "repository/inner/path")
+            .required("path")
+            .capabilities(Capability.FILESYSTEM_READ)
+            .risk(RiskLevel.LOW)
+            .requires("git")
+            .build());
+        all.add(ToolDefinition.of("git_write", "Write a repository file")
+            .description("Replace the contents of a file in a cloned repository")
+            .input("path", "repository/inner/path", "content", "What to write")
+            .required("path", "content")
+            .capabilities(Capability.FILESYSTEM_WRITE)
+            .risk(RiskLevel.MEDIUM)
+            .requires("git")
+            .build());
+        all.add(ToolDefinition.of("git_create", "Create in a repository")
+            .description("Make an empty file, or a folder, in a cloned repository")
+            .input("path", "repository/inner/path", "folder", "true for a folder")
+            .required("path")
+            .capabilities(Capability.FILESYSTEM_WRITE)
+            .risk(RiskLevel.MEDIUM)
+            .requires("git")
+            .build());
+        all.add(ToolDefinition.of("git_edit", "Edit part of a repository file")
+            .description("Replace an exact block of text in a repository file, leaving the "
+                + "rest alone. Prefer this over git_write for an existing file")
+            .input("path", "repository/inner/path",
+                "find", "The exact lines to replace, copied from the file",
+                "replace", "What to put in their place",
+                "all", "true to change every occurrence")
+            .required("path", "find", "replace")
+            .capabilities(Capability.FILESYSTEM_WRITE)
+            .risk(RiskLevel.MEDIUM)
+            .requires("git")
+            .build());
+        all.add(ToolDefinition.of("git_delete", "Delete from a repository")
+            .description("Remove a file or folder from a cloned repository")
+            .input("path", "repository/inner/path")
+            .required("path")
+            .capabilities(Capability.FILESYSTEM_DELETE)
+            .risk(RiskLevel.HIGH)
+            .requires("git")
+            .build());
+        all.add(ToolDefinition.of("git_move", "Move in a repository")
+            .description("Move or rename a file inside a cloned repository")
+            .input("path", "repository/inner/path", "to", "The new repository/inner/path")
+            .required("path", "to")
+            .capabilities(Capability.FILESYSTEM_WRITE)
+            .risk(RiskLevel.MEDIUM)
+            .requires("git")
+            .build());
         return all;
     }
 }

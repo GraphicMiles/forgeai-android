@@ -97,6 +97,66 @@ public final class HeadlessBrowser implements BrowserProvider {
             + "return out.join('\\n');"
             + "})();";
 
+    /**
+     * Pictures and videos on the page, as addresses rather than bytes.
+     *
+     * <p>The browser deliberately never downloads an image — it is headless and
+     * the bytes would be wasted. But a person who asks for "pictures of" or
+     * "the latest video" wants to see something, and Flutter can load a
+     * thumbnail perfectly well from a URL. So the scrape collects addresses and
+     * the chat does the rendering.
+     *
+     * <p>Three sources, in order of how much they can be trusted: Google's own
+     * image results carry the original address in their metadata, YouTube
+     * results have a video id that yields a poster frame, and any page has
+     * plain img tags worth keeping if they are big enough to be content rather
+     * than an icon.
+     */
+    private static final String MEDIA_EXTRACT =
+        "(function(){"
+            + "var out=[], seen={};"
+            + "function clean(s){ return (s||'').replace(/\\s+/g,' ').trim(); }"
+            + "function push(kind,src,page,title,extra){"
+            + "if(!src||src.indexOf('http')!==0||seen[src]){return;}"
+            + "if(out.length>=12){return;}"
+            + "seen[src]=1;"
+            + "out.push(kind+' || '+src+' || '+(page||'')+' || '+clean(title)+' || '+(extra||''));"
+            + "}"
+            // YouTube results: the video id gives a poster frame and a watch url.
+            + "var vids=document.querySelectorAll('a[href*=\"watch?v=\"], a[href*=\"youtu.be/\"]');"
+            + "for(var v=0;v<vids.length;v++){"
+            + "var vh=vids[v].getAttribute('href')||'';"
+            + "var m=vh.match(/(?:watch\\?v=|youtu\\.be\\/)([A-Za-z0-9_-]{11})/);"
+            + "if(!m){continue;}"
+            + "var id=m[1];"
+            + "var vt=clean(vids[v].innerText)||clean(vids[v].getAttribute('title'));"
+            + "push('video','https://i.ytimg.com/vi/'+id+'/hqdefault.jpg',"
+            + "'https://www.youtube.com/watch?v='+id,vt,id);"
+            + "}"
+            // Google Images packs the original address into a JSON blob.
+            + "var metas=document.querySelectorAll('div[data-lpage], a[href*=\"imgurl=\"]');"
+            + "for(var g=0;g<metas.length;g++){"
+            + "var gh=metas[g].getAttribute('href')||'';"
+            + "var gm=gh.match(/[?&]imgurl=([^&]+)/);"
+            + "if(gm){"
+            + "try{ push('image',decodeURIComponent(gm[1]),"
+            + "metas[g].getAttribute('data-lpage')||'',clean(metas[g].innerText),''); }catch(e){}"
+            + "}"
+            + "}"
+            // Anything else on the page that is plainly a picture, not an icon.
+            + "var imgs=document.querySelectorAll('img');"
+            + "for(var i=0;i<imgs.length;i++){"
+            + "var im=imgs[i];"
+            + "var w=im.naturalWidth||im.width||0, h=im.naturalHeight||im.height||0;"
+            + "if(w&&w<160){continue;}"
+            + "if(h&&h<120){continue;}"
+            + "var src=im.getAttribute('src')||im.getAttribute('data-src')||'';"
+            + "if(src.indexOf('data:')===0){continue;}"
+            + "push('image',src,location.href,im.getAttribute('alt')||'','');"
+            + "}"
+            + "return out.join('\\n');"
+            + "})();";
+
     private final Context context;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ErrorLog errors;
@@ -217,6 +277,26 @@ public final class HeadlessBrowser implements BrowserProvider {
 
     /** The open page's search results, as "title || address || snippet" lines. */
     @Override
+    /**
+     * Media on the current page. Same settle-and-retry as the result scrape,
+     * because a search page paints its thumbnails last of all.
+     */
+    public String media() {
+        for (int attempt = 0; attempt < SEARCH_SCRAPE_TRIES; attempt++) {
+            String found = ReadableText.clean(evaluate(MEDIA_EXTRACT), MAX_TEXT);
+            if (!found.isEmpty() || attempt == SEARCH_SCRAPE_TRIES - 1) {
+                return found;
+            }
+            try {
+                Thread.sleep(SEARCH_SETTLE_MS);
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+                return found;
+            }
+        }
+        return "";
+    }
+
     public String searchResults() {
         // Google often paints its result blocks a beat after onPageFinished, or
         // shows a consent wall before them. One empty scrape is not proof there

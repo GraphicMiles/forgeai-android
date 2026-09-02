@@ -22,13 +22,14 @@ public final class ToolPolicy {
 
     public static final List<String> READ_ONLY = Arrays.asList(
         "list_files", "read_file", "search_code", "respond",
-        "git_status", "git_log", "git_diff"
+        "git_status", "git_log", "git_diff", "git_list", "git_read"
     );
 
     public static final List<String> MUTATING = Arrays.asList(
-        "write_file", "create_file", "create_folder", "delete_file", "rename_file",
+        "write_file", "edit_file", "create_file", "create_folder", "delete_file", "rename_file",
         "open_page", "read_page", "search_web", "github_file", "ask_user",
-        "git_clone", "git_pull", "git_push", "git_commit"
+        "git_clone", "git_pull", "git_push", "git_commit",
+        "git_write", "git_edit", "git_create", "git_delete", "git_move"
     );
 
     private static final Set<String> READ_ONLY_SET = new HashSet<>(READ_ONLY);
@@ -47,7 +48,7 @@ public final class ToolPolicy {
 
     /** Tools that need a granted folder to mean anything. */
     public static final List<String> NEEDS_FOLDER = Arrays.asList(
-        "list_files", "read_file", "search_code", "write_file", "create_file",
+        "list_files", "read_file", "search_code", "write_file", "edit_file", "create_file",
         "create_folder", "delete_file", "rename_file"
     );
 
@@ -116,6 +117,21 @@ public final class ToolPolicy {
             }
             case "create_file":
                 return "Create " + safePath + "?";
+            case "edit_file":
+                return "Change part of " + safePath + "?";
+            case "git_edit":
+                return "Change part of " + safePath + " in the repository?";
+            case "git_write": {
+                int lines = content == null || content.isEmpty() ? 0 : content.split("\n", -1).length;
+                return "Replace what is in " + safePath + " with "
+                    + lines + (lines == 1 ? " line?" : " lines?");
+            }
+            case "git_create":
+                return "Create " + safePath + " in the repository?";
+            case "git_delete":
+                return "Delete " + safePath + " from the repository?";
+            case "git_move":
+                return "Move " + safePath + " inside the repository?";
             case "create_folder":
                 return "Create the folder " + safePath + "?";
             case "delete_file":
@@ -171,6 +187,20 @@ public final class ToolPolicy {
                 return "Your changes and your GitHub token are sent to the remote repository.";
             case "git_commit":
                 return "A commit is recorded in Luna's git workspace.";
+            case "edit_file":
+                return "Only the matched lines change. The rest of the file is untouched, "
+                    + "and the old contents are backed up first.";
+            case "git_edit":
+                return "Only the matched lines change in the cloned repository.";
+            case "git_write":
+                return "The file in the cloned repository is overwritten. There is no backup, "
+                    + "but the change is not pushed until you ask.";
+            case "git_create":
+                return "A new file appears in the cloned repository.";
+            case "git_delete":
+                return "It is removed from the cloned repository. There is no backup.";
+            case "git_move":
+                return "The file changes place inside the cloned repository.";
             default:
                 return path == null ? "" : path;
         }

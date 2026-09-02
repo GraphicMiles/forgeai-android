@@ -117,7 +117,7 @@ public final class AgentsTest {
         AgentManager manager = manager();
         ToolContext context = context(true, true);
         check("Luna gets everything the phone offers",
-            manager.toolIds(context).size() == 14);
+            manager.toolIds(context).size() == 15);
 
         manager.activate("acme.reader");
         List<String> narrowed = manager.toolIds(context);

@@ -54,6 +54,8 @@ javac --release 11 -encoding UTF-8 -nowarn \
   "$root"/android/app/src/main/java/ai/luna/app/*.java \
   "$root"/tools/tests/ai/luna/app/*.java
 
+java -cp "$deps:$platform:$work/classes" ai.luna.app.TextEditTest
+java -cp "$deps:$platform:$work/classes" ai.luna.app.GitTreeTest
 java -cp "$deps:$platform:$work/classes" ai.luna.app.MemoryRecoveryTest
 java -cp "$deps:$platform:$work/classes" ai.luna.app.ProviderConfigTest
 java -cp "$deps:$platform:$work/classes" ai.luna.app.ContractsTest

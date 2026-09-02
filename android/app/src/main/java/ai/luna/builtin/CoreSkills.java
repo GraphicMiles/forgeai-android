@@ -54,7 +54,15 @@ public final class CoreSkills implements SkillProvider {
             + "life.js, not Alarms/life.js. Keep the exact name and extension the person "
             + "gave. Do not guess at a file you have not listed or read. When a tool reports "
             + "a path back to you, that path is what exists — say that one, not the one you "
-            + "asked for.")
+            + "asked for. To change a file that already exists, use edit_file: give it the "
+            + "exact lines to find, copied from what you read, and what to put in their "
+            + "place. It cannot touch the parts you did not mention. write_file replaces "
+            + "everything, so keep it for a new file or a rewrite you genuinely intend — "
+            + "using it to change a few lines means re-emitting the rest from memory, and "
+            + "whatever you misremember is destroyed. If an edit reports that it could not "
+            + "find your text, read the file again and copy the lines more carefully; do "
+            + "not fall back to overwriting the whole file. Make several small edits rather "
+            + "than one enormous one.")
         .tools("list_files", "read_file", "search_code", "write_file", "create_file",
             "create_folder", "delete_file", "rename_file")
         .requires("workspace")
@@ -98,15 +106,19 @@ public final class CoreSkills implements SkillProvider {
         .describe("How to clone, commit and push repositories in Luna's git workspace.")
         .says("Repositories live in Luna's own git workspace, not in the granted folder. "
             + "git_clone downloads a repository by its address; the other git tools name it "
-            + "by the folder it was cloned under. The file tools cannot see that workspace at "
-            + "all: after a clone you cannot list, search or read the repository's files, so "
-            + "you do not know what is in it and must not say what it contains. If you are "
-            + "asked what a cloned project is about, say that you can clone and manage it but "
-            + "cannot read its contents, and offer github_file to fetch one named file. Read "
-            + "the status before you commit, and say what changed when you are done. A push "
-            + "sends your changes and your GitHub token to the remote.")
+            + "by the folder it was cloned under. The ordinary file tools cannot see that "
+            + "workspace, so use the git ones inside a clone: git_list and git_read to look, "
+            + "git_edit, git_write, git_create, git_delete and git_move to change it. "
+            + "Prefer git_edit over git_write on a file that already exists. Their paths are "
+            + "repository/inner/path — git_read on \"myrepo/README.md\", not \"README.md\". "
+            + "To describe a project you have cloned, list it and read its README or its "
+            + "manifest first; never describe a repository you have not read. Read the status "
+            + "before you commit, and say what changed when you are done. Changes stay on this "
+            + "device until you push, and a push sends them and your GitHub token to the "
+            + "remote.")
         .tools("git_clone", "git_pull", "git_push", "git_status", "git_commit", "git_log",
-            "git_diff")
+            "git_diff", "git_list", "git_read", "git_write", "git_create", "git_delete",
+            "git_move", "git_edit")
         .requires("git")
         .order(35)
         .build();
