@@ -83,9 +83,15 @@ public final class TextEdit {
         // 1. Exact. The overwhelmingly common case when it works at all.
         int first = source.indexOf(find);
         if (first >= 0) {
-            int second = source.indexOf(find, first + 1);
-            if (second >= 0 && !all) {
-                return Result.failed("That text appears " + count(source, find)
+            // Count the way the replacement will actually consume the text --
+            // non-overlapping -- so that the check and the count agree. Looking
+            // one character ahead instead finds an overlap of the block with
+            // itself ("aa" inside "aaa"), which is a single replaceable
+            // occurrence, and refusing it produced the nonsense "appears 1
+            // times".
+            int total = count(source, find);
+            if (total > 1 && !all) {
+                return Result.failed("That text appears " + total
                     + " times, so it is not clear which one to change. Include a few more "
                     + "surrounding lines to make it unique, or set all to true to change "
                     + "every one.");

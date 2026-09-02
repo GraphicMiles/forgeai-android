@@ -22,6 +22,7 @@ public final class TextEditTest {
         refusals();
         everyOccurrence();
         preservation();
+        overlapping();
 
         System.out.println();
         if (failed > 0) {
@@ -138,6 +139,41 @@ public final class TextEditTest {
         TextEdit.Result last = TextEdit.apply("rest\nend\n", "end", "END", false);
         check("a match at the last line works", last.ok
             && last.text.equals("rest\nEND\n"));
+    }
+
+    /**
+     * A block that overlaps itself is still one replaceable occurrence.
+     *
+     * <p>Ambiguity used to be detected by looking one character past the first
+     * hit, while the count that went into the message stepped over a whole
+     * block. For "aa" inside "aaa" those disagree: the edit was refused as
+     * ambiguous and the model was told the text "appears 1 times" -- a refusal
+     * it cannot act on, for an edit that was never ambiguous. Both now count
+     * the way the replacement actually consumes the text.
+     */
+    private static void overlapping() {
+        TextEdit.Result once = TextEdit.apply("aaa\n", "aa", "b", false);
+        check("a self-overlapping block is replaced", once.ok);
+        check("and only the first is taken", once.ok && once.text.equals("ba\n"));
+
+        // Genuinely two, once the overlap is resolved the way a replace runs.
+        TextEdit.Result twice = TextEdit.apply("aaaa\n", "aa", "b", false);
+        check("two non-overlapping copies are ambiguous", !twice.ok);
+        check("and the count is the honest one",
+            !twice.ok && twice.problem.contains("appears 2 times"));
+        check("never a count of one",
+            !twice.problem.contains("appears 1 times"));
+
+        TextEdit.Result all = TextEdit.apply("aaaa\n", "aa", "b", true);
+        check("all=true takes both", all.ok && all.text.equals("bb\n"));
+
+        // The count in the message has to match what all=true would really do,
+        // or the model is told to expect a different edit than it will get.
+        TextEdit.Result pair = TextEdit.apply("abab\n", "ab", "X", false);
+        check("a clean pair reports two", !pair.ok && pair.problem.contains("appears 2 times"));
+        TextEdit.Result both = TextEdit.apply("abab\n", "ab", "X", true);
+        check("and all=true changes exactly that many",
+            both.ok && both.text.equals("XX\n"));
     }
 
     private static void check(String what, boolean condition) {

@@ -33,6 +33,7 @@ public final class WorkspacePathTest {
         theRootItself();
         ordinaryPaths();
         traversal();
+        mangledNames();
 
         System.out.println();
         if (failed > 0) {
@@ -142,6 +143,44 @@ public final class WorkspacePathTest {
             refuses(store, "read", "src/../../secret.txt"));
         check("and it is refused for writes too",
             refuses(store, "delete", "../secret.txt"));
+    }
+
+    /**
+     * Files an older version of this app left behind under the wrong name.
+     *
+     * <p>Before the MIME fix, asking for life.js could put life.js.txt on disk.
+     * Those files are still sitting in people's folders, and an exact-name
+     * lookup misses them -- which is how "add a loop to life.js" once created a
+     * second file beside the first instead of editing it. The lookup has to
+     * find the mangled one, and it has to keep doing so now that the folder
+     * prefix is stripped on the way in.
+     */
+    private static void mangledNames() {
+        Tree root = Tree.folder("Alarms",
+            Tree.file("life.js.txt"),
+            Tree.file("notes.md"));
+        WorkspaceStore store = storeOn(root);
+
+        check("a file mangled to .txt is still found",
+            named(store, "life.js", "life.js.txt"));
+        check("and found through the folder prefix too",
+            named(store, "Alarms/life.js", "life.js.txt"));
+        check("and regardless of case", named(store, "LIFE.JS", "life.js.txt"));
+        check("a correctly named file is unaffected",
+            named(store, "notes.md", "notes.md"));
+
+        // The important negative: a file that genuinely is not there must not
+        // be matched to something else, or a create turns into an overwrite.
+        check("a missing file is still missing",
+            store.resolveForTest("missing.js") == null);
+        check("and a different stem is not matched",
+            store.resolveForTest("life.py") == null);
+    }
+
+    /** Whether a path reaches a document with the given real name. */
+    private static boolean named(WorkspaceStore store, String path, String expected) {
+        DocumentFile reached = store.resolveForTest(path);
+        return reached != null && expected.equals(reached.getName());
     }
 
     // --- helpers --------------------------------------------------------------
