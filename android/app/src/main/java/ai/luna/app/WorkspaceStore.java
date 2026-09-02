@@ -59,8 +59,21 @@ public final class WorkspaceStore implements StorageProvider {
     private final Prefs prefs;
 
     public WorkspaceStore(Context context, Prefs prefs) {
-        this.context = context.getApplicationContext();
+        this.context = context == null ? null : context.getApplicationContext();
         this.prefs = prefs;
+    }
+
+    /**
+     * A store with no device behind it, backed by the given tree.
+     *
+     * <p>Only the path rules work in this state -- anything that reads or
+     * writes bytes needs a content resolver. That is enough: the path rules are
+     * the part with the history of bugs.
+     */
+    static WorkspaceStore forPathTests(DocumentFile tree) {
+        WorkspaceStore store = new WorkspaceStore(null, null);
+        store.rootOverride = tree;
+        return store;
     }
 
     // --- grant ---------------------------------------------------------------
@@ -218,7 +231,19 @@ public final class WorkspaceStore implements StorageProvider {
         return name == null ? "" : name;
     }
 
-    private DocumentFile root() {
+    /**
+     * The granted folder, or null if there is not one.
+     *
+     * <p>Package-visible and overridable purely so the path rules can be tested
+     * off a device. The path logic below -- which name means which folder, and
+     * when a repeated folder name is a mistake -- is where this app's worst
+     * bugs have lived, and it is unreachable in a test while the only way to
+     * get a folder is a real SAF grant.
+     */
+    DocumentFile root() {
+        if (rootOverride != null) {
+            return rootOverride;
+        }
         String uri = prefs.workspaceUri();
         if (uri.isEmpty()) {
             return null;
@@ -228,6 +253,19 @@ public final class WorkspaceStore implements StorageProvider {
         } catch (Exception error) {
             return null;
         }
+    }
+
+    /** Set only by tests; null in every shipping path. */
+    private DocumentFile rootOverride;
+
+    /** What a path resolves to, for tests. Null when nothing is there yet. */
+    DocumentFile resolveForTest(String path) {
+        return resolve(path, false);
+    }
+
+    /** The segments a path reduces to, for tests. */
+    List<String> segmentsForTest(String path) {
+        return segments(path);
     }
 
     // --- policy --------------------------------------------------------------
@@ -284,18 +322,51 @@ public final class WorkspaceStore implements StorageProvider {
      */
     private List<String> segments(String path) {
         List<String> parts = rawSegments(path);
-        if (parts.size() < 2) {
-            return parts;
-        }
         String root = rootName();
-        if (root.isEmpty() || !parts.get(0).equalsIgnoreCase(root)) {
+        if (root.isEmpty() || parts.isEmpty() || !parts.get(0).equalsIgnoreCase(root)) {
             return parts;
         }
-        DocumentFile here = root();
-        if (here != null && findChild(here, parts.get(0)) != null) {
-            return parts;
+
+        // Build every reading of the path, from the most literal to the most
+        // forgiving: "Alarms/Alarms/life.js" could mean that, or "Alarms/life.js",
+        // or "life.js". A model that has been told paths start at the granted
+        // folder sometimes says its name once too often, and sometimes twice.
+        List<List<String>> readings = new ArrayList<>();
+        List<String> candidate = parts;
+        readings.add(candidate);
+        while (!candidate.isEmpty() && candidate.get(0).equalsIgnoreCase(root)) {
+            candidate = new ArrayList<>(candidate.subList(1, candidate.size()));
+            readings.add(candidate);
         }
-        return new ArrayList<>(parts.subList(1, parts.size()));
+
+        // Prefer whichever reading names something that is actually there. That
+        // keeps the literal meaning when the folder really does contain a child
+        // of the same name, and drops the repeat when it does not.
+        for (List<String> reading : readings) {
+            if (!reading.isEmpty() && existsAt(reading)) {
+                return reading;
+            }
+        }
+
+        // Nothing exists yet, so this is a path being created. The person who
+        // says "put it in the alarms folder" while standing in Alarms means
+        // this folder, not a new one inside it, so take the plainest reading.
+        return candidate;
+    }
+
+    /** Whether a resolved list of segments names something that exists. */
+    private boolean existsAt(List<String> parts) {
+        DocumentFile current = root();
+        if (current == null) {
+            return false;
+        }
+        for (String part : parts) {
+            current = findChild(current, part);
+            if (current == null) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -610,6 +681,11 @@ public final class WorkspaceStore implements StorageProvider {
         if (isProtected(path) || isProtected(newName)) {
             throw new IOException("That file is protected.");
         }
+        // As with delete: the granted folder itself is not Luna's to rename.
+        if (segments(path).isEmpty()) {
+            throw new IOException("That is the granted folder itself, which Luna cannot "
+                + "rename. Name something inside it.");
+        }
         DocumentFile file = resolve(path, false);
         if (file == null) {
             throw new IOException("No such file: " + path);
@@ -630,6 +706,14 @@ public final class WorkspaceStore implements StorageProvider {
     public void delete(String path) throws IOException {
         if (isProtected(path)) {
             throw new IOException("That file is protected. Luna cannot delete it.");
+        }
+        // An empty path resolves to the granted folder itself, and so now does
+        // the folder's own name -- "delete the Alarms folder" said while
+        // standing in Alarms. Neither may be honoured: it would take the whole
+        // workspace, and there is no undo for that.
+        if (segments(path).isEmpty()) {
+            throw new IOException("That is the granted folder itself, which Luna cannot "
+                + "delete. Name something inside it.");
         }
         DocumentFile file = resolve(path, false);
         if (file == null) {
