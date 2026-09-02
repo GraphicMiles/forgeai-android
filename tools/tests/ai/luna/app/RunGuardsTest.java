@@ -22,6 +22,7 @@ public final class RunGuardsTest {
         transientFailures();
         freshRuns();
         budgets();
+        recoveryMessagesCount();
 
         System.out.println();
         if (failed > 0) {
@@ -162,6 +163,50 @@ public final class RunGuardsTest {
         RunGuards.Verdict verdict = guards.check("read_file", path("c"), false);
         check("the tool-call budget is enforced", !verdict.allowed);
         check("and it says so as a limit", verdict.reason.contains("limit"));
+    }
+
+    /**
+     * The two halves have to agree on what a failure looks like.
+     *
+     * <p>Recovery writes the failure messages; RunGuards decides which
+     * observations are failures by reading their wording. If Recovery is ever
+     * reworded without RunGuards being told, failures silently stop being
+     * counted and the repeat guard quietly switches itself off -- so the
+     * agreement is asserted rather than assumed.
+     */
+    private static void recoveryMessagesCount() {
+        Throwable[] every = {
+            new java.io.FileNotFoundException("/storage/emulated/0/x"),
+            new SecurityException("Permission denied"),
+            new java.net.SocketTimeoutException("timed out"),
+            new java.net.UnknownHostException("nowhere.example"),
+            new java.io.IOException("ENOSPC: no space left"),
+            new java.io.IOException("Network is unreachable"),
+            new IllegalStateException("something unrecognised"),
+            new OutOfMemoryError("heap"),
+        };
+        RunGuards guards = fresh();
+        JSONObject args = path("notes.txt");
+        for (Throwable error : every) {
+            String message = Recovery.from("read_file", error);
+            guards.begin();
+            guards.record("read_file", args, message);
+            check("a " + error.getClass().getSimpleName() + " message is treated as a failure",
+                guards.check("read_file", args, false).replay == null);
+        }
+
+        // And a call to a tool that does not exist is likewise not an answer.
+        guards.begin();
+        guards.record("reed_file", args,
+            Recovery.unknownTool("reed_file", java.util.Arrays.asList("read_file")));
+        check("an unknown-tool message is treated as a failure",
+            guards.check("reed_file", args, false).replay == null);
+
+        // The other direction: ordinary content must not be mistaken for one.
+        guards.begin();
+        guards.record("read_file", args, "There is nothing wrong with this file's contents.");
+        check("prose that merely resembles a failure is still content",
+            guards.check("read_file", args, false).replay != null);
     }
 
     // --- helpers --------------------------------------------------------------
