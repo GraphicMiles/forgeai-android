@@ -1419,7 +1419,7 @@ public final class AgentEngine {
             String system = prompt.build(toolContext(), child.task,
                 workspace.hasRoot() ? workspace.rootName() : "", prefs.unattended(), null,
                 memory.recallLines(child.task, child.agent.id, 3));
-            String answer = askOnce(system + "\n\n" + child.task, activeLocalModel(),
+            String answer = askOnce(system + "\n\n" + briefFor(child.task), activeLocalModel(),
                 activeCloudProvider(), new RunGuards(child.budget.steps, child.budget.seconds,
                     child.budget.cloudCalls));
             if (answer == null || answer.trim().isEmpty()) {
@@ -1431,6 +1431,56 @@ public final class AgentEngine {
         } finally {
             agentManager.activate(previous);
         }
+    }
+
+    /**
+     * The child's task, with the framing that produced it.
+     *
+     * <p>A subagent that is handed only its slice makes decisions that are
+     * locally sensible and globally wrong -- it is asked for "a moving
+     * background" and never learns the job was a Flappy Bird clone. The parent
+     * keeps its trace; the child gets what it is for, what was actually asked,
+     * and where the work is happening, and nothing else. That is deliberately
+     * thin: the point of consulting is that the child's own rummaging stays
+     * out of this run's history.
+     */
+    private String briefFor(String task) {
+        return brief(lastUserInstruction(),
+            workspace.hasRoot() ? workspace.rootName() : "", task);
+    }
+
+    /** The briefing itself, free of engine state so it can be tested. */
+    static String brief(String asked, String folder, String task) {
+        StringBuilder out = new StringBuilder();
+        if (asked != null && !asked.trim().isEmpty()) {
+            // Clamped by characters, not by ReadableText.clean: that counts
+            // lines and only checks after appending a whole one, so a single
+            // long request sails past the limit -- and its "the rest of the
+            // page was not read" note is about a web page, not a request.
+            out.append("The person asked: ").append(shorten(asked, 400)).append("\n\n");
+        }
+        if (folder != null && !folder.isEmpty()) {
+            out.append("The work is in the ").append(folder).append(" folder.\n\n");
+        }
+        if (out.length() > 0) {
+            out.append("Your part of it:\n");
+        }
+        return out.append(task == null ? "" : task).toString();
+    }
+
+    /** The first {@code limit} characters, on a word boundary where possible. */
+    static String shorten(String text, int limit) {
+        String tidy = text.replace("\r", " ").replace("\n", " ")
+            .replaceAll("[ \\t\\u00a0]+", " ").trim();
+        if (tidy.length() <= limit) {
+            return tidy;
+        }
+        String cut = tidy.substring(0, limit);
+        int space = cut.lastIndexOf(' ');
+        if (space > limit / 2) {
+            cut = cut.substring(0, space);
+        }
+        return cut.trim() + "…";
     }
 
     /** What Luna remembers, by kind, for the screen that shows it. */

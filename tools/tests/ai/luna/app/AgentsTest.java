@@ -42,6 +42,7 @@ public final class AgentsTest {
         cannotWiden();
         budgets();
         promptForOneAgent();
+        goalSurvivesTrimming();
 
         System.out.println();
         if (failed > 0) {
@@ -182,6 +183,40 @@ public final class AgentsTest {
             text.contains("You only ever read."));
         check("they come after the shared rules",
             text.indexOf("Never claim you did something") < text.indexOf("You only ever read."));
+    }
+
+    /**
+     * The request is restated in the system prompt, not only in the history.
+     *
+     * <p>History is trimmed oldest-first, so on a long job the message that
+     * started the work is the first thing dropped -- and an agent that has
+     * forgotten the goal keeps going anyway. The system prompt is rebuilt
+     * every turn and never trimmed, which makes it the durable place for it.
+     */
+    private static void goalSurvivesTrimming() {
+        SystemPrompt prompt = new SystemPrompt(builtinTools(), coreSkills(), new SkillResolver(),
+            manager());
+        String text = prompt.build(context(true, true),
+            "rename every screenshot to the date it was taken", "Pictures", false, null);
+        check("the prompt restates the job",
+            text.contains("rename every screenshot to the date it was taken"));
+        check("and says to keep at it", text.contains("until it is done"));
+
+        // A blank message must not leave a heading with nothing under it.
+        String empty = prompt.build(context(true, true), "   ", "Pictures", false, null);
+        check("an empty request adds no heading", !empty.contains("What you were asked to do"));
+
+        // Long enough to matter: the goal repeats every turn, so it is capped.
+        StringBuilder longAsk = new StringBuilder();
+        for (int i = 0; i < 200; i++) {
+            longAsk.append("tidy the folder ");
+        }
+        String capped = prompt.build(context(true, true), longAsk.toString(), "Pictures",
+            false, null);
+        int start = capped.indexOf("What you were asked to do");
+        int end = capped.indexOf("Keep doing this", start);
+        check("a rambling request is clamped", end - start < 600);
+        check("but still says what it was", capped.contains("tidy the folder"));
     }
 
     // --- helpers --------------------------------------------------------------
