@@ -44,6 +44,7 @@ public final class GitTreeTest {
             moving(store);
             deleting(store);
             containment(store, root);
+            spelling(store, root);
             binaries(store, repo);
         } finally {
             remove(root);
@@ -148,6 +149,60 @@ public final class GitTreeTest {
             !new File(new File(root, "demo"), ".git/hooks/pre-commit").exists());
 
         check("an empty path is refused", store.read("").contains("Give me a path"));
+        check("a path of only separators is refused",
+            store.read("///").contains("Give me a path"));
+
+        // Tidying away "." must not open a way around the .git refusal.
+        check("a dot cannot smuggle a path into .git",
+            store.read("demo/./.git/config").contains("not editable"));
+        check("nor can a backslash",
+            store.write("demo\\.git\\hooks\\pre-commit", "x").contains("not editable"));
+        check("case does not evade the .git refusal",
+            store.read("demo/.GIT/config").contains("not editable"));
+        check("tidying does not defeat containment",
+            store.read("demo/.//../secret.txt").contains("stay inside"));
+        check("nor does a backslash climb",
+            store.read("demo\\..\\secret.txt").contains("stay inside"));
+    }
+
+    /**
+     * The same file, written the many ways a model writes a path.
+     *
+     * <p>None of these change which file is meant, so none of them should be an
+     * error -- but each one used to be, or nearly was. The doubled repository
+     * name is the interesting one: it is the model taking "paths start with the
+     * repository name" a little too literally.
+     */
+    private static void spelling(AppGitStore store, File root) {
+        String[] same = {
+            "demo/README.md",
+            "/demo/README.md",
+            "./demo/README.md",
+            "demo//README.md",
+            "demo/./README.md",
+            "demo\\README.md",
+            "  demo/README.md  ",
+            "demo/demo/README.md",
+        };
+        for (String path : same) {
+            check("\"" + path.trim() + "\" finds the file",
+                store.read(path).contains("A repository."));
+        }
+
+        // The stutter must only be forgiven when it is a stutter. A repository
+        // that really does contain a folder named after itself still wins.
+        File nested = new File(new File(root, "demo"), "demo");
+        nested.mkdirs();
+        try {
+            FileOutputStream out = new FileOutputStream(new File(nested, "README.md"));
+            out.write("inner one".getBytes(StandardCharsets.UTF_8));
+            out.close();
+        } catch (Exception ignored) {
+            check("could not set up the nested case", false);
+            return;
+        }
+        check("a real nested folder is not mistaken for a stutter",
+            store.read("demo/demo/README.md").contains("inner one"));
     }
 
     private static void binaries(AppGitStore store, File repo) throws Exception {

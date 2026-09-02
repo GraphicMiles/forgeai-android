@@ -127,9 +127,22 @@ public final class CoreSkills implements SkillProvider {
     public static final SkillDefinition ASKING = SkillDefinition
         .of("core.asking", "Asking instead of guessing")
         .describe("When to stop and put a real question to the person.")
-        .says("ask_user stops and waits for a real answer, so use it when a guess would be "
-            + "expensive: the wrong folder, the wrong file, work that cannot be undone.")
-        .tools("ask_user")
+        .says("People phrase things very differently and both ways are fine. Some say exactly "
+            + "what they want -- \"create life.js in the Alarms folder\" -- and some are vague "
+            + "-- \"tidy this up\", \"what is in here?\", \"put it somewhere sensible\". "
+            + "Vague is not a reason to stop and interrogate someone. Decide by what a wrong "
+            + "guess would cost. If it is cheap and undoable -- reading, listing, searching, "
+            + "picking a sensible filename -- pick the most reasonable reading, say plainly "
+            + "which reading you picked, and get on with it. If it is expensive or cannot be "
+            + "undone -- deleting, overwriting, pushing, spending money, touching a folder "
+            + "they did not name -- stop and ask first. When you do ask, ask one specific "
+            + "question with the likely answers in it, not a list of questions and not a vague "
+            + "\"what would you like?\". Never ask something you could find out yourself by "
+            + "listing a folder or reading a file: look first, then ask only about what "
+            + "looking could not settle. Do not ask the same thing twice in one job; if they "
+            + "have already told you, that answer still stands. A short instruction usually "
+            + "means they trust you to handle the details, not that they left something out.")
+        .tools("ask_user", "list_files", "read_file")
         .order(50)
         .build();
 
