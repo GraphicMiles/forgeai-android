@@ -88,6 +88,10 @@ public final class SystemPrompt {
             }
             out.append('\n');
         }
+        out.append("You have no function-calling ability and no built-in tools. Never emit a "
+            + "function call or try to invoke a tool such as web_search — that is an error and "
+            + "you will be stopped. Use Luna's tools only by writing the JSON object below as "
+            + "plain text.\n");
         out.append("To use a tool, reply with one JSON object and nothing else:\n");
         List<String> lines = scope == null ? tools.promptLines(context) : scope.promptLines(context);
         for (String line : lines) {
