@@ -51,6 +51,10 @@ public final class RunGuards {
 
     private final Set<String> seen = new HashSet<>();
     private final Map<String, String> ledger = new HashMap<>();
+    private final Map<String, Integer> toolCounts = new HashMap<>();
+
+    /** Searches a job may run before the model is told to answer instead. */
+    private static final int SEARCH_WEB_CAP = 3;
 
     private long startedAt;
     private int toolCalls;
@@ -86,6 +90,18 @@ public final class RunGuards {
         if (toolCalls >= maxToolCalls) {
             return Verdict.refuse("This job hit its limit of " + maxToolCalls + " tool calls.");
         }
+        // A model that rephrases the query forever is the search-tool loop:
+        // each new wording dodges the replay guard below, so the count is
+        // capped outright. After the cap the model is told to answer with what
+        // it has rather than to keep looking.
+        if (tool.equals("search_web")) {
+            Integer ran = toolCounts.get(tool);
+            if (ran != null && ran >= SEARCH_WEB_CAP) {
+                return Verdict.refuse("You have run search_web " + SEARCH_WEB_CAP
+                    + " times in this job. Stop searching and answer with what you already "
+                    + "have, or ask the user how they want to proceed.");
+            }
+        }
 
         String signature = signature(tool, args);
         if (!mutating && ledger.containsKey(signature)) {
@@ -103,6 +119,7 @@ public final class RunGuards {
         String signature = signature(tool, args);
         seen.add(signature);
         toolCalls++;
+        toolCounts.merge(tool, 1, Integer::sum);
         if (observation != null && observation.length() < 4000) {
             ledger.put(signature, observation);
         }

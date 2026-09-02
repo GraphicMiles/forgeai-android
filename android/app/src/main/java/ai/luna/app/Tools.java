@@ -158,7 +158,18 @@ public final class Tools {
         }
         String results = env.browser.searchResults();
         if (results.isEmpty()) {
-            return "The search ran, but no readable results came back. Try a different query.";
+            // Google sometimes shows a consent wall, a bot check, or simply has
+            // not painted its result blocks yet. The page text is the next best
+            // thing: better the model reads raw text than report a search that
+            // looks like it never ran.
+            String text = env.browser.text();
+            if (text.isEmpty()) {
+                // Deliberately not "try a different query": that invitation is
+                // how a model burns its whole budget re-searching. It is told
+                // the search failed and left to answer from knowledge instead.
+                return "The search ran, but no readable results came back.";
+            }
+            return clamp("The search page gave no structured results, but its text says:\n" + text);
         }
         return clamp("Search results for \"" + query.trim() + "\":\n" + results);
     }
