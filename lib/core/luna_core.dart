@@ -359,15 +359,18 @@ class LunaCore extends ChangeNotifier {
             }
           }
         }
+        final String detail = (event['detail'] as String?) ?? '';
         final int existing = steps.indexWhere((Map<String, String> step) =>
             step['tool'] == tool && step['path'] == (event['path'] as String? ?? ''));
         if (existing >= 0) {
           steps[existing]['state'] = state;
+          if (detail.isNotEmpty) steps[existing]['detail'] = detail;
         } else {
           steps.add(<String, String>{
             'tool': tool,
             'path': (event['path'] as String?) ?? '',
             'state': state,
+            if (detail.isNotEmpty) 'detail': detail,
           });
         }
         break;

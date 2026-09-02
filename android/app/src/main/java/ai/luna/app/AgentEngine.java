@@ -729,7 +729,7 @@ public final class AgentEngine {
                     continue;
                 }
                 if (!verdict.allowed) {
-                    emitStep(tool, path, "blocked");
+                    emitStep(tool, path, "blocked", reasonStep(verdict.reason));
                     appendObservation(tool, verdict.reason);
                     if (verdict.reason.contains("limit")) {
                         answer = verdict.reason;
@@ -756,14 +756,15 @@ public final class AgentEngine {
                 emitStep(tool, path, "running");
                 ToolResult result = tools.run(env, tool, args, watchdog());
                 if (result.timedOut) {
-                    emitStep(tool, path, "unfinished");
+                    emitStep(tool, path, "unfinished", reasonStep(result.observation));
                     appendObservation(tool, result.observation
                         + " Try a smaller piece of the same job, or a different way in.");
                     continue;
                 }
                 String observation = result.observation;
                 guards.record(tool, args, observation);
-                emitStep(tool, path, result.ok ? "done" : "failed");
+                emitStep(tool, path, result.ok ? "done" : "failed",
+                    result.ok ? null : reasonStep(observation));
                 appendObservation(tool, observation);
             }
 
@@ -1519,7 +1520,7 @@ public final class AgentEngine {
                 return ToolResult.ok(verdict.replay);
             }
             if (!verdict.allowed) {
-                emitStep(toolId, path, "blocked");
+                emitStep(toolId, path, "blocked", reasonStep(verdict.reason));
                 return ToolResult.failed(verdict.reason);
             }
             if (ToolPolicy.decide(toolId, path, prefs) == ToolPolicy.Decision.ASK) {
@@ -1532,7 +1533,8 @@ public final class AgentEngine {
             emitStep(toolId, path, "running");
             ToolResult result = tools.run(env, toolId, args, watchdog());
             guards.record(toolId, args, result.observation);
-            emitStep(toolId, path, result.timedOut ? "unfinished" : (result.ok ? "done" : "failed"));
+            emitStep(toolId, path, result.timedOut ? "unfinished" : (result.ok ? "done" : "failed"),
+                result.ok ? null : reasonStep(result.observation));
             return result;
         }
 
@@ -1860,6 +1862,17 @@ public final class AgentEngine {
             return;
         }
         emit("step", event);
+    }
+
+    /** A step event carrying the real reason, so the trace can show it. */
+    private static JSONObject reasonStep(String reason) {
+        JSONObject extra = new JSONObject();
+        try {
+            extra.put("detail", ReadableText.clean(reason, 160));
+        } catch (JSONException ignored) {
+            // The step still lands; it just carries no explanation.
+        }
+        return extra;
     }
 
     /**
