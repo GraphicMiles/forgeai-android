@@ -53,6 +53,19 @@ public final class FilesystemTools extends BuiltinProvider {
             .risk(RiskLevel.MEDIUM)
             .requires("workspace")
             .build());
+        all.add(ToolDefinition.of("edit_file", "Edit part of a file")
+            .description("Replace an exact block of text in a file, leaving the rest alone. "
+                + "Prefer this over write_file for an existing file: it cannot delete the "
+                + "parts you did not mention")
+            .input("path", "File to edit",
+                "find", "The exact lines to replace, copied from the file",
+                "replace", "What to put in their place",
+                "all", "true to change every occurrence")
+            .required("path", "find", "replace")
+            .capabilities(Capability.FILESYSTEM_WRITE)
+            .risk(RiskLevel.MEDIUM)
+            .requires("workspace")
+            .build());
         all.add(ToolDefinition.of("create_file", "Create a file")
             .description("Make an empty file. The path it actually lands on is reported back")
             .input("path", "File to create, relative to the granted folder itself — do not "

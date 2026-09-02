@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/luna_core.dart';
 import '../theme.dart';
+import '../widgets/media_strip.dart';
 import '../widgets/rich_reply.dart';
 import '../widgets/agent_response.dart';
 import '../widgets/common.dart';
@@ -457,7 +458,16 @@ class _ChatScreenState extends State<ChatScreen> {
         out.add(_steps(core));
         tracePlaced = true;
       }
-      out.add(_agentColumn(RichReply(content)));
+      // Anything Luna saw while browsing rides with the answer it belongs to.
+      final List<Map<String, dynamic>> media = _mediaOf(message);
+      out.add(_agentColumn(Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          RichReply(content),
+          if (media.isNotEmpty) MediaStrip(media),
+        ],
+      )));
     }
     // Nothing was asked and nothing is running: there is no answer to attach
     // the trace to, so it stays out. This is what keeps an empty chat from
@@ -530,6 +540,27 @@ class _ChatScreenState extends State<ChatScreen> {
     'sub_agent': 'Did not consult an agent',
     'workflow': 'Did not run the workflow',
   };
+
+  /// The media attached to one message, if the engine found any.
+  ///
+  /// Defensive on purpose: this arrives as decoded JSON from the platform
+  /// channel, and a malformed entry should cost its own thumbnail rather than
+  /// the whole chat.
+  static List<Map<String, dynamic>> _mediaOf(Map<String, dynamic> message) {
+    final Object? raw = message['media'];
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
+    for (final Object? entry in raw) {
+      if (entry is Map) {
+        final Map<String, dynamic> item = <String, dynamic>{};
+        entry.forEach((Object? key, Object? value) {
+          if (key is String) item[key] = value;
+        });
+        if ((item['src'] as String?)?.isNotEmpty ?? false) out.add(item);
+      }
+    }
+    return out;
+  }
 
   Widget _steps(LunaCore core) {
     final List<TraceStep> steps = <TraceStep>[];

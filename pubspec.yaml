@@ -10,6 +10,9 @@ dependencies:
   flutter:
     sdk: flutter
   font_awesome_flutter: ^11.0.0
+  # Video found by a search plays inside Luna rather than handing the person
+  # off to another app. The official package, so it tracks the embedder.
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:

@@ -41,16 +41,23 @@ final class Fakes {
         }
 
         @Override
+        public boolean exists(String path) {
+            return false;
+        }
+
+        @Override
         public String readText(String path) {
             return "";
         }
 
         @Override
-        public void writeText(String path, String content) {
+        public String writeText(String path, String content) {
+            return path;
         }
 
         @Override
-        public void createFile(String path) {
+        public String createFile(String path) {
+            return path;
         }
 
         @Override
@@ -58,7 +65,8 @@ final class Fakes {
         }
 
         @Override
-        public void rename(String path, String newName) {
+        public String rename(String path, String newName) {
+            return newName;
         }
 
         @Override
@@ -136,6 +144,36 @@ final class Fakes {
 
         @Override
         public String log(String path, int limit) {
+            return "";
+        }
+
+        @Override
+        public String list(String path) {
+            return "";
+        }
+
+        @Override
+        public String read(String path) {
+            return "";
+        }
+
+        @Override
+        public String write(String path, String content) {
+            return "";
+        }
+
+        @Override
+        public String create(String path, boolean folder) {
+            return "";
+        }
+
+        @Override
+        public String delete(String path) {
+            return "";
+        }
+
+        @Override
+        public String move(String from, String to) {
             return "";
         }
 

@@ -568,6 +568,7 @@ public final class AgentEngine {
         running.set(true);
         stopRequested.set(false);
         finished.set(false);
+        clearMedia();
         waitedMillis.set(0L);
         livePrompt = null;
         conversationOnly = SmallTalk.matches(userText);
@@ -809,6 +810,13 @@ public final class AgentEngine {
                     continue;
                 }
                 String observation = result.observation;
+                // A person who asks for pictures or a video wants to see them,
+                // not read a list of addresses. Whatever the page is showing is
+                // captured now, while it is still loaded, and travels with the
+                // answer.
+                if (result.ok && isBrowsing(tool)) {
+                    collectMedia();
+                }
                 guards.record(tool, args, observation);
                 emitStep(tool, path, result.ok ? "done" : "failed",
                     result.ok ? null : reasonStep(observation));
@@ -1472,6 +1480,7 @@ public final class AgentEngine {
         running.set(true);
         stopRequested.set(false);
         finished.set(false);
+        clearMedia();
         waitedMillis.set(0L);
         livePrompt = null;
         long started = System.currentTimeMillis();
@@ -2012,6 +2021,80 @@ public final class AgentEngine {
 
     // --- plumbing ------------------------------------------------------------
 
+    /** Pictures and videos found while this run was browsing. */
+    private final JSONArray runMedia = new JSONArray();
+
+    /** Last run's pictures are not this run's. Emptied when a turn begins. */
+    private void clearMedia() {
+        while (runMedia.length() > 0) {
+            runMedia.remove(runMedia.length() - 1);
+        }
+    }
+
+    /** The tools that leave a page loaded worth looking at. */
+    private static boolean isBrowsing(String tool) {
+        return tool.equals("search_web") || tool.equals("open_page") || tool.equals("read_page");
+    }
+
+    /**
+     * Read the media off the page the browser is holding.
+     *
+     * <p>Parsed into real fields here rather than in the UI: the scrape format
+     * is this file's business, and the chat should receive something it can
+     * render without knowing how it was found.
+     */
+    private void collectMedia() {
+        if (browser == null || runMedia.length() >= 12) {
+            return;
+        }
+        String found;
+        try {
+            found = browser.media();
+        } catch (Exception error) {
+            return;
+        }
+        if (found == null || found.isEmpty()) {
+            return;
+        }
+        for (String line : found.split("\n")) {
+            if (runMedia.length() >= 12) {
+                break;
+            }
+            String[] parts = line.split(" \\|\\| ", -1);
+            if (parts.length < 2) {
+                continue;
+            }
+            String source = parts[1].trim();
+            if (source.isEmpty()) {
+                continue;
+            }
+            // The same picture found twice by two different scrapes is one
+            // picture, and a duplicate thumbnail looks like a bug.
+            boolean already = false;
+            for (int index = 0; index < runMedia.length(); index++) {
+                JSONObject existing = runMedia.optJSONObject(index);
+                if (existing != null && source.equals(existing.optString("src"))) {
+                    already = true;
+                    break;
+                }
+            }
+            if (already) {
+                continue;
+            }
+            try {
+                JSONObject item = new JSONObject();
+                item.put("kind", parts[0].trim().isEmpty() ? "image" : parts[0].trim());
+                item.put("src", source);
+                item.put("page", parts.length > 2 ? parts[2].trim() : "");
+                item.put("title", parts.length > 3 ? parts[3].trim() : "");
+                item.put("id", parts.length > 4 ? parts[4].trim() : "");
+                runMedia.put(item);
+            } catch (JSONException ignored) {
+                // One unparseable line must not cost the rest.
+            }
+        }
+    }
+
     private void append(String role, String content, String meta) {
         try {
             JSONObject message = new JSONObject();
@@ -2020,6 +2103,9 @@ public final class AgentEngine {
             message.put("at", System.currentTimeMillis());
             if (meta != null) {
                 message.put("meta", meta);
+            }
+            if (role.equals("assistant") && runMedia.length() > 0) {
+                message.put("media", runMedia);
             }
             transcript.add(message);
             saveTranscript();

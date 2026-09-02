@@ -87,6 +87,18 @@ public final class Tools {
                     String wrote = env.workspace.writeText(asked, args.optString("content", ""));
                     return "Wrote " + wrote + "." + landedNote(asked, wrote);
                 }
+                case "edit_file": {
+                    return editFile(env, args.optString("path", ""),
+                        args.optString("find", args.optString("search", "")),
+                        args.optString("replace", args.optString("replacement", "")),
+                        args.optBoolean("all", false));
+                }
+                case "git_edit": {
+                    return gitEdit(env, args.optString("path", ""),
+                        args.optString("find", args.optString("search", "")),
+                        args.optString("replace", args.optString("replacement", "")),
+                        args.optBoolean("all", false));
+                }
                 case "create_file": {
                     String asked = args.optString("path", "");
                     String created = env.workspace.createFile(asked);
@@ -127,6 +139,21 @@ public final class Tools {
                     return gitLog(env, args.optString("path", ""));
                 case "git_diff":
                     return gitDiff(env, args.optString("path", ""));
+                case "git_list":
+                    return gitList(env, args.optString("path", ""));
+                case "git_read":
+                    return gitRead(env, args.optString("path", ""));
+                case "git_write":
+                    return gitWrite(env, args.optString("path", ""),
+                        args.optString("content", ""));
+                case "git_create":
+                    return gitCreate(env, args.optString("path", ""),
+                        args.optBoolean("folder", false));
+                case "git_delete":
+                    return gitDelete(env, args.optString("path", ""));
+                case "git_move":
+                    return gitMove(env, args.optString("path", ""),
+                        args.optString("to", args.optString("newName", "")));
                 default:
                     return "Unknown tool: " + tool;
             }
@@ -178,6 +205,52 @@ public final class Tools {
      * the browser's structured results — one "title || address || snippet"
      * line per result — never the raw page.
      */
+    /**
+     * The search tab a query is really asking for.
+     *
+     * <p>"pictures of a red kite" wants the image tab and "the latest MrBeast
+     * video" wants the video one. Asking the web tab for either gets ten blue
+     * links and nothing to look at. Only plain, unambiguous words count: a
+     * query merely mentioning a photograph is still a web search.
+     */
+    private static String mediaTab(String query) {
+        String text = query.toLowerCase(java.util.Locale.US);
+        String[] pictures = {
+            "picture", "pictures", "photo", "photos", "photograph", "image",
+            "images", "wallpaper", "logo", "poster", "screenshot", "artwork",
+            "what does it look like", "what does he look like",
+            "what does she look like", "show me",
+        };
+        String[] moving = { "video", "videos", "trailer", "clip", "clips", "footage" };
+        for (String word : moving) {
+            if (containsWord(text, word)) {
+                return "&tbm=vid";
+            }
+        }
+        for (String word : pictures) {
+            if (containsWord(text, word)) {
+                return "&tbm=isch";
+            }
+        }
+        return "";
+    }
+
+    /** Whole words only: "videographer" is not a request for video. */
+    private static boolean containsWord(String text, String word) {
+        int at = text.indexOf(word);
+        while (at >= 0) {
+            boolean beforeOk = at == 0 || !Character.isLetterOrDigit(text.charAt(at - 1));
+            int after = at + word.length();
+            boolean afterOk = after >= text.length()
+                || !Character.isLetterOrDigit(text.charAt(after));
+            if (beforeOk && afterOk) {
+                return true;
+            }
+            at = text.indexOf(word, at + 1);
+        }
+        return false;
+    }
+
     private static String searchWeb(Env env, String query) throws Exception {
         if (env.browser == null) {
             return "There is no browser available on this device.";
@@ -185,8 +258,12 @@ public final class Tools {
         if (query == null || query.trim().isEmpty()) {
             return "Give me a query to search for.";
         }
+        // A search for pictures has to land on the pictures tab, or the page
+        // has no pictures on it to find. Google's tbm switch is what the tab
+        // buttons themselves use.
+        String tab = mediaTab(query);
         String url = "https://www.google.com/search?q="
-            + URLEncoder.encode(query.trim(), "UTF-8") + "&hl=en&num=10";
+            + URLEncoder.encode(query.trim(), "UTF-8") + "&hl=en&num=10" + tab;
         String refusal = env.browser.open(url, 20000L);
         if (!refusal.isEmpty()) {
             return "The search could not run: " + refusal.replace("refused: ", "") + ".";
@@ -283,6 +360,112 @@ public final class Tools {
     /** The same token the GitHub file tool uses, or empty for public access. */
     private static String gitToken(Env env) {
         return env.vault == null ? "" : env.vault.get(SecretProvider.CORE, "github");
+    }
+
+    /** Every working-tree tool needs the same two checks before it can run. */
+    /**
+     * Change part of a file, leaving the rest of it alone.
+     *
+     * <p>The observation deliberately says which strategy matched. A model that
+     * learns its exact block did not match, and only landed by anchoring, is a
+     * model that copies more carefully next time.
+     */
+    private static String editFile(Env env, String path, String find, String replace,
+                                   boolean all) throws Exception {
+        if (path == null || path.trim().isEmpty()) {
+            return "Give me the file to edit.";
+        }
+        String before = env.workspace.readText(path);
+        TextEdit.Result edit = TextEdit.apply(before, find, replace, all);
+        if (!edit.ok) {
+            return "Failed: " + edit.problem;
+        }
+        String landed = env.workspace.writeText(path, edit.text);
+        return "Edited " + landed + " (" + edit.how + " match)."
+            + landedNote(path, landed);
+    }
+
+    private static String gitEdit(Env env, String path, String find, String replace,
+                                  boolean all) {
+        String refused = gitGuard(env, path);
+        if (refused != null) {
+            return refused;
+        }
+        String before = env.git.read(path.trim());
+        // read() answers in words when it cannot read, and those sentences are
+        // not file contents to be edited.
+        if (before.startsWith("There is no file at ") || before.startsWith("Give me a path")
+            || before.startsWith("There is no repository named ")
+            || before.startsWith("Paths have to stay inside")) {
+            return before;
+        }
+        TextEdit.Result edit = TextEdit.apply(before, find, replace, all);
+        if (!edit.ok) {
+            return "Failed: " + edit.problem;
+        }
+        String result = env.git.write(path.trim(), edit.text);
+        return result.isEmpty()
+            ? "Edited " + path.trim() + " (" + edit.how + " match)." : result;
+    }
+
+    private static String gitGuard(Env env, String path) {
+        if (env.git == null) {
+            return "There is no git available on this device.";
+        }
+        if (path == null || path.trim().isEmpty()) {
+            return "Give me a path as repository/file.";
+        }
+        return null;
+    }
+
+    private static String gitList(Env env, String path) {
+        String refused = gitGuard(env, path);
+        return refused != null ? refused : env.git.list(path.trim());
+    }
+
+    private static String gitRead(Env env, String path) {
+        String refused = gitGuard(env, path);
+        return refused != null ? refused : env.git.read(path.trim());
+    }
+
+    private static String gitWrite(Env env, String path, String content) {
+        String refused = gitGuard(env, path);
+        if (refused != null) {
+            return refused;
+        }
+        String result = env.git.write(path.trim(), content);
+        return result.isEmpty() ? "Wrote " + path.trim() + "." : result;
+    }
+
+    private static String gitCreate(Env env, String path, boolean folder) {
+        String refused = gitGuard(env, path);
+        if (refused != null) {
+            return refused;
+        }
+        String result = env.git.create(path.trim(), folder);
+        return result.isEmpty()
+            ? "Created " + (folder ? "the folder " : "") + path.trim() + "." : result;
+    }
+
+    private static String gitDelete(Env env, String path) {
+        String refused = gitGuard(env, path);
+        if (refused != null) {
+            return refused;
+        }
+        String result = env.git.delete(path.trim());
+        return result.isEmpty() ? "Deleted " + path.trim() + "." : result;
+    }
+
+    private static String gitMove(Env env, String from, String to) {
+        String refused = gitGuard(env, from);
+        if (refused != null) {
+            return refused;
+        }
+        if (to == null || to.trim().isEmpty()) {
+            return "Give me where to move it to.";
+        }
+        String result = env.git.move(from.trim(), to.trim());
+        return result.isEmpty() ? "Moved " + from.trim() + " to " + to.trim() + "." : result;
     }
 
     private static String gitClone(Env env, String url, String name) {

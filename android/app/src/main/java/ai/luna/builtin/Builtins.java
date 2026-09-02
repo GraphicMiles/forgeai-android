@@ -26,6 +26,7 @@ public final class Builtins {
         CANONICAL.put("read_file", "filesystem.read");
         CANONICAL.put("search_code", "filesystem.search");
         CANONICAL.put("write_file", "filesystem.write");
+        CANONICAL.put("edit_file", "filesystem.edit");
         CANONICAL.put("create_file", "filesystem.create");
         CANONICAL.put("create_folder", "filesystem.mkdir");
         CANONICAL.put("delete_file", "filesystem.delete");
@@ -41,6 +42,13 @@ public final class Builtins {
         CANONICAL.put("git_commit", "git.commit");
         CANONICAL.put("git_log", "git.log");
         CANONICAL.put("git_diff", "git.diff");
+        CANONICAL.put("git_list", "git.list");
+        CANONICAL.put("git_read", "git.read");
+        CANONICAL.put("git_write", "git.write");
+        CANONICAL.put("git_create", "git.create");
+        CANONICAL.put("git_delete", "git.delete");
+        CANONICAL.put("git_move", "git.move");
+        CANONICAL.put("git_edit", "git.edit");
         CANONICAL.put("ask_user", "user.ask");
         CANONICAL.put("respond", "agent.respond");
     }
