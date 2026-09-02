@@ -108,10 +108,18 @@ public final class SystemPrompt {
 
     /** Where the agent is standing, which changes every run. */
     private void situation(StringBuilder out, String folderName, boolean unattended) {
+        out.append("Today is ").append(today()).append(".\n");
         out.append("Folder granted: ")
             .append(folderName == null || folderName.isEmpty() ? "none yet" : folderName)
             .append('\n');
         out.append("Mode: ").append(unattended ? "unattended" : "ask before acting").append("\n\n");
+    }
+
+    /** The local date in words, so the model scopes questions and queries to now
+     * instead of whenever it was trained. */
+    private static String today() {
+        return new java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.US)
+            .format(new java.util.Date());
     }
 
     private String withPersona(StringBuilder out, String persona) {
