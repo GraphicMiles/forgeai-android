@@ -811,7 +811,7 @@ public final class AgentEngine {
     /** One model call. Returns raw text, or null when the turn already ended. */
     private String ask(ModelStore.Entry local, JSONObject cloud, RunGuards guards) {
         emit("thinking", new JSONObject());
-        final Spigot spigot = new Spigot();
+        final StreamFilter spigot = new StreamFilter();
         if (local != null) {
             final StringBuilder streamed = new StringBuilder();
             OnDeviceRuntime.Result result = runtime.generate(
@@ -851,6 +851,7 @@ public final class AgentEngine {
                 // Telemetry only.
             }
             emit("speed", speed);
+            flushSpigot(spigot);
             return result.text;
         }
 
@@ -913,7 +914,16 @@ public final class AgentEngine {
             return null;
         }
         router.worked("cloud:" + cloud.optString("id"));
+        flushSpigot(spigot);
         return reply.text;
+    }
+
+    /** Releases a stream filter's held tail — the last sentence of an answer. */
+    private void flushSpigot(StreamFilter spigot) {
+        String rest = spigot.finish();
+        if (!rest.isEmpty()) {
+            emitToken(rest);
+        }
     }
 
     /**
@@ -1913,49 +1923,6 @@ public final class AgentEngine {
     /** The live question, for a UI that has just woken up or missed an event. */
     public JSONObject pendingPrompt() {
         return livePrompt;
-    }
-
-    /**
-     * Decides whether a reply is for the person or for the machine, and only
-     * lets the first kind through.
-     *
-     * A tool call is one JSON object and nothing else, so the very first
-     * non-blank character settles it. Everything before that decision is held,
-     * which is at most a few characters; once the reply is known to be prose
-     * the held text is released in one go and the rest streams straight
-     * through. This is what stops {"tool":"write_file"...} being typed into the
-     * thread a word at a time and then yanked back out.
-     */
-    static final class Spigot {
-        private final StringBuilder held = new StringBuilder();
-        private boolean decided;
-        private boolean suppress;
-
-        String filter(String chunk) {
-            if (chunk == null || chunk.isEmpty()) {
-                return "";
-            }
-            if (decided) {
-                return suppress ? "" : chunk;
-            }
-            held.append(chunk);
-            String seen = held.toString();
-            String trimmed = seen.trim();
-            if (trimmed.isEmpty()) {
-                // Still only whitespace: nothing has been decided, and nothing
-                // shown. Leading blank lines are not worth streaming anyway.
-                return "";
-            }
-            char first = trimmed.charAt(0);
-            decided = true;
-            suppress = first == '{' || first == '[' || trimmed.startsWith("```");
-            if (suppress) {
-                held.setLength(0);
-                return "";
-            }
-            held.setLength(0);
-            return seen;
-        }
     }
 
     private void emit(String type, JSONObject payload) {

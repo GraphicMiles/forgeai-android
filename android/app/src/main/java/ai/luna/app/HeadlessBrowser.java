@@ -42,6 +42,12 @@ public final class HeadlessBrowser implements BrowserProvider {
     private static final long DEFAULT_TIMEOUT_MS = 20000L;
     private static final int MAX_TEXT = 40000;
 
+    /** A Google search page is scraped this many times before giving up. */
+    private static final int SEARCH_SCRAPE_TRIES = 3;
+
+    /** How long the page is left to settle between those scrapes. */
+    private static final long SEARCH_SETTLE_MS = 1200L;
+
     /**
      * Pulls Google's result blocks into one "title || address || snippet" line
      * each. Google wraps the real address in a /url?q= redirect and sprinkles
@@ -160,6 +166,7 @@ public final class HeadlessBrowser implements BrowserProvider {
                             return null;
                         }
                     });
+                    seedSearchConsent(target);
                     web.loadUrl(target);
                 } catch (Throwable error) {
                     failure.set(String.valueOf(error.getMessage()));
@@ -200,41 +207,37 @@ public final class HeadlessBrowser implements BrowserProvider {
 
     /** The readable text of whatever is open. */
     public String text() {
-        if (web == null) {
-            return "";
-        }
-        final CountDownLatch done = new CountDownLatch(1);
-        final AtomicReference<String> holder = new AtomicReference<>("");
-        main.post(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    web.evaluateJavascript(
-                        "(function(){var c=document.querySelector('article')||document.body;"
-                            + "if(!c)return '';var clone=c.cloneNode(true);"
-                            + "var junk=clone.querySelectorAll('script,style,noscript,nav,footer,header,aside');"
-                            + "for(var i=0;i<junk.length;i++){junk[i].remove();}"
-                            + "return clone.innerText;})();",
-                        value -> {
-                            holder.set(value == null ? "" : value);
-                            done.countDown();
-                        });
-                } catch (Throwable error) {
-                    done.countDown();
-                }
-            }
-        });
-        try {
-            done.await(8, TimeUnit.SECONDS);
-        } catch (InterruptedException stopped) {
-            Thread.currentThread().interrupt();
-        }
-        return ReadableText.clean(holder.get(), MAX_TEXT);
+        return ReadableText.clean(evaluate(
+            "(function(){var c=document.querySelector('article')||document.body;"
+                + "if(!c)return '';var clone=c.cloneNode(true);"
+                + "var junk=clone.querySelectorAll('script,style,noscript,nav,footer,header,aside');"
+                + "for(var i=0;i<junk.length;i++){junk[i].remove();}"
+                + "return clone.innerText;})();"), MAX_TEXT);
     }
 
     /** The open page's search results, as "title || address || snippet" lines. */
     @Override
     public String searchResults() {
+        // Google often paints its result blocks a beat after onPageFinished, or
+        // shows a consent wall before them. One empty scrape is not proof there
+        // is nothing to read, so the page is left to settle and scraped again.
+        for (int attempt = 0; attempt < SEARCH_SCRAPE_TRIES; attempt++) {
+            String results = ReadableText.clean(evaluate(SEARCH_EXTRACT), MAX_TEXT);
+            if (!results.isEmpty() || attempt == SEARCH_SCRAPE_TRIES - 1) {
+                return results;
+            }
+            try {
+                Thread.sleep(SEARCH_SETTLE_MS);
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+                return results;
+            }
+        }
+        return "";
+    }
+
+    /** Runs one script on the web view and waits for its answer. */
+    private String evaluate(String script) {
         if (web == null) {
             return "";
         }
@@ -244,7 +247,12 @@ public final class HeadlessBrowser implements BrowserProvider {
             @Override
             public void run() {
                 try {
-                    web.evaluateJavascript(SEARCH_EXTRACT, value -> {
+                    WebView view = web;
+                    if (view == null) {
+                        done.countDown();
+                        return;
+                    }
+                    view.evaluateJavascript(script, value -> {
                         holder.set(value == null ? "" : value);
                         done.countDown();
                     });
@@ -258,7 +266,7 @@ public final class HeadlessBrowser implements BrowserProvider {
         } catch (InterruptedException stopped) {
             Thread.currentThread().interrupt();
         }
-        return ReadableText.clean(holder.get(), MAX_TEXT);
+        return holder.get();
     }
 
     /** Called when a job ends. The next job starts with no history and no cookies. */
@@ -285,6 +293,23 @@ public final class HeadlessBrowser implements BrowserProvider {
                 }
             }
         });
+    }
+
+    /**
+     * Google sometimes answers a brand-new browser with a consent wall instead
+     * of results. Accepting up front is harmless and makes the search page
+     * render its results, so the scrape below has something to read.
+     */
+    private static void seedSearchConsent(String target) {
+        if (target == null || !target.contains("google.") || !target.contains("/search")) {
+            return;
+        }
+        try {
+            CookieManager.getInstance().setCookie("https://www.google.com",
+                "CONSENT=YES+; Domain=.google.com; Path=/");
+        } catch (Throwable ignored) {
+            // A cookie that will not stick must not take the search with it.
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
