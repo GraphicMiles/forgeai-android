@@ -218,7 +218,7 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 result.success(null);
                 return;
             case "answerQuestion":
-                agent.answerQuestion(String.valueOf(call.argument("id")), (String) call.argument("text"));
+                agent.answerQuestion(argString(call, "id"), (String) call.argument("text"));
                 result.success(null);
                 return;
             case "setBudget":
@@ -323,7 +323,7 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
                 activity.startActivityForResult(pickFileIntent("application/json"), REQUEST_RESTORE);
                 return;
             case "resolveApproval":
-                agent.resolveApproval(String.valueOf(call.argument("id")), Boolean.TRUE.equals(call.argument("approved")));
+                agent.resolveApproval(argString(call, "id"), Boolean.TRUE.equals(call.argument("approved")));
                 result.success(null);
                 return;
             case "resumeRun":
@@ -721,6 +721,16 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
         return out;
     }
 
+    /**
+     * One string argument, read safely.
+     *
+     * <p>Never write {@code String.valueOf(call.argument(name))}: the argument
+     * method is generic ({@code <T> T argument(String)}) and Java picks the most
+     * specific {@code String.valueOf} overload — {@code valueOf(char[])} — then
+     * casts the String to char[] inside, throwing
+     * {@code ClassCastException: java.lang.String cannot be cast to char[]}.
+     * Reading into a local Object first keeps the value a String.
+     */
     private static String argString(MethodCall call, String name) {
         Object value = call.argument(name);
         return value == null ? "" : String.valueOf(value);
