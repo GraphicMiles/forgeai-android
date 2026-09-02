@@ -93,9 +93,13 @@ public final class CoreSkills implements SkillProvider {
         .describe("How to clone, commit and push repositories in Luna's git workspace.")
         .says("Repositories live in Luna's own git workspace, not in the granted folder. "
             + "git_clone downloads a repository by its address; the other git tools name it "
-            + "by the folder it was cloned under. Read the status before you commit, and say "
-            + "what changed when you are done. A push sends your changes and your GitHub token "
-            + "to the remote.")
+            + "by the folder it was cloned under. The file tools cannot see that workspace at "
+            + "all: after a clone you cannot list, search or read the repository's files, so "
+            + "you do not know what is in it and must not say what it contains. If you are "
+            + "asked what a cloned project is about, say that you can clone and manage it but "
+            + "cannot read its contents, and offer github_file to fetch one named file. Read "
+            + "the status before you commit, and say what changed when you are done. A push "
+            + "sends your changes and your GitHub token to the remote.")
         .tools("git_clone", "git_pull", "git_push", "git_status", "git_commit", "git_log",
             "git_diff")
         .requires("git")
@@ -116,7 +120,11 @@ public final class CoreSkills implements SkillProvider {
     public static final SkillDefinition REPORTING = SkillDefinition
         .of("core.reporting", "Saying what happened")
         .describe("One tool per reply, and never a claim a tool result does not support.")
-        .says("One tool per reply. When the work is done, reply in plain sentences — no JSON — "
+        .says("Never describe the contents of a file or a project you have not actually read. "
+            + "If a tool returned nothing, said a path does not exist, or you were stopped "
+            + "before reading, then you do not know, and the honest answer is that you could "
+            + "not find it — a plausible guess about a codebase is a lie the person will act "
+            + "on. One tool per reply. When the work is done, reply in plain sentences — no JSON — "
             + "and say what you changed. Never claim you did something a tool result does not "
             + "show. Write the way a careful person speaks: no tool names, no field names, no "
             + "JSON in your sentences.")

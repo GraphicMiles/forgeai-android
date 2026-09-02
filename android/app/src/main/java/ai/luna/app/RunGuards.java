@@ -45,6 +45,12 @@ public final class RunGuards {
         }
     }
 
+    /** How many times one read may be replayed before it is called a loop. */
+    private static final int REPLAY_CAP = 2;
+
+    /** How many times each identical read has been served from the ledger. */
+    private final Map<String, Integer> replayCounts = new HashMap<>();
+
     private final int maxToolCalls;
     private final long maxRunMillis;
     private final int maxCloudCalls;
@@ -105,6 +111,18 @@ public final class RunGuards {
 
         String signature = signature(tool, args);
         if (!mutating && ledger.containsKey(signature)) {
+            // Handing back the same answer forever is its own loop: the model
+            // asks again because the answer did not help, and gets it again.
+            // After a few rounds the replay stops being a service and starts
+            // being a wall, so say so in words the model can act on.
+            Integer replays = replayCounts.merge(signature, 1, Integer::sum);
+            if (replays > REPLAY_CAP) {
+                return Verdict.refuse("You have already read " + tool
+                    + " with those arguments " + replays + " times in this job and the answer "
+                    + "has not changed. It does not contain what you are looking for. Do "
+                    + "something different, or tell the user what you could not find "
+                    + "rather than guessing.");
+            }
             return Verdict.fromLedger(ledger.get(signature));
         }
         if (seen.contains(signature)) {

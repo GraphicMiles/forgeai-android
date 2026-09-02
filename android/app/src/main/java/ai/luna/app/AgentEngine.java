@@ -1308,7 +1308,13 @@ public final class AgentEngine {
         pendingQuestionId = "";
         livePrompt = null;
         emit("prompt_cleared", new JSONObject());
-        return answer == null ? "" : answer.trim();
+        String settled = answer == null ? "" : answer.trim();
+        // The row has to be closed off here. Nothing else ever resolves an
+        // ask_user step, so without this it sits at "running" until the run
+        // ends and is then swept up as unfinished — telling the person Luna
+        // never asked them, on the very question they just answered.
+        emitStep("ask_user", "", settled.isEmpty() ? "declined" : "done");
+        return settled;
     }
 
     /** The same short hops as the approval wait, for the same reasons. */

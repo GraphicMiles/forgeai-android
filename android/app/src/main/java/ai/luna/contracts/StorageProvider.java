@@ -30,6 +30,12 @@ public interface StorageProvider {
     /** Entries directly under {@code path}: name, type, size. */
     JSONArray list(String path) throws Exception;
 
+    /**
+     * Whether anything exists at {@code path}. A caller that cannot tell an
+     * absent folder from an empty one will describe files that are not there.
+     */
+    boolean exists(String path);
+
     String readText(String path) throws IOException;
 
     /**
