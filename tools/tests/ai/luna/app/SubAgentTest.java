@@ -34,6 +34,7 @@ public final class SubAgentTest {
         permission();
         misbehaviour();
         results();
+        briefing();
 
         System.out.println();
         if (failed > 0) {
@@ -191,6 +192,46 @@ public final class SubAgentTest {
         AgentResult no = AgentResult.refused("acme.reader", "Nothing to read.");
         check("a refusal reads as the reason", no.observation().equals("Nothing to read."));
         check("and spent nothing", no.spent.steps == 0);
+    }
+
+    /**
+     * A child is told what the job is, not only its slice of it.
+     *
+     * <p>Handed just "build a moving background", a child has no way to know
+     * the job was a Flappy Bird clone, so it makes a locally sensible and
+     * globally wrong choice. The parent keeps its full trace; the child gets
+     * the framing and nothing else, because keeping the child's rummaging out
+     * of the parent's history is the whole point of consulting one.
+     */
+    private static void briefing() {
+        String brief = AgentEngine.brief("build a Flappy Bird clone", "Games",
+            "build a moving background with green pipes");
+        check("the child is told what was actually asked",
+            brief.contains("build a Flappy Bird clone"));
+        check("the child is told where the work is", brief.contains("Games"));
+        check("the child still gets its own task",
+            brief.contains("build a moving background with green pipes"));
+        check("the framing comes before the slice",
+            brief.indexOf("Flappy Bird") < brief.indexOf("green pipes"));
+
+        // With nothing to add, the task must be passed through untouched --
+        // no empty headings, no "The work is in the  folder."
+        String bare = AgentEngine.brief("", "", "summarise the log");
+        check("no framing means the bare task", bare.equals("summarise the log"));
+        check("and no stray heading", !bare.contains("Your part of it"));
+        String noFolder = AgentEngine.brief("tidy up", "", "list the duplicates");
+        check("a missing folder is simply left out", !noFolder.contains("folder"));
+        check("while the request is still passed on", noFolder.contains("tidy up"));
+
+        // The parent's request is clamped: it rides along on every consult.
+        StringBuilder rambling = new StringBuilder();
+        for (int i = 0; i < 200; i++) {
+            rambling.append("do the thing ");
+        }
+        String capped = AgentEngine.brief(rambling.toString(), "Work", "check it");
+        check("a long request is clamped before it is passed down",
+            capped.length() < 700);
+        check("nulls are tolerated", AgentEngine.brief(null, null, "go").equals("go"));
     }
 
     // --- helpers --------------------------------------------------------------

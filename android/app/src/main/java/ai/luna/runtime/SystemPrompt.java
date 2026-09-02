@@ -79,6 +79,19 @@ public final class SystemPrompt {
             }
         }
 
+        // The job itself, restated every turn. The transcript is trimmed
+        // oldest-first, so on a long run the message that started the work is
+        // the first thing to fall out of the window -- the agent keeps working
+        // with no record of what it was asked. The system prompt is rebuilt
+        // each turn and never trimmed, so the goal belongs here, not only in a
+        // history entry that expires.
+        if (message != null && !message.trim().isEmpty()) {
+            out.append("What you were asked to do:\n")
+                .append(clamp(message.trim(), 500))
+                .append("\nKeep doing this until it is done. If the work below has "
+                    + "already achieved it, say so and stop.\n\n");
+        }
+
         if (memories != null && !memories.isEmpty()) {
             // Recalled, not carried: these are the few things that bear on what
             // was just said, not everything the person has ever mentioned.
@@ -107,6 +120,12 @@ public final class SystemPrompt {
     }
 
     /** Where the agent is standing, which changes every run. */
+    /** The goal, kept short: it is repeated every turn and pays rent each time. */
+    private static String clamp(String text, int limit) {
+        String tidy = text.replace("\r", "").trim();
+        return tidy.length() <= limit ? tidy : tidy.substring(0, limit).trim() + "…";
+    }
+
     private void situation(StringBuilder out, String folderName, boolean unattended) {
         out.append("Today is ").append(today()).append(".\n");
         out.append("Folder granted: ")
