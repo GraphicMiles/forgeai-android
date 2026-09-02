@@ -150,8 +150,12 @@ public final class Tools {
             return "Could not open it: " + refusal.replace("refused: ", "") + ".";
         }
         String title = env.browser.currentTitle();
+        // A title is not what a page is about. Left with only this, a model
+        // will describe the site from its name and call the job done, so the
+        // next step is stated as the only one available.
         return "Opened " + env.browser.currentUrl() + (title.isEmpty() ? "" : " — " + title)
-            + ". Call read_page to read it.";
+            + ". You have not read it yet and know nothing about its contents. Call read_page "
+            + "next; do not describe the site until you have.";
     }
 
     private static String readPage(Env env) {

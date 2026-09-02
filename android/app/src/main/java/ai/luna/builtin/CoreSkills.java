@@ -125,7 +125,11 @@ public final class CoreSkills implements SkillProvider {
     public static final SkillDefinition REPORTING = SkillDefinition
         .of("core.reporting", "Saying what happened")
         .describe("One tool per reply, and never a claim a tool result does not support.")
-        .says("Never describe the contents of a file or a project you have not actually read. "
+        .says("Never say you have done something you have not done. Do not write \"I have "
+            + "searched\", \"I looked up\" or \"here are the results\" unless a tool in this "
+            + "job actually returned them — if you have run no tool, you have no results, and "
+            + "a list of plausible websites written from memory is invention however useful it "
+            + "looks. Never describe the contents of a file or a project you have not actually read. "
             + "If a tool returned nothing, said a path does not exist, or you were stopped "
             + "before reading, then you do not know, and the honest answer is that you could "
             + "not find it — a plausible guess about a codebase is a lie the person will act "
