@@ -32,9 +32,16 @@ public interface StorageProvider {
 
     String readText(String path) throws IOException;
 
-    void writeText(String path, String content) throws IOException;
+    /**
+     * Writes the file and returns the path it actually landed on, relative to
+     * the root. A provider may not be able to honour the name it was given —
+     * Android's document providers rewrite extensions — so the caller is told
+     * what happened rather than what was asked for.
+     */
+    String writeText(String path, String content) throws IOException;
 
-    void createFile(String path) throws IOException;
+    /** Creates the file and returns the path it actually landed on. */
+    String createFile(String path) throws IOException;
 
     void createFolder(String path) throws IOException;
 

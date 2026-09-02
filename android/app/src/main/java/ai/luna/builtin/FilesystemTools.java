@@ -46,15 +46,17 @@ public final class FilesystemTools extends BuiltinProvider {
             .build());
         all.add(ToolDefinition.of("write_file", "Write a file")
             .description("Replace a file's contents. The old bytes are kept for undo")
-            .input("path", "File to write", "content", "What to write")
+            .input("path", "File to write, relative to the granted folder itself — do not "
+                + "prefix it with that folder's own name", "content", "What to write")
             .required("path", "content")
             .capabilities(Capability.FILESYSTEM_WRITE)
             .risk(RiskLevel.MEDIUM)
             .requires("workspace")
             .build());
         all.add(ToolDefinition.of("create_file", "Create a file")
-            .description("Make an empty file")
-            .input("path", "File to create")
+            .description("Make an empty file. The path it actually lands on is reported back")
+            .input("path", "File to create, relative to the granted folder itself — do not "
+                + "prefix it with that folder's own name. Keep the extension asked for")
             .required("path")
             .capabilities(Capability.FILESYSTEM_WRITE)
             .risk(RiskLevel.MEDIUM)

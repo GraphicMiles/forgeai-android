@@ -426,11 +426,11 @@ public final class LunaBridge implements MethodChannel.MethodCallHandler, EventC
             case "readFile":
                 return workspace.readText(argString(call, "path"));
             case "writeFile":
-                workspace.writeText(argString(call, "path"), argString(call, "content"));
-                return null;
+                // The path the file actually landed on, which is not always the
+                // one that was asked for.
+                return workspace.writeText(argString(call, "path"), argString(call, "content"));
             case "createFile":
-                workspace.createFile(argString(call, "path"));
-                return null;
+                return workspace.createFile(argString(call, "path"));
             case "createFolder":
                 workspace.createFolder(argString(call, "path"));
                 return null;

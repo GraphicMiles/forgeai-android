@@ -48,8 +48,13 @@ public final class CoreSkills implements SkillProvider {
     public static final SkillDefinition FILES = SkillDefinition
         .of("core.files", "Working in the folder")
         .describe("How to read and change files in the folder the person granted.")
-        .says("Read before you write. Paths are relative to the granted folder. Do not guess at "
-            + "a file you have not listed or read.")
+        .says("Read before you write. Paths are relative to the granted folder itself, so do "
+            + "not repeat the granted folder's own name at the front of a path: inside a "
+            + "granted folder called Alarms, a file the person wants in that folder is "
+            + "life.js, not Alarms/life.js. Keep the exact name and extension the person "
+            + "gave. Do not guess at a file you have not listed or read. When a tool reports "
+            + "a path back to you, that path is what exists — say that one, not the one you "
+            + "asked for.")
         .tools("list_files", "read_file", "search_code", "write_file", "create_file",
             "create_folder", "delete_file", "rename_file")
         .requires("workspace")
