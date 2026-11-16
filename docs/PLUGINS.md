@@ -1,7 +1,7 @@
 # Writing a plugin
 
 A plugin is a **signed JSON document**. It carries knowledge (skills), agents and
-workflows — and nothing that executes. Installing one can never be worse than
+workflows - and nothing that executes. Installing one can never be worse than
 being told something untrue, because the runtime never runs a plugin's code:
 there is no code. Whatever a plugin's agent wants to do, it still has to do
 through a tool the person already allowed, under the same "Ask me first" switch
@@ -49,7 +49,7 @@ because what a device trusts can change between one run and the next.
 ## The three parts
 
 **A skill** is a paragraph of instruction plus when to use it. It is only put in
-front of the model when it is relevant — when the job mentions one of its
+front of the model when it is relevant - when the job mentions one of its
 triggers, or when the tools it names are the ones in play.
 
 ```json
@@ -86,7 +86,7 @@ herself. Leave `tools` out for everything, or name the few you want.
 
 **A workflow** is a job whose steps are known in advance. Node kinds: `llm`,
 `tool`, `condition`, `loop`, `parallel`, `approval`, `human_input`, `sub_agent`,
-`transform`, `validate`, `wait`, `end`. Values move between steps by name —
+`transform`, `validate`, `wait`, `end`. Values move between steps by name -
 `"as": "listing"` stores a result, `{{listing}}` fills it in later.
 
 ```json
@@ -121,14 +121,14 @@ scripts/luna-package.sh --verify assets/plugins/*.lunapkg.json
 ```
 
 The packager is `tools/package/PluginPackager.java`, and it is Java on purpose:
-it calls `PluginManifest.canonicalContent()` and `PluginVerifier` — *the app's own
+it calls `PluginManifest.canonicalContent()` and `PluginVerifier` - *the app's own
 classes*. A second implementation of the canonical form in another language
 would be a second definition of the truth, and the day the two disagreed every
 plugin everywhere would stop installing.
 
 The signature covers a canonical rebuild of the content, not the raw file, so
 reformatting the JSON or reordering its keys does not change a plugin's
-identity. Renaming it, rewording an instruction, or adding a capability does —
+identity. Renaming it, rewording an instruction, or adding a capability does -
 each of those is a test in `ExamplesTest`.
 
 A key is generated on first use and written to the path you pass with `--key`
@@ -140,10 +140,10 @@ the device has one, narrows that to keys it already knows.
 
 In the app: **Settings → Agent → Plugins**.
 
-- **Install the examples** — the three signed packages in `assets/plugins/`,
+- **Install the examples** - the three signed packages in `assets/plugins/`,
   shipped inside the APK. Zero setup, and the fastest way to see the whole
   machine working.
-- **From your folder** — anything named `*.lunapkg.json` at the top of the SAF
+- **From your folder** - anything named `*.lunapkg.json` at the top of the SAF
   folder you granted. Copy your own package there and install it.
 
 Then, still in Settings:
@@ -155,8 +155,8 @@ Then, still in Settings:
   under the same approvals, the same limits and the same trace as a message.
 
 Off the device, `scripts/logic-tests.sh` runs `ExamplesTest`, which holds the
-shipped examples to the strictest reading of the rules — empty trust list,
-unsigned disallowed — installs all three into real registries, checks every
+shipped examples to the strictest reading of the rules - empty trust list,
+unsigned disallowed - installs all three into real registries, checks every
 document loads, and checks that tampering with any of them breaks the digest.
 Point it at your own package the same way, or just run:
 

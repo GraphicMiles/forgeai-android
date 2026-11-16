@@ -1,4 +1,4 @@
-# Luna — full technical report
+# Luna - full technical report
 
 Branch `luna-rebuild`. Head `4b06311`, green in CI (run 33132703599).
 Everything below describes the code as it stands in this repository, feature by
@@ -41,20 +41,20 @@ Runs on every push to `luna-rebuild` and `main`, and on demand. Steps in order:
 1. `actions/checkout@v4`
 2. `setup-java@v4`, Temurin 17
 3. `subosito/flutter-action@v2`, Flutter **3.47.2**, cached
-4. `scripts/bootstrap-llama-cpp.sh` — clones llama.cpp into
+4. `scripts/bootstrap-llama-cpp.sh` - clones llama.cpp into
    `third_party/llama.cpp` pinned to commit `0e4a0362239713ea95a6864a17a8de4b0ad90d62`
 5. `sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"`
 6. `flutter pub get`
 7. `flutter analyze --no-fatal-infos --no-fatal-warnings`
-8. `bash scripts/logic-tests.sh` — the JVM test suite (§2.3)
+8. `bash scripts/logic-tests.sh` - the JVM test suite (§2.3)
 9. Restore the upload key from the `ANDROID_KEYSTORE_BASE64` secret into
    `android/luna-release.jks`; if the secret is absent the build falls back to
    the debug key and says so
 10. `flutter build apk --release --target-platform android-arm64 --tree-shake-icons`
 11. `apksigner verify --print-certs`, printed into the job summary
-12. `rm -f android/luna-release.jks` with `if: always()` — the key never
+12. `rm -f android/luna-release.jks` with `if: always()` - the key never
     survives the job
-13. `python3 scripts/apk-size.py <apk> 50` — the size gate
+13. `python3 scripts/apk-size.py <apk> 50` - the size gate
 14. Upload artifact `luna-release-apk`
 
 Whole run: about five minutes.
@@ -79,9 +79,9 @@ compiles **every** Java file in `ai/luna/app/` with `javac --release 11
 -encoding UTF-8` against that jar plus ten hand-written stubs in
 `tools/jvm-stubs/` (40 KB). Then it runs two suites:
 
-- `MemoryRecoveryTest` — 17 checks. What survives a stop or a kill: transcript
+- `MemoryRecoveryTest` - 17 checks. What survives a stop or a kill: transcript
   trimming (`AgentEngine.tail`), `resumable`, `dangling`, `lastUserInstruction`.
-- `ProviderConfigTest` — 56 provider checks, plus 12 greeting checks
+- `ProviderConfigTest` - 56 provider checks, plus 12 greeting checks
   (`SmallTalk`), 6 invented-address checks (`NetworkTargets`) and 10 gate checks
   (`ToolPolicy`).
 
@@ -119,11 +119,11 @@ The only Activity, a `FlutterActivity`. It:
 - forwards `onActivityResult` (folder picker, GGUF import, bring-in, restore)
 - disposes the bridge in `onDestroy`
 
-### 3.2 `LunaBridge` — the seam
+### 3.2 `LunaBridge` - the seam
 
 Method channel `ai.luna.app/core`, event channel `ai.luna.app/events`. Rules:
 
-- nothing blocks the platform thread — anything touching storage, network or the
+- nothing blocks the platform thread - anything touching storage, network or the
   model is handed to a two-thread `ExecutorService` and answers on the main
   looper via `reply(...)`
 - calls that only read memory answer inline (`snapshot`, prefs setters, chat
@@ -175,7 +175,7 @@ that matter:
   `ask` events, so a lost event cannot strand a run. The engine also re-emits
   the prompt every 2 s while it waits.
 - The **token filter**: if the streamed text starts with `{`, `[` or a fence,
-  the reply is treated as machine-shaped and is never typed into the thread —
+  the reply is treated as machine-shaped and is never typed into the thread -
   it belongs to the trace. This prevents half a brace being shown and then
   withdrawn.
 
@@ -207,7 +207,7 @@ One `SharedPreferences` file. Keys and accessors:
 `settleDownloadsAfterRestart()` runs in the constructor: anything recorded as
 mid-flight when the process died is marked paused, because it is not mid-flight
 now. `dropOldToolRules()` also runs there and deletes the retired
-`KEY_TOOL_RULES` key — the per-tool permission model no longer exists.
+`KEY_TOOL_RULES` key - the per-tool permission model no longer exists.
 
 `exportSettings()` / `importSettings()` back up everything except secrets.
 `clearAll()` is the reset.
@@ -222,14 +222,14 @@ ciphertext are written into a private `SharedPreferences` file. Named secrets:
 `Prefs.cloudProviders(vault)` migrates any legacy row that still carries a
 plaintext `apiKey` into the vault and strips the field.
 
-### 4.3 `WorkspaceStore` — the granted folder
+### 4.3 `WorkspaceStore` - the granted folder
 
 Storage Access Framework only. There is no path outside the granted tree, so
 there is nothing to escape from.
 
 - `pickFolderIntent()` → `ACTION_OPEN_DOCUMENT_TREE`; `persistGrant(uri)` takes
   a persistable read/write grant and remembers the name
-- `rootState()` returns `none`, `ok` or `revoked` — a grant the system has taken
+- `rootState()` returns `none`, `ok` or `revoked` - a grant the system has taken
   back is detected and reported instead of failing mysteriously
 - `list`, `readText`, `writeText`, `createFile`, `createFolder`, `rename`,
   `delete`, `search` (bounded recursion with a hit limit and line numbers)
@@ -246,7 +246,7 @@ there is nothing to escape from.
 `AgentEngine` writes one JSON file per chat in app storage. `chatIndex()` lists
 them newest first with a title derived from the first user line; `searchChats`
 greps them; `newChat`, `switchChat`, `deleteChat`, `exportChat` do what they
-say. `loadTranscript()` calls `noteInterruptedTurn()` — if the last turn was a
+say. `loadTranscript()` calls `noteInterruptedTurn()` - if the last turn was a
 user message with no reply, the chat says so and offers to carry on.
 
 ---
@@ -274,8 +274,8 @@ cloud provider; if failover is off it says the download is probably bad.
 
 1. `stopRequested` → "I stopped there." (state `stopped`)
 2. elapsed > `budgetSeconds` → say so, mark the run cut short
-3. `ask(local, cloud, guards)` — one model call, streaming
-4. `parseToolCall(raw)` — pulls the first balanced `{…}` that names a tool,
+3. `ask(local, cloud, guards)` - one model call, streaming
+4. `parseToolCall(raw)` - pulls the first balanced `{…}` that names a tool,
    string- and escape-aware. Prose returns null. If a reply *starts* like JSON
    but does not parse, one repair observation is appended and the loop retries;
    a second failure is taken as prose so this cannot spin
@@ -302,7 +302,7 @@ cloud provider; if failover is off it says the download is probably bad.
 
 At the end: the answer is appended to the transcript (marked `stopped` if it was
 cut short), the transcript is saved, and `run_done` carries `text`, `elapsedMs`
-and `workMs` — elapsed minus the time a human spent deciding.
+and `workMs` - elapsed minus the time a human spent deciding.
 
 `finally`: running cleared, pending ids cleared, `browser.close()` (cookies and
 history belong to the job), and the model unloaded unless "keep warm" is on.
@@ -311,7 +311,7 @@ history belong to the job), and the model unloaded unless "keep warm" is on.
 
 `systemPrompt(persona)` has two shapes.
 
-- **Conversational** (`conversationOnly`): no tool list at all — there is
+- **Conversational** (`conversationOnly`): no tool list at all - there is
   nothing to be tempted by. Reply in one or two warm sentences, no JSON, do not
   claim to have done anything.
 - **Working**: who Luna is, the granted folder name, the mode, then, *before*
@@ -350,7 +350,7 @@ used to strand the run with no card and no way to answer.
 `stop()` sets the flag, cancels the native generation and disconnects the cloud
 stream (`Cancellation`), so a Stop mid-stream closes the socket rather than
 waiting for the last token. `resume()`/`canResume()` use `resumable(messages)`
-and `dangling(messages)` — a turn that ended on a limit, a stop or a crash can
+and `dangling(messages)` - a turn that ended on a limit, a stop or a crash can
 be picked up from the last user instruction. The chat shows that as one
 "Carry on" affordance, never as a second Stop button.
 
@@ -358,7 +358,7 @@ be picked up from the last user instruction. The chat shows that as one
 
 Constructed per run from the budgets. `check(tool, args, mutating)` returns:
 
-- `fromLedger(recorded)` when the same `signature(tool, args)` has already run —
+- `fromLedger(recorded)` when the same `signature(tool, args)` has already run -
   the remembered observation is replayed instead of the call
 - `refuse(reason)` on the step limit, the time limit or the cloud-call cap
 - `allow()` otherwise
@@ -432,7 +432,7 @@ factual observation (`"Failed: …"`) and logged. Observations are clamped to
 ### 7.1 `HeadlessBrowser`
 
 The system WebView, created off-screen, never attached to a layout, destroyed
-with its cookies when the job ends — so it costs nothing in the APK. Two rules
+with its cookies when the job ends - so it costs nothing in the APK. Two rules
 make it safe enough to hand to a model: `shouldInterceptRequest` refuses images,
 fonts, media and anything that is not the document itself (a page cannot be used
 to pull a payload), and every load has a timeout (default 20 s) so a page that
@@ -451,7 +451,7 @@ missing scheme.
 
 ## 8. Models
 
-### 8.1 On-device catalogue — `ModelStore`
+### 8.1 On-device catalogue - `ModelStore`
 
 Eight pinned GGUF builds, every one at an immutable revision URL with a SHA-256:
 
@@ -508,18 +508,18 @@ Three details worth naming:
 
 `DeviceCapacity.suggestedThreads()` gives llama.cpp `min(6, cores − 1)`, leaving
 a core for the UI. `DeviceCapacity.read()` reports total and available RAM,
-total and available storage and the core count — used to warn before a model
+total and available storage and the core count - used to warn before a model
 that will not fit.
 
 ### 8.4 Ollama
 
 `Prefs.endpoint` holds the address. `CloudProvider.ollamaModels(endpoint)` lists
 what that machine serves. `EndpointPolicy` allows plain `http` **only** for a
-private or loopback host — your own machine on your own network — and requires
+private or loopback host - your own machine on your own network - and requires
 `https` for anything on the internet, with no userinfo, query or fragment in the
 base. Active id form: `ollama:<name>`.
 
-### 8.5 Cloud providers — `CloudProvider`
+### 8.5 Cloud providers - `CloudProvider`
 
 A provider row is `{id, label, baseUrl, model, kind, authStyle, authName,
 headers, checkedAt}` in `Prefs.KEY_CLOUD`; the key lives in the vault at
@@ -535,13 +535,13 @@ maxTokens, stream)`:
 | `gemini` | `POST {base}/models/{model}:streamGenerateContent?alt=sse` | roles `user`/`model`, `systemInstruction`, probe uses `:generateContent` | `candidates[0].content.parts[0].text` |
 
 **Four auth styles**: `bearer` (`Authorization: Bearer …`), `header` (any header
-name), `query` (any query parameter — how Gemini takes a key), `none`.
+name), `query` (any query parameter - how Gemini takes a key), `none`.
 `defaultAuthStyle(kind)` and `defaultAuthName(kind, style)` fill sensible
 defaults, and every one of those fields stays editable. Extra headers are a free
 JSON map.
 
 `readStream` handles both worlds: server-sent events when the provider streams,
-and one whole JSON document when it ignores the flag — the difference is
+and one whole JSON document when it ignores the flag - the difference is
 invisible above that method. Cancellation is checked between lines, and whatever
 arrived before a Stop is kept.
 
@@ -554,7 +554,7 @@ and wants the tail in the path; every OpenAI-shaped provider means the whole
 string, so `openai/gpt-oss-120b` and `groq/compound-mini` are sent as they are.
 Stripping them was a 404 that read like a bug in Luna.
 
-`ModelCatalog.looksLikeChatModel(id)` filters on substrings — whisper, tts,
+`ModelCatalog.looksLikeChatModel(id)` filters on substrings - whisper, tts,
 speech, voice, audio, transcribe, realtime, orpheus, playai, canary, kokoro,
 bark, musicgen, embed, rerank, moderation, guard, prompt-guard, image, dall-e,
 imagen, veo, stable-diffusion, sd3, flux, sora, clip, ocr and more.
@@ -569,13 +569,13 @@ available on this key and to refresh the list.
 `llama-3.3-70b-versatile` turned every install with it baked in into a 404 that
 read like an app bug.
 
-### 8.6 Realtime availability — the probe
+### 8.6 Realtime availability - the probe
 
 Being listed is not the same as being usable: a provider will list models a key
 has no entitlement for, and the first sign is a 404 in the middle of a job.
 
-`CloudProvider.probe(config)` sends one real, non-streamed request — `"Hi"`,
-`max_tokens: 1`, 30 s read timeout — built by the same `wireFor`, so the probe
+`CloudProvider.probe(config)` sends one real, non-streamed request - `"Hi"`,
+`max_tokens: 1`, 30 s read timeout - built by the same `wireFor`, so the probe
 and the run can never disagree. It returns `null` when the model answers, or the
 reason it cannot be used.
 
@@ -606,7 +606,7 @@ Where the probe is enforced:
   `blocked`, `no_folder`, `invented`, `declined`, `unfinished`, `denied`. The
   header carries the mark, one label and the elapsed time; the chevron rotates
   0 → −0.25 turns over 300 ms; the running row auto-previews its own detail.
-  Nothing is shown twice — there is no status row that repeats the header.
+  Nothing is shown twice - there is no status row that repeats the header.
 - **`ShimmerLabel`** for a live label (stops .35/.5/.65, right to left) and
   **`PixelLoader`** for the waiting mark.
 - **`StreamedAnswer`** types the reply word by word, animating only the last
@@ -619,7 +619,7 @@ Where the probe is enforced:
 - **Carry on**: shown when the last turn was cut short; calls `resumeRun`.
 - **Chats sheet**: search, switch, delete, export.
 - **Attach** copies a file into the granted folder and names it in the message.
-- **Composer** — the only Stop in the app: paperclip (disabled while running),
+- **Composer** - the only Stop in the app: paperclip (disabled while running),
   the field (hint `Add to the job…` while running, otherwise `Tell Luna what to
   do…`), and one 34 px circle that is `arrow-up` → send when idle and `stop` →
   `core.stop` while running.
@@ -642,19 +642,19 @@ note, not a crash).
 
 `lib/screens/models_screen.dart` (1 117 lines). Three sections.
 
-- **On this phone** — the catalogue, each row showing size, context and whether
+- **On this phone** - the catalogue, each row showing size, context and whether
   it fits this device; download with a live progress bar, pause, resume, cancel;
   a checksum note after verification; import your own GGUF; delete. The active
   model gets a hero card with its stats and the last measured tokens/second.
-- **Your computer** — the Ollama address, a probe button that lists what that
+- **Your computer** - the Ollama address, a probe button that lists what that
   machine serves, and selection from that list.
-- **Cloud** — the provider list, plus a preset picker (OpenAI, Anthropic,
+- **Cloud** - the provider list, plus a preset picker (OpenAI, Anthropic,
   Gemini, Groq, OpenRouter, Together, "Something else") which only pre-fills the
-  shape and address. The editor exposes label, base URL, key (obscured, "saved —
+  shape and address. The editor exposes label, base URL, key (obscured, "saved -
   type to replace"), wire shape, auth style, auth header/parameter name, extra
   headers and the model, with "Check models" and Save both probing (§8.6).
   `_say` posts one plain line; `_plainError` strips
-  `PlatformException(code, …)` down to the sentence — written with
+  `PlatformException(code, …)` down to the sentence - written with
   `startsWith`/`indexOf`/`substring` rather than a regex, after a doubled
   backslash through a patch script produced a regex that compiled and never
   matched.
@@ -665,21 +665,21 @@ note, not a crash).
 
 `lib/screens/settings_screen.dart` (588 lines), in sections:
 
-- **Before anything permanent** — the single "Ask me first" switch, plus one
+- **Before anything permanent** - the single "Ask me first" switch, plus one
   note explaining what it means either way. Off: Luna may act unsupervised. On:
   she asks before altering files, before deleting, and before reading sensitive
   material.
-- **Limits on one job** — steppers for steps, seconds and cloud calls.
-- **Your computer** — the Ollama address.
-- **When the on-device model cannot cope** — the failover switch.
-- **GitHub** — add or remove the token (kept in the keystore).
-- **Downloads** — Wi-Fi only, pause under 15 %.
-- **The model in memory** — keep the model warm.
-- **Folders** — the current grant, and previous grants you can switch back to or
+- **Limits on one job** - steppers for steps, seconds and cloud calls.
+- **Your computer** - the Ollama address.
+- **When the on-device model cannot cope** - the failover switch.
+- **GitHub** - add or remove the token (kept in the keystore).
+- **Downloads** - Wi-Fi only, pause under 15 %.
+- **The model in memory** - keep the model warm.
+- **Folders** - the current grant, and previous grants you can switch back to or
   forget.
-- **Look and feel** — theme (system/light/dark) and text size.
-- **Stored on this device** — chat size and clear, undo backups, the error log.
-- **Backup** — export settings into the granted folder (keys excluded) and
+- **Look and feel** - theme (system/light/dark) and text size.
+- **Stored on this device** - chat size and clear, undo backups, the error log.
+- **Backup** - export settings into the granted folder (keys excluded) and
   restore, then a reset that clears everything.
 
 ---
@@ -701,7 +701,7 @@ Sources:
 
 | `where` | Written by |
 | --- | --- |
-| `call` | `LunaBridge.onMethodCall` — the method **name only**, never arguments |
+| `call` | `LunaBridge.onMethodCall` - the method **name only**, never arguments |
 | `http` | `CloudProvider.open` (verb, URL, model, shape) and the response code; the body of a failure, trimmed |
 | `probe` | Availability probes: pass with the code, or fail with the code and body |
 | `engine` | Every agent event except `token` and heartbeats: type, tool, state, path, reason |
@@ -710,14 +710,14 @@ Sources:
 
 Static call sites (the provider layer is all static methods) reach the log
 through `ErrorLog.tap/tapNote/tapFail`. `ErrorLog.safeUrl` truncates a `?key=`
-query before it is ever written — a debug panel that leaks the key is a debug
+query before it is ever written - a debug panel that leaks the key is a debug
 panel that ends up in a screenshot.
 
 ### 13.2 How it reaches the screen
 
 `ErrorLog.listen(...)` hands every new line to `LunaBridge`, which pushes it as
 a `log` event. `LunaCore._onEvent` routes `log` straight into `DebugLog` and
-returns — no screen state depends on it. `DebugLog` is its own `ChangeNotifier`
+returns - no screen state depends on it. `DebugLog` is its own `ChangeNotifier`
 holding 500 lines, because a rebuild of four screens per log line would make the
 panel the slowest thing in the app. On startup `pullLog()` seeds it with
 whatever Java already had (`debugLog` method), merged newest-first.
@@ -727,12 +727,12 @@ whatever Java already had (`debugLog` method), merged newest-first.
 `lib/widgets/debug_panel.dart`. `DebugOverlay` wraps the whole Shell, so it is
 present on all four screens.
 
-- **Closed:** a 27 px tab hugging the right edge, a third of the way up —
+- **Closed:** a 27 px tab hugging the right edge, a third of the way up -
   clear of the composer (where the only Stop lives) and of every screen header.
   It fills with ink and shows a count when something has failed.
 - **Open:** a sheet over the bottom 52 % of the screen, so the app is still
   visible behind it. Header: "Debug log", the line count, then three 34 px
-  buttons — **copy**, **clear**, **close**.
+  buttons - **copy**, **clear**, **close**.
 - **Filter:** Everything / Errors.
 - **Lines:** newest first, monospace, `hh:mm:ss.mmm` · source · text. Failures
   carry weight and a fill, never colour.
@@ -754,9 +754,9 @@ present on all four screens.
 - No box shadows, no outlines on surfaces, no sharp edges. Radii: 44 frame, 28
   sheet, 24 card, 22 group, 20 step, 18 note, 15 tile, 12 tile-small, pill.
 - Type: Manrope for display, Inter for text, JetBrains Mono for code and the log
-  — all subsetted, 1.2 MB together, loaded from `assets/fonts/`.
+  - all subsetted, 1.2 MB together, loaded from `assets/fonts/`.
 - State reads through fill and weight, never hue.
-- Icons are FontAwesome (`FaIconData` — v11 renamed the type and it is *not* an
+- Icons are FontAwesome (`FaIconData` - v11 renamed the type and it is *not* an
   `IconData` subtype, so every parameter is declared `FaIconData`). No emoji, no
   inline SVG. The mascot is the sole exception, drawn in a `CustomPainter`.
 - Buttons fit their content; cards are compact.
@@ -790,7 +790,7 @@ Shared widgets: `Mark`, `Glyph`, `IconButtonSoft`, `ScreenTop`, `SectionLabel`,
 ## 16. Known remainder
 
 - The composer hint "Add to the job…" promises queueing that `_send` does not do
-  (it returns early while running) — wire it or reword it.
+  (it returns early while running) - wire it or reword it.
 - Model Zoo has one duplicate import.
 - Long tool observations can truncate mid-word.
 - `DownloadService` does not auto-retry a dropped connection.
@@ -805,18 +805,18 @@ Out of scope by decision: scheduled jobs, biometric lock.
 
 ## 17. File map
 
-**Java** — `AgentEngine` 1391, `CloudProvider` 854, `LunaBridge` 820,
+**Java** - `AgentEngine` 1391, `CloudProvider` 854, `LunaBridge` 820,
 `WorkspaceStore` 685, `Prefs` 573, `ModelStore` 375, `DownloadService` 290,
 `ErrorLog` 235, `HeadlessBrowser` 236, `Tools` 221, `OnDeviceRuntime` 199,
 `NetworkTargets` 171, `ToolPolicy` 156, `RunGuards` 133, `ModelCatalog` 109,
 `EndpointPolicy` 108, `SmallTalk` 91, `CredentialVault` 84, `MainActivity` 75,
 `ReadableText` 72, `DeviceCapacity` 58.
 
-**Dart** — `models_screen` 1117, `luna_core` 984, `chat_screen` 858,
+**Dart** - `models_screen` 1117, `luna_core` 984, `chat_screen` 858,
 `common` 699, `settings_screen` 588, `agent_response` 516, `files_screen` 504,
 `main` 335, `debug_panel` 254, `providers` 208, `theme` 179, `debug_log` 140.
 
-**Other** — `cpp/OnDeviceRuntime.cpp`, `cpp/CMakeLists.txt`,
+**Other** - `cpp/OnDeviceRuntime.cpp`, `cpp/CMakeLists.txt`,
 `scripts/{logic-tests.sh, apk-size.py, bootstrap-llama-cpp.sh}`,
 `tools/jvm-stubs/`, `tools/tests/`, `.github/workflows/{android-apk,keystore}.yml`,
 `docs/{AUDIT_INVENTORY, CODE_AUDIT, PROVIDERS, BUGS_FROM_DEVICE, MODELS_GAPS,

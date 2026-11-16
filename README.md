@@ -16,7 +16,7 @@ Nine tools, all scoped to the folder you grant:
 | --- | --- |
 | List files, read a file, search | Write, create a file, create a folder, delete, rename |
 
-No terminal, no git, no web. Those were removed on purpose — a tool that can do
+No terminal, no git, no web. Those were removed on purpose - a tool that can do
 anything cannot be reasoned about.
 
 Files that hold secrets stay locked in both modes: `.env`, `.netrc`, key
@@ -27,11 +27,11 @@ Every change she makes is backed up first, so a wrong edit is one tap of Undo.
 
 ## Where the model runs
 
-- **On device** — eight GGUF models from 93 MB to 1.7 GB, pinned to immutable
+- **On device** - eight GGUF models from 93 MB to 1.7 GB, pinned to immutable
   Hugging Face revisions and checked by SHA-256. Downloads resume. Models the
   device does not have RAM for are shown greyed with the reason.
-- **Your computer** — an Ollama address on the same network.
-- **Cloud** — any OpenAI-compatible endpoint and key. Keys go in the Android
+- **Your computer** - an Ollama address on the same network.
+- **Cloud** - any OpenAI-compatible endpoint and key. Keys go in the Android
   keystore, never in a file.
 
 On-device models work with the radio off. A cloud model sends your prompt and
@@ -50,13 +50,13 @@ in the app allowed to be purple.
 ## Layout
 
 ```
-lib/                        Dart — interface only
+lib/                        Dart - interface only
   theme.dart                the design system, ported from docs/design/luna-screens.html
   core/luna_core.dart       one method channel, one event stream, mirrored state
   widgets/common.dart       mascot, rows, groups, sheets, pills, chips
   screens/                  chat, files, models, settings
 android/app/src/main/
-  java/ai/luna/app/         Java — everything that touches the device
+  java/ai/luna/app/         Java - everything that touches the device
     AgentEngine.java        the loop: prompt, parse, approve, act, repeat (max 6)
     OnDeviceRuntime.java    JNI to llama.cpp
     ModelStore.java         catalogue, resumable downloads, SHA-256 gate

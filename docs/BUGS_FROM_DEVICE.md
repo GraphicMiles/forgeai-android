@@ -1,4 +1,4 @@
-# Bugs from the 23:37 build — noted, not yet fixed
+# Bugs from the 23:37 build - noted, not yet fixed
 
 From your two screenshots on 27 August. Nothing here has been touched; say which
 ones to take and in what order.
@@ -7,12 +7,12 @@ ones to take and in what order.
 
 1. **The raw tool call is printed as the answer.** `{"tool":"write_file","args":…}`
    and a stray `{"changed": …}` both landed in the bubble. The streamed tokens of
-   a tool call should never reach the thread — only the step row should. The
+   a tool call should never reach the thread - only the step row should. The
    parser strips the call after the fact, but the tokens have already been shown.
-2. **"Overwrite notes.md with 1 lines?"** — the line count is not pluralised.
+2. **"Overwrite notes.md with 1 lines?"** - the line count is not pluralised.
 3. **Skip looks disabled.** On the white approval card the Skip button is light
    grey on near-white. It reads as ghosted next to a solid black Allow.
-4. **A stray "…" chip** sits above the buttons — that is the content preview with
+4. **A stray "…" chip** sits above the buttons - that is the content preview with
    nothing in it. It should not render when there is nothing to preview.
 5. **The trace says "Working · 1 step"** while the job is parked on your
    approval. Waiting on you is not working, and the only step it lists is
@@ -23,10 +23,10 @@ ones to take and in what order.
 ## Model Zoo
 
 7. **The imported model and the downloaded model are the same file** and both are
-   listed — the imported copy of `qwen2.5-coder-0.5b…` duplicates the catalogue
+   listed - the imported copy of `qwen2.5-coder-0.5b…` duplicates the catalogue
    entry that is already installed. Dedupe by content, or say "already in the
    zoo" instead of importing a second copy.
-8. **Titles truncate mid-word** — `qwen2.5-coder-0.5b-…` and `not ver…`. The row
+8. **Titles truncate mid-word** - `qwen2.5-coder-0.5b-…` and `not ver…`. The row
    needs two lines for its own files, or a middle ellipsis.
 9. **"Running now" claims the model is loaded** while the phone is idle. It is
    accurate only when the runtime holds it; otherwise it should read "Ready".
@@ -50,17 +50,17 @@ truncating mid-word in Your own files).
 
 ---
 
-## Second device run — 28 August, 00:51 ("hi")
+## Second device run - 28 August, 00:51 ("hi")
 
 Eighteen findings, in the order they hurt. All eighteen are addressed by the
 "self-healing pipeline" change described under each one.
 
-1. **A held tool showed no approval card.** The row said "Opening a page —
+1. **A held tool showed no approval card.** The row said "Opening a page -
    waiting on you" and nothing asked anything. The job could only end in Stop.
    The whole approval chain was read end to end and every link was correct, so
    the event was lost in transit. Fixed by redundancy rather than repair: the
-   question is now announced on three channels — the `approval` event, a copy
-   carried on the held step row, and a `pendingPrompt` key in the snapshot —
+   question is now announced on three channels - the `approval` event, a copy
+   carried on the held step row, and a `pendingPrompt` key in the snapshot -
    plus a re-emit every two seconds while it is still unanswered. Any one of
    the three draws the card.
 2. **The header, the row and the working line disagreed.** There is now one
@@ -77,7 +77,7 @@ Eighteen findings, in the order they hurt. All eighteen are addressed by the
    the trace is rendered above the answer, where the record belongs.
 8. **"hi" loaded the model and called `open_page` with no folder.** The prompt
    now opens with the rule that most messages need no tool, and file tools are
-   omitted entirely when no folder is granted — and refused before approval if
+   omitted entirely when no folder is granted - and refused before approval if
    one is somehow called.
 9. **"Loaded the model" was a step.** Hidden once it succeeds; still shown when
    it fails.

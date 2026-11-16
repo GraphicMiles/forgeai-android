@@ -1,4 +1,4 @@
-# Luna Platform — architecture and migration plan
+# Luna Platform - architecture and migration plan
 
 The decision: **Luna is not rebuilt.** The runtime it already has is kept, and
 the hardcoded parts become contracts with an extension layer around them.
@@ -142,14 +142,14 @@ configuration and is portable as a folder: `manifest.json`, `instructions.md`,
 
 ### Plugin runtime (§9, §10)
 `PluginManager` (discover, install, verify, enable, disable, update, uninstall,
-rollback) and `PluginRegistry`. **Plugins are declarative first** — manifest,
+rollback) and `PluginRegistry`. **Plugins are declarative first** - manifest,
 skill markdown, workflow JSON, tool definitions, tests. No arbitrary Java in the
 process. Sandboxed code execution comes later.
 
 ### Skills (§11, §12, §13)
 Extract prompt knowledge out of `systemPrompt()` into composable skills
 (manifest, instructions, tools, workflows, examples, validators, requirements)
-with a `SkillRegistry` and **skill relevance** — never dump every installed skill
+with a `SkillRegistry` and **skill relevance** - never dump every installed skill
 into every prompt. `SmallTalk` grows into an `IntentRouter`: conversation,
 question, tool_use, workflow, research, coding, file_operation,
 agent_delegation, plugin_management, system_action.
@@ -173,13 +173,13 @@ knowledge/RAG and execution memory. They must not collapse into one context
 window.
 
 ### Inference and routing (§20, §21)
-`InferenceProvider` — `generate`, `stream`, `cancel`, `listModels`, `probe`,
-`capabilities` — implemented by llama.cpp, Ollama, OpenAI, Anthropic, Gemini,
+`InferenceProvider` - `generate`, `stream`, `cancel`, `listModels`, `probe`,
+`capabilities` - implemented by llama.cpp, Ollama, OpenAI, Anthropic, Gemini,
 OpenRouter, remote vLLM, custom HTTP. Then an `InferenceRouter` choosing on task
 type, model capability, RAM, latency, cost, privacy, context size and
 availability.
 
-### Execution providers (§22–§24)
+### Execution providers (§22-§24)
 Separate from inference: inference is where it thinks, execution is where the
 tool runs. `ExecutionProvider`, `FileSystemProvider` (AndroidSAF, local, git,
 Docker volume, remote, cloud storage), `BrowserProvider` (WebView, Chromium,
@@ -193,20 +193,20 @@ capabilities.
 `SecretProvider` with per-plugin namespaces. Plugin A cannot reach plugin B's
 secrets.
 
-### Events, runs and replay (§27–§29)
+### Events, runs and replay (§27-§29)
 A formal `AgentEvent` schema; the transcript becomes a structured execution log
 (user_input, plan, model_call, tool_call, approval, tool_result,
 subagent_started, subagent_result, checkpoint, final) still rendered as a chat.
 That buys debugging, replay, auditing, visualisation, crash recovery, evaluation
-and developer tooling — including "replay from step 14".
+and developer tooling - including "replay from step 14".
 
-### Packaging and trust (§30–§33)
+### Packaging and trust (§30-§33)
 A manifest (`id, name, version, author, type, runtime.minLuna, permissions,
 skills, tools, dependencies, platforms`), a package format `.lunapkg`
 (`manifest.json`, `skills/`, `workflows/`, `tools/`, `agents/`, `assets/`,
 `tests/`), publisher/version/hash/signature/source/licence metadata, trust tiers
 (Verified, Community, Local, Unsigned) and a plugin sandbox behind a permission
-broker — designed *before* any marketplace.
+broker - designed *before* any marketplace.
 
 ### Layering and stores (§34, §35)
 `Flutter → Platform API → Luna Runtime {Agent Manager, Plugin Manager, Workflow
@@ -215,11 +215,11 @@ Manager}`. `LunaBridge` only translates UI calls and events. `Prefs` splits into
 SettingsStore, AgentStore, PluginStore, ModelStore, ProviderStore, WorkflowStore,
 MemoryStore, SecretStore, WorkspaceStore.
 
-### Registries and UI (§36–§41)
+### Registries and UI (§36-§41)
 Model Zoo becomes a Resources hub (models, inference servers, agents, skills,
 plugins, workflows, memory providers, execution providers). Add an
 `AgentRegistry` and an `EnvironmentRegistry` (this phone, laptop, VPS, office
-server, cloud — each exposing capabilities, models, tools, storage, browser,
+server, cloud - each exposing capabilities, models, tools, storage, browser,
 GPU, memory, limits, latency). The screens become **Home, Agents, Workspace,
 Resources, Runs, Settings**; Files grows into Workspace (files, projects,
 repositories, connections, environments). A developer SDK follows:
@@ -244,21 +244,21 @@ First make the runtime extensible.
 
 ---
 
-## 5. Migration order (§45) — the plan of record
+## 5. Migration order (§45) - the plan of record
 
 | Phase | Work | State |
 | --- | --- | --- |
 | 1 | Extract contracts: ToolProvider, InferenceProvider, StorageProvider, BrowserProvider, SecretProvider, ExecutionProvider | **done** |
 | 2 | Tool Registry; existing tools become built-in plugins `core.filesystem`, `core.browser`, `core.user`, `core.github` | next |
 | 3 | Skill system: SkillRegistry, SkillDefinition, SkillResolver | |
-| 4 | Agent system: AgentDefinition, AgentRegistry, AgentManager — Luna becomes an installed agent | |
+| 4 | Agent system: AgentDefinition, AgentRegistry, AgentManager - Luna becomes an installed agent | |
 | 5 | Plugin system: PluginManager, PluginRegistry, PluginManifest, PluginInstaller, PluginVerifier (declarative only) | |
 | 6 | Workflow engine: WorkflowDefinition, WorkflowNode, WorkflowExecutor | |
 | 7 | Memory abstraction: MemoryProvider, MemoryRegistry; split conversation / working / long-term / execution | |
 | 8 | Inference abstraction + InferenceRouter | |
 | 9 | Execution environments: ExecutionProvider, EnvironmentRegistry | |
 | 10 | Sub-agents: AgentSpawner, AgentContext, AgentBudget, AgentResult | |
-| 11 | Marketplace / registry — only once the runtime is stable | |
+| 11 | Marketplace / registry - only once the runtime is stable | |
 
 ### The ten to touch first
 
@@ -298,7 +298,7 @@ luna/
 
 ---
 
-## 7. Phase 1 — delivered
+## 7. Phase 1 - delivered
 
 Package `ai.luna.contracts`, compiled into the app and into the JVM test run.
 
@@ -330,13 +330,13 @@ chat.
 
 ---
 
-## 8. Phase 2 — delivered
+## 8. Phase 2 - delivered
 
 The tool list is no longer written anywhere in the engine. It is asked for.
 
 ### The plugins that ship with the runtime
 
-`ai.luna.builtin` — four providers, each a plugin like any other, distinguished
+`ai.luna.builtin` - four providers, each a plugin like any other, distinguished
 only by being installed before the app starts.
 
 | Provider | Tools | Capabilities | Needs |
@@ -357,19 +357,19 @@ four in prompt order and now also holds the legacy → dotted rename map.
 `ai.luna.runtime.ToolRegistry`. One entry point, and everything it enforces is
 enforced for a plugin exactly as for the core:
 
-- **one owner per name** — a tool id belongs to whoever claimed it first, so an
+- **one owner per name** - a tool id belongs to whoever claimed it first, so an
   installed plugin cannot quietly become `delete_file`;
-- **the platform has to match** — `runsOn(context.platform)`;
-- **every capability must be granted by the environment** — `AndroidExecution`
+- **the platform has to match** - `runsOn(context.platform)`;
+- **every capability must be granted by the environment** - `AndroidExecution`
   offers nine, so a tool wanting `shell.execute` is not merely refused at call
   time, it is never shown to the model;
-- **resources must exist** — no folder, no file tools in the prompt; no
+- **resources must exist** - no folder, no file tools in the prompt; no
   browser, no page tools;
-- **required arguments before approval** — a malformed call is rejected before
+- **required arguments before approval** - a malformed call is rejected before
   a person is asked to allow it;
-- **each tool's own clock** — `open_page` 20 s, `ask_user` 10 min, the rest 30 s,
+- **each tool's own clock** - `open_page` 20 s, `ask_user` 10 min, the rest 30 s,
   instead of one 90-second rule for everything;
-- **a provider may misbehave** — a throw, a null, or a hang becomes a failed or
+- **a provider may misbehave** - a throw, a null, or a hang becomes a failed or
   unfinished `ToolResult`, never an ended run.
 
 ### What the engine gave up
@@ -393,14 +393,14 @@ prompt lines, and an impostor plugin that tries to claim `delete_file`.
 
 ---
 
-## 9. Phase 3 — delivered
+## 9. Phase 3 - delivered
 
 Luna's competence left the engine. `AgentEngine.systemPrompt` was 55 lines of
 English; it is now six lines that ask for a prompt.
 
 ### A skill is data
 
-`SkillDefinition` — id, name, description, the instructions themselves, the
+`SkillDefinition` - id, name, description, the instructions themselves, the
 tools it talks about, the resources it needs (`requires`) or must not have
 (`unless`), the words that bring it in (`triggers`), whether it is `always` on,
 and where it sits in the order. It round-trips through JSON, because a plugin
@@ -413,13 +413,13 @@ what makes installing one safe.
 
 | Skill | Order | Condition |
 | --- | --- | --- |
-| `core.identity` — who and where she is | 0 | always |
-| `core.restraint` — most messages need no tool | 10 | always |
-| `core.files` — read before you write, relative paths | 30 | needs a folder |
-| `core.no-folder` — say so and ask, don't waste a step | 30 | *unless* a folder |
-| `core.web` — never invent an address | 40 | needs a browser |
-| `core.asking` — stop when a guess would be expensive | 50 | needs `ask_user` |
-| `core.reporting` — one tool per reply, no unsupported claims | 90 | always |
+| `core.identity` - who and where she is | 0 | always |
+| `core.restraint` - most messages need no tool | 10 | always |
+| `core.files` - read before you write, relative paths | 30 | needs a folder |
+| `core.no-folder` - say so and ask, don't waste a step | 30 | *unless* a folder |
+| `core.web` - never invent an address | 40 | needs a browser |
+| `core.asking` - stop when a guess would be expensive | 50 | needs `ask_user` |
+| `core.reporting` - one tool per reply, no unsupported claims | 90 | always |
 
 `core.small-talk` is held apart: it replaces the prompt rather than joining it,
 so a greeting turn contains no tool list at all.
@@ -428,7 +428,7 @@ so a greeting turn contains no tool list at all.
 
 `SkillResolver` drops a skill when the resources are missing, when none of the
 tools it discusses are available, or when the turn is plainly about something
-else — then stops adding once the character budget is spent. An `always` skill
+else - then stops adding once the character budget is spent. An `always` skill
 is never cut; the core rules survive any amount of installed knowledge.
 
 `SystemPrompt` assembles the result in a fixed order: identity, then the
@@ -452,14 +452,14 @@ overwrite it, and the budget cutting a chatty skill before a core one.
 
 ---
 
-## 10. Phase 4 — delivered
+## 10. Phase 4 - delivered
 
 Luna is now an installed agent. The app runs *an* agent; it is no longer *the*
 agent.
 
 ### An agent is data
 
-`AgentDefinition` — id, name, description, version, author, its own extra
+`AgentDefinition` - id, name, description, version, author, its own extra
 instructions, the skills it has, the tools it may use, a preferred model, and a
 budget in steps and seconds. `*` means "whatever the runtime offers". It
 round-trips through JSON, so an agent is a document somebody can write.
@@ -473,7 +473,7 @@ is registered first and is therefore the fallback.
 The rule that has to hold the moment anyone can write a definition: **an agent
 list can only subtract.** `AgentManager` intersects the agent's tool list with
 what `ToolRegistry` already decided this environment offers, so an agent that
-asks for `shell_exec` on a phone gets nothing — not a refusal at call time, but
+asks for `shell_exec` on a phone gets nothing - not a refusal at call time, but
 absence from the prompt. The same for budgets: `steps(appLimit)` returns the
 smaller of the two, never the agent's number when it is larger.
 
@@ -491,7 +491,7 @@ be attributed to it.
 ### Persistence
 
 `Prefs.activeAgentId` (defaults to `luna`) and `Prefs.installedAgents`, stored
-as the JSON they arrived as rather than parsed into columns — a definition is a
+as the JSON they arrived as rather than parsed into columns - a definition is a
 document, and a store that understood its fields would need migrating every
 time one gained a field.
 
@@ -505,11 +505,11 @@ Suite total: **309 checks across six files.**
 
 ---
 
-## 11. Phase 5 — delivered
+## 11. Phase 5 - delivered
 
 Plugins, declarative only. A plugin is a document, never a program: it carries
 skills, agents and (from Phase 6) workflows, and nothing that executes. The
-worst an installed plugin can do is tell the model something — and the model can
+worst an installed plugin can do is tell the model something - and the model can
 only act through tools the environment already allowed.
 
 ### The manifest
@@ -527,7 +527,7 @@ change a plugin's identity.
 1. format is one this runtime understands;
 2. the id is lower-case dotted, 3–64 characters, and is not `core*` or `luna`;
 3. it has a version and carries something, and not more than 200 documents;
-4. every capability exists **and** is grantable to a plugin — `credential.export`
+4. every capability exists **and** is grantable to a plugin - `credential.export`
    and `plugin.manage` are refused here, permanently;
 5. every document it defines is named after it (`acme.invoices.filing`), so a
    plugin cannot redefine `core.identity` or claim an agent called `luna`;
@@ -536,7 +536,7 @@ change a plugin's identity.
 8. the signature verifies (`SHA256withRSA` over the digest) and, when the device
    keeps a trust list, belongs to a key on it.
 
-Unsigned plugins are refused unless `Prefs.allowUnsignedPlugins` is on — a
+Unsigned plugins are refused unless `Prefs.allowUnsignedPlugins` is on - a
 developer setting. An unsigned plugin is not dangerous the way running code is
 dangerous, but it is anonymous, and anonymous knowledge is worth refusing.
 
@@ -547,7 +547,7 @@ built-ins use: skills to `SkillRegistry` credited to the plugin id, agents to
 `AgentRegistry`. There is one code path for knowledge, one for agents, and a
 plugin's skill is resolved, narrowed and budgeted exactly like Luna's own.
 Manifests persist through a `Store` (`PrefsPluginStore`) and are **verified
-again on restore** — what a device trusts can change between one run and the
+again on restore** - what a device trusts can change between one run and the
 next, and a phone that stops allowing unsigned plugins stops loading the ones it
 accepted while it did.
 
@@ -558,7 +558,7 @@ installs, and a restore that refuses what the tightened rules no longer accept.
 
 ---
 
-## 12. Phase 6 — delivered
+## 12. Phase 6 - delivered
 
 Workflows: a job written down as steps instead of hoped for in a prompt. An
 agent loop is a good way to handle a request nobody anticipated and a poor way
@@ -567,12 +567,12 @@ to do the same thing every Monday.
 ### The twelve kinds of step
 
 `llm`, `tool`, `condition`, `loop`, `parallel`, `approval`, `human_input`,
-`sub_agent`, `transform`, `validate`, `wait`, `end` — all of `WorkflowDefinition`
+`sub_agent`, `transform`, `validate`, `wait`, `end` - all of `WorkflowDefinition`
 is data, so a workflow can arrive in a plugin.
 
 Templating is `{{name}}`, filled from what the run knows. Conditions are
-deliberately tiny — `key is value`, `not`, `contains`, `present`, `empty`, `>`,
-`<` — and are split *before* filling, so `{{answer}} present` with nothing known
+deliberately tiny - `key is value`, `not`, `contains`, `present`, `empty`, `>`,
+`<` - and are split *before* filling, so `{{answer}} present` with nothing known
 asks whether an empty thing is present rather than mistaking the word "present"
 for the whole expression. `transform` has seven operations and no expression
 language: a scripting language inside a workflow is a second product, and the
@@ -580,8 +580,8 @@ plan says not to build one.
 
 `parallel` means independent, not simultaneous. A phone has one tool runner and
 one model; running branches at once would mean two copies of a 3B model in
-memory. The contract the node makes — these branches do not depend on each
-other, and all of them must finish — is the part an author actually relies on.
+memory. The contract the node makes - these branches do not depend on each
+other, and all of them must finish - is the part an author actually relies on.
 
 ### Refusing early
 
@@ -594,8 +594,8 @@ before it has changed anybody's files.
 
 `WorkflowHost` is the only route out: think, tool, approve, ask, sub-agent,
 pause, stopped, event. `AgentEngine.EngineHost` implements it against machinery
-that already existed — the tool registry with its watchdog, `RunGuards`,
-`ToolPolicy`, the approval wait, the question wait — so **a workflow gets no
+that already existed - the tool registry with its watchdog, `RunGuards`,
+`ToolPolicy`, the approval wait, the question wait - so **a workflow gets no
 power the chat loop does not have**. `requestApproval` grew an overload that
 takes the question as text, because a person should not be able to tell whether
 a tool or a workflow is asking.
@@ -608,33 +608,33 @@ the same chat.
 
 `WorkflowRun` is the structured record the plan asks for: every step with its
 node id, kind, outcome and time, plus the variables. `WorkflowRun.resume` reads
-one back and `run(workflow, input, fromNode)` starts from it — replay from a
+one back and `run(workflow, input, fromNode)` starts from it - replay from a
 checkpoint, working today rather than aspirational.
 
 Budgets cannot be escaped through a loop: every pass costs from the same total,
 so a loop with `max: 100` inside a workflow with `maxSteps: 5` stops at five.
 
-Guarded by `WorkflowTest` (68 checks) against a recording host — no model, no
+Guarded by `WorkflowTest` (68 checks) against a recording host - no model, no
 phone, no person, no clock.
 
 ---
 
-## 13. Phase 7 — delivered
+## 13. Phase 7 - delivered
 
 Memory, split into the five things the transcript was being asked to be at once.
 
 | Kind | Lives | Held by |
 | --- | --- | --- |
-| `conversation` — what was said | with the chat | `EphemeralMemory` |
-| `working` — notes for the job in hand | **dies with the run, on purpose** | `EphemeralMemory` |
-| `long_term` — what the person told Luna | forever | `FileMemory` |
-| `knowledge` — how their folder is laid out | forever | `FileMemory` |
-| `execution` — what was actually done | forever | `FileMemory` |
+| `conversation` - what was said | with the chat | `EphemeralMemory` |
+| `working` - notes for the job in hand | **dies with the run, on purpose** | `EphemeralMemory` |
+| `long_term` - what the person told Luna | forever | `FileMemory` |
+| `knowledge` - how their folder is laid out | forever | `FileMemory` |
+| `execution` - what was actually done | forever | `FileMemory` |
 
 `MemoryProvider` is a contract because the right answer differs by kind and by
 device: working memory belongs in RAM, long-term memory in a file, and knowledge
 about a large folder will one day belong in something with an index.
-`FileMemory` writes one JSON file per kind under the app's own storage — not in
+`FileMemory` writes one JSON file per kind under the app's own storage - not in
 the person's folder, which is theirs and not a database.
 
 ### Recall, not carrying
@@ -642,7 +642,7 @@ the person's folder, which is theirs and not a database.
 `MemoryRegistry.recall` scores rather than searches: three points per matching
 word, a fifth of the record's own importance, and a small bonus for being
 recent. Being *about the subject* outweighs being important, so a vital fact
-about photographs stays out of an answer about invoices — but a record marked 80
+about photographs stays out of an answer about invoices - but a record marked 80
 or above comes back even with no match, because some things should be said
 regardless. No embeddings, no index, no second product.
 
@@ -663,12 +663,12 @@ Guarded by `MemoryTest` (37 checks).
 
 ---
 
-## 14. Phase 8 — delivered
+## 14. Phase 8 - delivered
 
 `InferenceRouter`: which brain answers, and the sentence that justifies it.
 
 The old rule was "use the local model, fall back to the cloud if it will not
-load". That is fine until the questions differ — a document that does not fit in
+load". That is fine until the questions differ - a document that does not fit in
 a 2k window, a private file that must not leave the phone, a provider that has
 been returning errors for ten minutes.
 
@@ -676,7 +676,7 @@ been returning errors for ten minutes.
 
 1. what the person or the agent explicitly chose, if it is usable and healthy;
 2. anything **local** that fits, because the device is free and private;
-3. a remote provider — but only if the work is allowed to leave;
+3. a remote provider - but only if the work is allowed to leave;
 4. a resting provider as a last resort, saying openly that it has been failing.
 
 Privacy is a hard stop, not a preference: a `private` job that no local model can
@@ -694,8 +694,8 @@ the failover event and the debug panel now show.
 ### Health
 
 `failed(id)` rests a provider for two minutes; `worked(id)` wakes it immediately.
-`AgentEngine` reports both outcomes from the paths that already existed — a local
-generate failure, a cloud error, a successful reply — and `inferenceHealth()`
+`AgentEngine` reports both outcomes from the paths that already existed - a local
+generate failure, a cloud error, a successful reply - and `inferenceHealth()`
 exposes the tally.
 
 Guarded by `RouterTest` (28 checks): the ordinary case, size, privacy in both
@@ -704,13 +704,13 @@ last-resort use of a failing provider, and a reason on every single decision.
 
 ---
 
-## 15. Phase 9 — delivered
+## 15. Phase 9 - delivered
 
 `EnvironmentRegistry`: everywhere a tool could run, with the phone as the first
 entry rather than the only kind.
 
 A laptop on the network, a VPS over SSH and a Docker container are all the same
-shape of thing — a platform name, a set of capabilities, somewhere to put files,
+shape of thing - a platform name, a set of capabilities, somewhere to put files,
 maybe a browser, somewhere secrets live. `DeclaredEnvironment` is one that has
 been *described* but not reached: it answers `available() == false` and gives a
 sentence saying so.
@@ -718,12 +718,12 @@ sentence saying so.
 That honesty is the feature. The registry plans around a machine that could run
 a shell without anything pretending a shell has run:
 
-- `activate(id)` refuses an environment that is not reachable — an agent
+- `activate(id)` refuses an environment that is not reachable - an agent
   stranded somewhere absent cannot even tell you why;
 - `where(tool)` finds an environment whose platform and capabilities suit the
   tool;
 - `elsewhere(tool)` produces *"shell_exec cannot run on this phone, but The
-  build box could do it"* — but only when the box is actually connected, so
+  build box could do it"* - but only when the box is actually connected, so
   Luna never dangles a machine that is offline.
 
 `ToolContext` is now built by the registry from the active environment, and the
@@ -737,7 +737,7 @@ Guarded by `EnvironmentTest` (25 checks).
 
 ---
 
-## 16. Phase 10 — delivered
+## 16. Phase 10 - delivered
 
 Sub-agents: handing a piece of work to a narrower agent, under the same budget.
 
@@ -747,8 +747,8 @@ questions before anything runs:
 
 1. does the child exist;
 2. is spawning allowed here at all (`agent.spawn`, from the environment);
-3. is there depth left — a child of a child of a child is a runaway;
-4. is this a loop — an agent spawning itself, or **any ancestor above it**;
+3. is there depth left - a child of a child of a child is a runaway;
+4. is this a loop - an agent spawning itself, or **any ancestor above it**;
 5. is there budget left to give away;
 6. does the child stay inside the parent's tools.
 
@@ -760,7 +760,7 @@ herself is told: *"Luna wants every tool, which Narrow does not have to give."*
 ### Budgets as a value
 
 `AgentBudget` is what `RunGuards` was hiding: steps, seconds, cloud calls and
-depth, as something that can be handed down. It only ever narrows —
+depth, as something that can be handed down. It only ever narrows -
 `forChild` gives a **third** of what is left and one level less depth, because
 the parent still has to finish the job and tell somebody about it. A child's own
 `maxSteps` narrows it further; nothing widens it.
@@ -772,8 +772,8 @@ than believed.
 
 ### What a child can do today
 
-It gets its own system prompt — its skills, its narrowed tool list, its own
-recalled memories — and one model call. It cannot run tools yet: the chat loop
+It gets its own system prompt - its skills, its narrowed tool list, its own
+recalled memories - and one model call. It cannot run tools yet: the chat loop
 is still the only thing that can, and giving a child a second copy of that loop
 before it is extracted would mean two loops disagreeing about what a run has
 already spent. The seam (`SubAgentSpawner.Runner`) is where the extracted loop
@@ -789,17 +789,17 @@ Guarded by `SubAgentTest` (43 checks).
 
 | Phase | State |
 | --- | --- |
-| 1 — contracts | delivered |
-| 2 — tool registry, built-ins as plugins | delivered |
-| 3 — skills | delivered |
-| 4 — agents, Luna as one of them | delivered |
-| 5 — plugins, declarative and signed | delivered |
-| 6 — workflows | delivered |
-| 7 — memory | delivered |
-| 8 — inference router | delivered |
-| 9 — environments | delivered |
-| 10 — sub-agents | delivered |
-| 11 — registry / marketplace | **not started, deliberately** |
+| 1 - contracts | delivered |
+| 2 - tool registry, built-ins as plugins | delivered |
+| 3 - skills | delivered |
+| 4 - agents, Luna as one of them | delivered |
+| 5 - plugins, declarative and signed | delivered |
+| 6 - workflows | delivered |
+| 7 - memory | delivered |
+| 8 - inference router | delivered |
+| 9 - environments | delivered |
+| 10 - sub-agents | delivered |
+| 11 - registry / marketplace | **not started, deliberately** |
 
 Phase 11 stays where the plan put it: last, and after everything above has been
 used in anger. Nothing about a marketplace is hard except deciding what is worth
@@ -848,8 +848,8 @@ page in front of the three tabs, reached from rows that say what they lead to:
 
 `lib/screens/platform_pages.dart` holds all seven. They are built from the same
 `SectionLabel` / `Group` / `LunaRow` / `PillButton` / `Note` vocabulary as the
-rest of Settings, read their data when they open — none of it changes between
-one message and the next — and say what happened exactly once, in a snackbar.
+rest of Settings, read their data when they open - none of it changes between
+one message and the next - and say what happened exactly once, in a snackbar.
 
 `LunaRow` gained `subtitleLines`, because a row that has to explain what a
 workflow does cannot do it in one line. One by default: a settings list reads as
@@ -878,7 +878,7 @@ Three example plugins ship inside the APK, signed, in `assets/plugins/`:
 | Plugin | Carries | Shows off |
 | --- | --- | --- |
 | `example.tidy` | a naming skill, a folder-survey workflow | triggers, `requires: workspace`, a `tool` → `llm` → `end` chain |
-| `example.reviewer` | a review skill, a read-only agent | an agent that subtracts tools — it cannot write, rename or delete |
+| `example.reviewer` | a review skill, a read-only agent | an agent that subtracts tools - it cannot write, rename or delete |
 | `example.standup` | a three-question workflow | `human_input`, a `condition`, a `transform`, and `{{templating}}` |
 
 **Settings → Agent → Plugins → Install the examples** installs all three with no
@@ -887,7 +887,7 @@ the top of the SAF folder you granted. Both go through the ordinary verifier: no
 developer switch, no unsigned exception.
 
 The packager is `tools/package/PluginPackager.java`, driven by
-`scripts/luna-package.sh`. It is Java on purpose — it calls the app's own
+`scripts/luna-package.sh`. It is Java on purpose - it calls the app's own
 `PluginManifest.canonicalContent()` and `PluginVerifier`, so what is hashed at
 build time is by construction what is checked on the device. A reimplementation
 in a scripting language would be a second definition of the truth, and the day
@@ -896,7 +896,7 @@ is in the repository: one is generated on first use, and a signature is checked
 against the public key the package carries.
 
 `ExamplesTest` (50 checks) holds the shipped examples to the strictest reading
-of the rules — empty trust list, unsigned disallowed — installs all three into
+of the rules - empty trust list, unsigned disallowed - installs all three into
 real registries, checks every skill, agent and workflow loads and that the
 reviewer really cannot write, and checks that changing a version, rewording an
 instruction, stripping the signature or adding a capability each breaks the
